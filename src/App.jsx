@@ -2,22 +2,16 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── Supabase client ───────────────────────────────────────────
-const SUPABASE_URL = "https://eyfwqcxcjunrpnqhbbek.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5ZndxY3hjanVucnBucWhiYmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjAwNTIsImV4cCI6MjA4ODEzNjA1Mn0.6pNYJTeFKs4Uf-KqqJ_H8pSQSOWGFUvy-UR_dk6fHGY";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://eyfwqcxcjunrpnqhbbek.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5ZndxY3hjanVucnBucWhiYmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjAwNTIsImV4cCI6MjA4ODEzNjA1Mn0.6pNYJTeFKs4Uf-KqqJ_H8pSQSOWGFUvy-UR_dk6fHGY";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// ── Auth Context ──────────────────────────────────────────────
-const AuthCtx = createContext(null);
-const useAuth = () => useContext(AuthCtx);
 
 // ── Colores por sede ──────────────────────────────────────────
 const SEDE_COLOR = {
-  "Lima Centro": "#00C4B4",
-  "Miraflores":  "#7C6AF7",
-  "San Isidro":  "#F59E0B",
-  "La Molina":   "#10B981",
+  "Molisalud": "#10B981",
+  "Clínica San Miguel Arcángel": "#7C6AF7",
 };
-const getColor = (nombre) => SEDE_COLOR[nombre] || "#6B7280";
+const getColor = (nombre) => SEDE_COLOR[nombre] || "#00C4B4";
 
 // ── Componentes base ──────────────────────────────────────────
 const Spinner = () => (
@@ -89,36 +83,23 @@ function Login({onLogin}) {
     <div style={{minHeight:"100vh",background:"#080C18",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}input::placeholder{color:#4B5563}select option{background:#1A2035}`}</style>
-
       <div style={{width:"100%",maxWidth:420,padding:20}}>
-        {/* Logo */}
         <div style={{textAlign:"center",marginBottom:40}}>
           <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:64,height:64,borderRadius:20,background:"linear-gradient(135deg,#00C4B420,#7C6AF720)",border:"1px solid #00C4B440",marginBottom:16,fontSize:28}}>🫁</div>
           <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:800,color:"#E8EAF0",letterSpacing:"-0.03em"}}>OxyNatur</div>
           <div style={{fontSize:13,color:"#4B5563",marginTop:4}}>Sistema de Gestión Clínica</div>
         </div>
-
         <Card style={{padding:32}}>
           <div style={{fontSize:18,fontWeight:700,color:"#E8EAF0",marginBottom:6,fontFamily:"Syne,sans-serif"}}>Iniciar sesión</div>
           <div style={{fontSize:13,color:"#4B5563",marginBottom:24}}>Acceso autorizado al personal OxyNatur</div>
-
-          {error && (
-            <div style={{background:"#F8717115",border:"1px solid #F8717140",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#F87171"}}>
-              ⚠ {error}
-            </div>
-          )}
-
+          {error && <div style={{background:"#F8717115",border:"1px solid #F8717140",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#F87171"}}>⚠ {error}</div>}
           <Input label="Email" value={email} onChange={setEmail} type="email" placeholder="tu@email.com"/>
           <Input label="Contraseña" value={pass} onChange={setPass} type="password" placeholder="••••••••"/>
-
           <Btn onClick={handleLogin} disabled={loading} style={{width:"100%",padding:"12px",fontSize:15,marginTop:8}}>
             {loading ? "Ingresando..." : "Ingresar →"}
           </Btn>
         </Card>
-
-        <div style={{textAlign:"center",marginTop:20,fontSize:12,color:"#374151"}}>
-          OxyNatur · Sistema Interno · Acceso Restringido
-        </div>
+        <div style={{textAlign:"center",marginTop:20,fontSize:12,color:"#374151"}}>OxyNatur · Sistema Interno · Acceso Restringido</div>
       </div>
     </div>
   );
@@ -127,8 +108,9 @@ function Login({onLogin}) {
 // ── SIDEBAR ───────────────────────────────────────────────────
 function Sidebar({vista, setVista, perfil, onLogout}) {
   const isAdmin = perfil?.rol === "admin_general";
+  const isMedico = perfil?.rol === "medico";
   const navAdmin = [
-    {id:"dashboard", icon:"▦", label:"Dashboard"},
+    {id:"dashboard", icon:"▦",  label:"Dashboard"},
     {id:"pacientes", icon:"👤", label:"Pacientes"},
     {id:"sesiones",  icon:"⚡", label:"Sesiones"},
     {id:"historias", icon:"📋", label:"Historias Clínicas"},
@@ -137,28 +119,31 @@ function Sidebar({vista, setVista, perfil, onLogout}) {
     {id:"usuarios",  icon:"👥", label:"Usuarios"},
   ];
   const navMedico = [
-    {id:"agenda",    icon:"📅", label:"Mi Agenda"},
     {id:"pacientes", icon:"👤", label:"Pacientes"},
     {id:"historias", icon:"📋", label:"Historias Clínicas"},
+    {id:"agenda",    icon:"📅", label:"Mi Agenda"},
   ];
-  const nav = isAdmin ? navAdmin : navMedico;
+  const navEnfermero = [
+    {id:"agenda",    icon:"📅", label:"Agenda del día"},
+    {id:"pacientes", icon:"👤", label:"Pacientes"},
+    {id:"historias", icon:"📋", label:"Historias Clínicas"},
+    {id:"sesiones",  icon:"⚡", label:"Sesiones"},
+  ];
+  const nav = isAdmin ? navAdmin : isMedico ? navMedico : navEnfermero;
+  const rolLabel = isAdmin ? "Admin General" : isMedico ? "Médico" : "Enfermero";
 
   return (
-    <div style={{width:220,background:"#0D1320",borderRight:"1px solid #1E2535",padding:"20px 10px",display:"flex",flexDirection:"column",gap:2,flexShrink:0,minHeight:"100vh"}}>
+    <div style={{width:240,background:"#0D1320",borderRight:"1px solid #1E2535",padding:"20px 10px",display:"flex",flexDirection:"column",gap:2,flexShrink:0,minHeight:"100vh"}}>
       <div style={{padding:"0 8px 24px"}}>
         <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:20,color:"#00C4B4",letterSpacing:"-0.03em"}}>OxyNatur</div>
-        <div style={{fontSize:10,color:"#374151",marginTop:1,letterSpacing:"0.05em",textTransform:"uppercase"}}>
-          {isAdmin ? "Admin General" : perfil?.sede_nombre || "Médico"}
-        </div>
+        <div style={{fontSize:10,color:"#374151",marginTop:1,letterSpacing:"0.05em",textTransform:"uppercase"}}>{rolLabel}</div>
       </div>
-
       {nav.map(item=>(
         <button key={item.id} onClick={()=>setVista(item.id)}
           style={{background:vista===item.id?"linear-gradient(135deg,#00C4B420,#7C6AF720)":"none",border:vista===item.id?"1px solid #00C4B430":"1px solid transparent",cursor:"pointer",padding:"10px 14px",borderRadius:10,color:vista===item.id?"#00C4B4":"#6B7280",fontFamily:"inherit",fontSize:14,fontWeight:500,display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",transition:"all .2s"}}>
           <span style={{fontSize:15}}>{item.icon}</span>{item.label}
         </button>
       ))}
-
       <div style={{marginTop:"auto",padding:"16px 8px 0",borderTop:"1px solid #1E2535"}}>
         <div style={{fontSize:13,color:"#6B7280",fontWeight:500}}>{perfil?.nombre}</div>
         <div style={{fontSize:11,color:"#374151",marginTop:2}}>{perfil?.email}</div>
@@ -193,12 +178,8 @@ function DashboardAdmin() {
     <div>
       <div style={{marginBottom:28}}>
         <h1 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"#E8EAF0"}}>Dashboard</h1>
-        <p style={{color:"#4B5563",fontSize:14,marginTop:4}}>
-          {new Date().toLocaleDateString("es-PE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
-        </p>
+        <p style={{color:"#4B5563",fontSize:14,marginTop:4}}>{new Date().toLocaleDateString("es-PE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
       </div>
-
-      {/* KPIs globales */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
           {label:"Pacientes Activos", val:totales.pacientes, color:"#00C4B4", icon:"👥"},
@@ -217,8 +198,6 @@ function DashboardAdmin() {
           </Card>
         ))}
       </div>
-
-      {/* Por sede */}
       <div style={{marginBottom:10,fontSize:13,fontWeight:700,color:"#6B7280",letterSpacing:"0.08em",textTransform:"uppercase"}}>Rendimiento por sede</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14}}>
         {resumen.map(s=>(
@@ -249,6 +228,7 @@ function DashboardAdmin() {
 // ── PACIENTES ─────────────────────────────────────────────────
 function Pacientes({perfil}) {
   const isAdmin = perfil?.rol === "admin_general";
+  const isMedico = perfil?.rol === "medico";
   const [pacs, setPacs]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [busq, setBusq]   = useState("");
@@ -261,7 +241,7 @@ function Pacientes({perfil}) {
   const load = async () => {
     setLoading(true);
     let q = supabase.from("pacientes").select("*, sedes(nombre,color)").order("created_at",{ascending:false});
-    if(!isAdmin) q = q.eq("sede_principal_id", perfil.sede_id);
+    if(!isAdmin && !isMedico) q = q.eq("sede_principal_id", perfil.sede_id);
     const {data} = await q;
     setPacs(data||[]);
     setLoading(false);
@@ -289,7 +269,6 @@ function Pacientes({perfil}) {
     setErr(e);
     if(Object.keys(e).length) return;
     setSaving(true);
-
     const {data:pac,error} = await supabase.from("pacientes").insert({
       nombres:form.nombres, apellidos:form.apellidos, dni:form.dni,
       telefono:form.telefono, email:form.email, genero:form.genero||null,
@@ -298,17 +277,13 @@ function Pacientes({perfil}) {
       total_sesiones_prescritas:parseInt(form.total_sesiones_prescritas)||0,
       estado:"activo",
     }).select().single();
-
     if(!error && pac) {
-      // Crear HC maestra
       await supabase.from("historias_clinicas").insert({
         paciente_id:pac.id, sede_apertura_id:form.sede_principal_id,
         diagnostico_principal:form.diagnostico_hc, medico_id:perfil.id,
       });
-      // Registrar sede visitada
       await supabase.from("paciente_sedes").insert({paciente_id:pac.id, sede_id:form.sede_principal_id});
     }
-
     setSaving(false);
     setModal(false);
     setForm({nombres:"",apellidos:"",dni:"",telefono:"",email:"",genero:"",fecha_nacimiento:"",sede_principal_id:"",total_sesiones_prescritas:"",diagnostico_hc:""});
@@ -327,10 +302,8 @@ function Pacientes({perfil}) {
         </div>
         <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>
       </div>
-
       <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por nombre o DNI..."
         style={{background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 16px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:18}}/>
-
       {loading
         ? <div style={{color:"#4B5563",padding:20}}>Cargando...</div>
         : (
@@ -339,7 +312,7 @@ function Pacientes({perfil}) {
               <span>Paciente</span><span>DNI</span><span>Sede</span><span>Sesiones</span><span>Estado</span>
             </div>
             {filtrados.map(p=>(
-              <div key={p.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",transition:"border-color .2s",cursor:"pointer"}}
+              <div key={p.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",cursor:"pointer"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
                 onMouseLeave={e=>e.currentTarget.style.borderColor="#1E2535"}>
                 <div>
@@ -359,8 +332,6 @@ function Pacientes({perfil}) {
           </>
         )
       }
-
-      {/* Modal nuevo paciente */}
       {modal && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
           <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -404,19 +375,19 @@ function Pacientes({perfil}) {
 // ── HISTORIAS CLÍNICAS ────────────────────────────────────────
 function HistoriasClinicas({perfil}) {
   const isAdmin = perfil?.rol === "admin_general";
+  const isMedico = perfil?.rol === "medico";
   const [hcs, setHcs]     = useState([]);
   const [sedes, setSedes] = useState([]);
   const [sedeTab, setSedeTab] = useState("todas");
   const [loading, setLoading] = useState(true);
-  const [modalEval, setModalEval] = useState(null);
   const [verHC, setVerHC] = useState(null);
 
   const load = async () => {
     setLoading(true);
     let q = supabase.from("evaluaciones_medicas")
       .select("*, pacientes(nombres,apellidos,dni), sedes(nombre,color), perfiles(nombre)")
-      .order("fecha",{ascending:false}).order("hora",{ascending:false});
-    if(!isAdmin) q = q.eq("sede_id", perfil.sede_id);
+      .order("fecha",{ascending:false});
+    if(!isAdmin && !isMedico) q = q.eq("sede_id", perfil.sede_id);
     const {data} = await q;
     setHcs(data||[]);
     setLoading(false);
@@ -428,7 +399,6 @@ function HistoriasClinicas({perfil}) {
   },[]);
 
   const filtradas = sedeTab==="todas" ? hcs : hcs.filter(h=>h.sede_id===sedeTab);
-
   const dolorColor = (n) => parseInt(n)>=7?"#F87171":parseInt(n)>=4?"#F59E0B":"#10B981";
   const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"#10B981":e==="Regular"?"#F59E0B":"#F87171";
 
@@ -440,8 +410,7 @@ function HistoriasClinicas({perfil}) {
           <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>Registro obligatorio por sesión</p>
         </div>
       </div>
-
-      {isAdmin && (
+      {(isAdmin || isMedico) && (
         <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           <button onClick={()=>setSedeTab("todas")} style={{background:sedeTab==="todas"?"#00C4B420":"#111827",border:`1px solid ${sedeTab==="todas"?"#00C4B455":"#1E2535"}`,color:sedeTab==="todas"?"#00C4B4":"#6B7280",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
             Todas ({hcs.length})
@@ -457,18 +426,17 @@ function HistoriasClinicas({perfil}) {
           })}
         </div>
       )}
-
       {loading
         ? <div style={{color:"#4B5563",padding:20}}>Cargando...</div>
         : filtradas.length===0
           ? <Card style={{textAlign:"center",padding:"50px 20px"}}><div style={{fontSize:40,marginBottom:12,opacity:.3}}>📋</div><div style={{color:"#6B7280"}}>Sin historias clínicas registradas</div></Card>
           : (
             <>
-              <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 80px 80px 90px 100px 100px",padding:"0 18px 10px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-                <span>Paciente</span><span>Fecha</span><span>Sesión</span><span>Cámara</span><span>Dolor</span><span>Estado</span><span>Acciones</span>
+              <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 80px 90px 100px 100px",padding:"0 18px 10px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                <span>Paciente</span><span>Fecha</span><span>Sesión</span><span>Dolor</span><span>Estado</span><span>Acción</span>
               </div>
               {filtradas.map(hc=>(
-                <div key={hc.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"13px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"1.5fr 1fr 80px 80px 90px 100px 100px",alignItems:"center"}}>
+                <div key={hc.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"13px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"1.5fr 1fr 80px 90px 100px 100px",alignItems:"center"}}>
                   <div>
                     <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{hc.pacientes?.nombres} {hc.pacientes?.apellidos}</div>
                     <div style={{fontSize:12,color:"#6B7280",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
@@ -478,7 +446,6 @@ function HistoriasClinicas({perfil}) {
                   </div>
                   <div style={{fontSize:13,color:"#E8EAF0"}}>{hc.fecha}<br/><span style={{color:"#6B7280",fontSize:11}}>{hc.hora?.slice(0,5)}</span></div>
                   <div style={{fontSize:15,fontWeight:700,color:"#00C4B4"}}>#{hc.numero_sesion}</div>
-                  <div style={{fontSize:13,color:"#9CA3AF"}}>{hc.camara_id?"Cám.":"—"}</div>
                   <div style={{fontSize:15,fontWeight:700,color:dolorColor(hc.nivel_dolor)}}>{hc.nivel_dolor}/10</div>
                   <div><Badge color={estColor(hc.estado_general)}>{hc.estado_general}</Badge></div>
                   <div><button onClick={()=>setVerHC(hc)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Ver</button></div>
@@ -487,8 +454,6 @@ function HistoriasClinicas({perfil}) {
             </>
           )
       }
-
-      {/* Modal ver HC */}
       {verHC && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
           <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:600,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -504,8 +469,8 @@ function HistoriasClinicas({perfil}) {
               {[
                 {titulo:"Signos Vitales", campos:[["Presión Arterial",verHC.presion_arterial],["Frec. Cardíaca",verHC.frecuencia_cardiaca],["Saturación O₂",verHC.saturacion_o2],["Temperatura",verHC.temperatura],["Peso",verHC.peso?`${verHC.peso} kg`:null]]},
                 {titulo:"Evaluación Clínica", campos:[["Nivel de Dolor",`${verHC.nivel_dolor}/10`],["Estado General",verHC.estado_general],["Evolución",verHC.evolucion]]},
-                {titulo:"Contraindicaciones", campos:[["Otitis/Sinusitis",verHC.otitis],["Claustrofobia",verHC.claustrofobia],["Embarazo",verHC.embarazo],["Fiebre Activa",verHC.fiebre_activa]]},
-                {titulo:"Parámetros de Sesión", campos:[["Presión Cámara",`${verHC.presion_indicada} ATA`],["Duración",`${verHC.duracion_minutos} min`]]},
+                {titulo:"Contraindicaciones", campos:[["Otitis",verHC.otitis],["Claustrofobia",verHC.claustrofobia],["Embarazo",verHC.embarazo],["Fiebre",verHC.fiebre_activa]]},
+                {titulo:"Parámetros", campos:[["Presión Cámara",`${verHC.presion_indicada} ATA`],["Duración",`${verHC.duracion_minutos} min`]]},
                 {titulo:"Post-Sesión", campos:[["Incidencias",verHC.incidencias],["Observaciones",verHC.observaciones],["Médico",verHC.firma_medico]]},
               ].map(sec=>(
                 <div key={sec.titulo} style={{marginBottom:20}}>
@@ -538,9 +503,7 @@ function Sedes() {
     Promise.all([
       supabase.from("sedes").select("*"),
       supabase.from("vista_resumen_sedes").select("*"),
-    ]).then(([{data:s},{data:r}])=>{
-      setSedes(s||[]); setResumen(r||[]); setLoading(false);
-    });
+    ]).then(([{data:s},{data:r}])=>{ setSedes(s||[]); setResumen(r||[]); setLoading(false); });
   },[]);
 
   if(loading) return <div style={{color:"#4B5563",padding:20}}>Cargando...</div>;
@@ -600,7 +563,6 @@ function Finanzas() {
     <div>
       <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:8}}>Finanzas</h1>
       <p style={{color:"#4B5563",fontSize:14,marginBottom:24}}>Resumen financiero por sede y mes</p>
-
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
         {[
           {label:"Ingresos totales", val:`S/ ${totalIngresos.toLocaleString()}`, color:"#10B981"},
@@ -613,19 +575,13 @@ function Finanzas() {
           </Card>
         ))}
       </div>
-
-      {loading
-        ? <div style={{color:"#4B5563"}}>Cargando...</div>
+      {loading ? <div style={{color:"#4B5563"}}>Cargando...</div>
         : ingresos.length===0
           ? <Card style={{textAlign:"center",padding:"40px"}}><div style={{color:"#6B7280"}}>Sin movimientos registrados aún</div></Card>
-          : (
-            <Card>
+          : <Card>
               <div style={{fontSize:13,fontWeight:700,color:"#6B7280",marginBottom:16,letterSpacing:"0.06em",textTransform:"uppercase"}}>Detalle por sede y mes</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",padding:"0 0 10px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-                <span>Sede</span><span>Mes</span><span>Método</span><span>Ingresos</span><span>Transacciones</span>
-              </div>
               {ingresos.map((r,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",padding:"10px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",padding:"10px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
                   <div style={{display:"flex",alignItems:"center",gap:7}}>
                     <span style={{width:7,height:7,borderRadius:"50%",background:getColor(r.sede),display:"inline-block"}}/>
                     <span style={{fontSize:13,color:"#E8EAF0"}}>{r.sede}</span>
@@ -633,11 +589,9 @@ function Finanzas() {
                   <div style={{fontSize:13,color:"#9CA3AF"}}>{new Date(r.mes).toLocaleDateString("es-PE",{month:"long",year:"numeric"})}</div>
                   <div style={{fontSize:13,color:"#9CA3AF"}}>{r.metodo_pago||"—"}</div>
                   <div style={{fontSize:14,fontWeight:700,color:"#10B981"}}>S/ {Number(r.ingresos||0).toLocaleString()}</div>
-                  <div style={{fontSize:13,color:"#9CA3AF"}}>{r.num_transacciones}</div>
                 </div>
               ))}
             </Card>
-          )
       }
     </div>
   );
@@ -649,7 +603,7 @@ function Usuarios({perfil:adminPerfil}) {
   const [sedes, setSedes]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [modal, setModal]       = useState(false);
-  const [form, setForm]         = useState({email:"",password:"",nombre:"",rol:"medico",sede_id:""});
+  const [form, setForm]         = useState({email:"",password:"",nombre:"",rol:"enfermero",sede_id:""});
   const [saving, setSaving]     = useState(false);
   const [msg, setMsg]           = useState("");
 
@@ -669,22 +623,13 @@ function Usuarios({perfil:adminPerfil}) {
   const crear = async () => {
     if(!form.email||!form.password||!form.nombre){setMsg("Completa todos los campos requeridos");return;}
     setSaving(true); setMsg("");
-    const {data,error} = await supabase.auth.admin?.createUser({
+    const {error} = await supabase.auth.signUp({
       email:form.email, password:form.password,
-      user_metadata:{nombre:form.nombre, rol:form.rol, sede_id:form.sede_id||null},
-      email_confirm:true,
+      options:{data:{nombre:form.nombre, rol:form.rol, sede_id:form.sede_id||null}}
     });
-    if(error){
-      // Fallback: el admin no puede crear usuarios directamente desde cliente
-      // Usar invite en su lugar
-      const {error:e2} = await supabase.auth.signUp({
-        email:form.email, password:form.password,
-        options:{data:{nombre:form.nombre, rol:form.rol, sede_id:form.sede_id||null}}
-      });
-      if(e2){setMsg("Error: "+e2.message);setSaving(false);return;}
-    }
+    if(error){setMsg("Error: "+error.message);setSaving(false);return;}
     setSaving(false); setModal(false);
-    setForm({email:"",password:"",nombre:"",rol:"medico",sede_id:""});
+    setForm({email:"",password:"",nombre:"",rol:"enfermero",sede_id:""});
     setMsg(""); load();
   };
 
@@ -699,11 +644,8 @@ function Usuarios({perfil:adminPerfil}) {
         </div>
         <Btn onClick={()=>setModal(true)}>+ Nuevo Usuario</Btn>
       </div>
-
-      {loading
-        ? <div style={{color:"#4B5563"}}>Cargando...</div>
-        : (
-          <Card>
+      {loading ? <div style={{color:"#4B5563"}}>Cargando...</div>
+        : <Card>
             <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1.2fr",padding:"0 0 12px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
               <span>Usuario</span><span>Email</span><span>Rol</span><span>Sede</span>
             </div>
@@ -716,9 +658,7 @@ function Usuarios({perfil:adminPerfil}) {
               </div>
             ))}
           </Card>
-        )
       }
-
       {modal && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
           <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
@@ -731,11 +671,9 @@ function Usuarios({perfil:adminPerfil}) {
             <Input label="Email" value={form.email} onChange={v=>setF("email",v)} type="email" required/>
             <Input label="Contraseña temporal" value={form.password} onChange={v=>setF("password",v)} type="password" required/>
             <Select label="Rol" value={form.rol} onChange={v=>setF("rol",v)} required
-              options={[{value:"admin_sede",label:"Admin Sede"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
-            {form.rol!=="admin_general" && (
-              <Select label="Sede asignada" value={form.sede_id} onChange={v=>setF("sede_id",v)} required
-                options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
-            )}
+              options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
+            <Select label="Sede asignada" value={form.sede_id} onChange={v=>setF("sede_id",v)} required
+              options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
             <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
               <Btn variant="ghost" onClick={()=>setModal(false)}>Cancelar</Btn>
               <Btn onClick={crear} disabled={saving}>{saving?"Creando...":"Crear Usuario"}</Btn>
@@ -747,15 +685,15 @@ function Usuarios({perfil:adminPerfil}) {
   );
 }
 
-// ── AGENDA MÉDICO ─────────────────────────────────────────────
+// ── AGENDA MÉDICO / ENFERMERO ─────────────────────────────────
 function AgendaMedico({perfil}) {
   const [agenda, setAgenda] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(()=>{
-    supabase.from("vista_agenda_hoy").select("*")
-      .eq("sede_id", perfil.sede_id)
-      .then(({data})=>{ setAgenda(data||[]); setLoading(false); });
+    let q = supabase.from("vista_agenda_hoy").select("*");
+    if(perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+    q.then(({data})=>{ setAgenda(data||[]); setLoading(false); });
   },[]);
 
   const estadoColor = {programada:"#F59E0B",en_curso:"#00C4B4",completada:"#10B981",cancelada:"#F87171",no_asistio:"#6B7280"};
@@ -763,13 +701,13 @@ function AgendaMedico({perfil}) {
   return (
     <div>
       <div style={{marginBottom:24}}>
-        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>Mi Agenda — Hoy</h1>
+        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>
+          {perfil?.rol==="medico" ? "Mi Agenda" : "Agenda del día"}
+        </h1>
         <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>
           {new Date().toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})}
-          {perfil.sedes?.nombre && ` · ${perfil.sedes.nombre}`}
         </p>
       </div>
-
       {loading
         ? <div style={{color:"#4B5563"}}>Cargando agenda...</div>
         : agenda.length===0
@@ -794,6 +732,21 @@ function AgendaMedico({perfil}) {
   );
 }
 
+// ── SESIONES (placeholder) ────────────────────────────────────
+function Sesiones({perfil}) {
+  return (
+    <div>
+      <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:8}}>Sesiones</h1>
+      <p style={{color:"#4B5563",fontSize:14,marginBottom:24}}>Gestión de sesiones hiperbáricas</p>
+      <Card style={{textAlign:"center",padding:"60px 20px"}}>
+        <div style={{fontSize:48,marginBottom:16,opacity:.3}}>⚡</div>
+        <div style={{color:"#6B7280",fontSize:16,marginBottom:8}}>Módulo en construcción</div>
+        <div style={{color:"#4B5563",fontSize:13}}>Próximamente: programar sesiones, marcar como completadas y vincular HC</div>
+      </Card>
+    </div>
+  );
+}
+
 // ── APP PRINCIPAL ─────────────────────────────────────────────
 export default function App() {
   const [user,    setUser]    = useState(null);
@@ -803,46 +756,75 @@ export default function App() {
 
   useEffect(()=>{
     let mounted = true;
-    const init = async () => {
+
+    const loadPerfil = async (userId) => {
       try {
-        const {data:{session}} = await supabase.auth.getSession();
-        if(session && mounted){
-          const {data:p} = await supabase
-            .from("perfiles").select("*")
-            .eq("id",session.user.id).single();
-          if(mounted){
+        const {data, error} = await supabase.from("perfiles").select("*").eq("id", userId).single();
+        if(error) throw error;
+        return data;
+      } catch(e) {
+        console.error("Error cargando perfil:", e);
+        return null;
+      }
+    };
+
+    const {data:{subscription}} = supabase.auth.onAuthStateChange(async (event, session) => {
+      if(!mounted) return;
+      console.log("Auth event:", event);
+
+      if(event === "SIGNED_OUT" || !session) {
+        setUser(null);
+        setPerfil(null);
+        setLoading(false);
+        return;
+      }
+
+      if(["SIGNED_IN","TOKEN_REFRESHED","INITIAL_SESSION"].includes(event)) {
+        if(session?.user) {
+          const p = await loadPerfil(session.user.id);
+          if(mounted) {
             setUser(session.user);
             setPerfil(p);
-            setVista(p?.rol==="admin_general"?"dashboard":"agenda");
+            const defaultVista = p?.rol === "admin_general" ? "dashboard"
+              : p?.rol === "medico" ? "pacientes" : "agenda";
+            setVista(defaultVista);
+            setLoading(false);
           }
+        } else {
+          if(mounted) setLoading(false);
         }
-      } catch(e){ console.error(e); }
-      finally { if(mounted) setLoading(false); }
-    };
-    init();
-    const {data:{subscription}} = supabase.auth.onAuthStateChange(async (event,session)=>{
-      if(!mounted) return;
-      if(event==="SIGNED_OUT"){ setUser(null); setPerfil(null); setLoading(false); return; }
-      if(session){
-        try {
-          const {data:p} = await supabase
-            .from("perfiles").select("*")
-            .eq("id",session.user.id).single();
-          if(mounted){ setUser(session.user); setPerfil(p); setVista(p?.rol==="admin_general"?"dashboard":"agenda"); }
-        } catch(e){ console.error(e); }
-        finally { if(mounted) setLoading(false); }
       }
     });
-    return ()=>{ mounted=false; subscription.unsubscribe(); };
-  },[]);
 
-  const handleLogin = ({perfil:p,...u})=>{ setUser(u); setPerfil(p); setVista(p?.rol==="admin_general"?"dashboard":"agenda"); };
-  const handleLogout = async ()=>{ await supabase.auth.signOut(); setUser(null); setPerfil(null); };
+    // Timeout de seguridad: si en 8 segundos no resuelve, fuerza login
+    const timeout = setTimeout(() => {
+      if(mounted) setLoading(false);
+    }, 8000);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  const handleLogin = ({perfil:p,...u})=>{
+    setUser(u);
+    setPerfil(p);
+    const defaultVista = p?.rol === "admin_general" ? "dashboard"
+      : p?.rol === "medico" ? "pacientes" : "agenda";
+    setVista(defaultVista);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setPerfil(null);
+    setVista("dashboard");
+  };
 
   if(loading) return <Spinner/>;
   if(!user)   return <Login onLogin={handleLogin}/>;
-
-  const isAdmin = perfil?.rol==="admin_general";
 
   const renderVista = () => {
     switch(vista){
@@ -852,18 +834,19 @@ export default function App() {
       case "finanzas":  return <Finanzas/>;
       case "sedes":     return <Sedes/>;
       case "usuarios":  return <Usuarios perfil={perfil}/>;
+      case "sesiones":  return <Sesiones perfil={perfil}/>;
       case "agenda":    return <AgendaMedico perfil={perfil}/>;
       default:          return <DashboardAdmin/>;
     }
   };
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#080C18",minHeight:"100vh",color:"#E8EAF0"}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#080C18",minHeight:"100vh",color:"#E8EAF0",width:"100%"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#1E2535;border-radius:3px}select option{background:#1A2035}input::placeholder{color:#4B5563}textarea::placeholder{color:#4B5563}textarea{box-sizing:border-box}`}</style>
-      <div style={{display:"flex",minHeight:"100vh"}}>
+      <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
         <Sidebar vista={vista} setVista={setVista} perfil={perfil} onLogout={handleLogout}/>
-        <div style={{flex:1,overflow:"auto",padding:"28px 32px"}}>
+        <div style={{flex:1,overflow:"auto",padding:"28px 40px"}}>
           {renderVista()}
         </div>
       </div>
