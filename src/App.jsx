@@ -20,6 +20,62 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── Helpers para queries de Supabase ──────────────────────────
+// FIX BUG 3 (race conditions en mount/unmount): patrón seguro para queries.
+// Captura errores, evita setState en componentes desmontados, log a consola.
+
+/**
+ * Ejecuta una query de Supabase con manejo de errores robusto.
+ * Siempre devuelve {data, error}, nunca lanza excepciones.
+ * Si la query lanza una excepción, la captura y la devuelve como error.
+ */
+async function safeQuery(queryFn, contexto = "query") {
+  try {
+    const result = await queryFn();
+    if (result?.error) {
+      console.error(`[${contexto}] Error de Supabase:`, result.error);
+      return { data: null, error: result.error };
+    }
+    return { data: result?.data ?? null, error: null };
+  } catch (e) {
+    console.error(`[${contexto}] Excepción:`, e);
+    return { data: null, error: e };
+  }
+}
+
+/**
+ * Hook custom: ejecuta una query al montar el componente.
+ * - queryFn: función que devuelve la promesa de Supabase
+ * - deps: array de dependencias (igual que useEffect)
+ * - contexto: string descriptivo para los logs
+ * Devuelve {data, loading, error, refetch}.
+ * Maneja cleanup automático para evitar setState en componentes desmontados.
+ */
+function useSupabaseQuery(queryFn, deps = [], contexto = "query") {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [refetchTick, setRefetchTick] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+
+    safeQuery(queryFn, contexto).then(({ data, error }) => {
+      if (!mounted) return;
+      setData(data);
+      setError(error);
+      setLoading(false);
+    });
+
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, refetchTick]);
+
+  const refetch = () => setRefetchTick(t => t + 1);
+  return { data, loading, error, refetch };
+}
+
 // ── Colores por sede ──────────────────────────────────────────
 const SEDE_COLOR = {
   "Molisalud": "#10B981",
@@ -177,19 +233,19 @@ function Sidebar({vista, setVista, perfil, onLogout}) {
 
 // ── DASHBOARD ADMIN ───────────────────────────────────────────
 function DashboardAdmin() {
-  const [resumen, setResumen] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(()=>{
-    supabase.from("vista_resumen_sedes").select("*")
-      .then(({data})=>{ setResumen(data||[]); setLoading(false); });
-  },[]);
+  // FIX BUG 3: hook con cleanup + error handling. Antes era .then() sin manejo de errores.
+  const { data: resumen, loading } = useSupabaseQuery(
+    () => supabase.from("vista_resumen_sedes").select("*"),
+    [],
+    "Dashboard:vista_resumen_sedes"
+  );
+  const filas = resumen || [];
 
   const totales = {
-    pacientes: resumen.reduce((a,s)=>a+Number(s.pacientes_activos||0),0),
-    sesiones:  resumen.reduce((a,s)=>a+Number(s.sesiones_mes||0),0),
-    ingresos:  resumen.reduce((a,s)=>a+Number(s.ingresos_mes||0),0),
-    sesHoy:    resumen.reduce((a,s)=>a+Number(s.sesiones_hoy||0),0),
+    pacientes: filas.reduce((a,s)=>a+Number(s.pacientes_activos||0),0),
+    sesiones:  filas.reduce((a,s)=>a+Number(s.sesiones_mes||0),0),
+    ingresos:  filas.reduce((a,s)=>a+Number(s.ingresos_mes||0),0),
+    sesHoy:    filas.reduce((a,s)=>a+Number(s.sesiones_hoy||0),0),
   };
 
   if(loading) return <div style={{padding:32,color:"#4B5563"}}>Cargando dashboard...</div>;
@@ -220,7 +276,7 @@ function DashboardAdmin() {
       </div>
       <div style={{marginBottom:10,fontSize:13,fontWeight:700,color:"#6B7280",letterSpacing:"0.08em",textTransform:"uppercase"}}>Rendimiento por sede</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14}}>
-        {resumen.map(s=>(
+        {filas.map(s=>(
           <Card key={s.sede_id} style={{borderTop:`3px solid ${getColor(s.sede)}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#E8EAF0"}}>{s.sede}</div>
@@ -258,18 +314,31 @@ function Pacientes({perfil}) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState({});
 
+  // FIX BUG 3: load reescrita con safeQuery. Captura errores, no se queda colgada.
   const load = async () => {
     setLoading(true);
-    let q = supabase.from("pacientes").select("*, sedes(nombre,color)").order("created_at",{ascending:false});
-    if(!isAdmin && !isMedico) q = q.eq("sede_principal_id", perfil.sede_id);
-    const {data} = await q;
-    setPacs(data||[]);
+    const { data } = await safeQuery(() => {
+      let q = supabase.from("pacientes").select("*, sedes!sede_principal_id(nombre,color)").order("created_at",{ascending:false});
+      if(!isAdmin && !isMedico) q = q.eq("sede_principal_id", perfil.sede_id);
+      return q;
+    }, "Pacientes:load");
+    setPacs(data || []);
     setLoading(false);
   };
 
+  // FIX BUG 3: cleanup pattern para evitar setState en componente desmontado.
   useEffect(()=>{
-    load();
-    supabase.from("sedes").select("id,nombre").then(({data})=>setSedes(data||[]));
+    let mounted = true;
+    (async () => {
+      await load();
+      const { data: sedesData } = await safeQuery(
+        () => supabase.from("sedes").select("id,nombre"),
+        "Pacientes:sedes"
+      );
+      if (mounted) setSedes(sedesData || []);
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const filtrados = pacs.filter(p=>{
@@ -402,20 +471,33 @@ function HistoriasClinicas({perfil}) {
   const [loading, setLoading] = useState(true);
   const [verHC, setVerHC] = useState(null);
 
+  // FIX BUG 3: load con safeQuery.
   const load = async () => {
     setLoading(true);
-    let q = supabase.from("evaluaciones_medicas")
-      .select("*, pacientes(nombres,apellidos,dni), sedes(nombre,color), perfiles(nombre)")
-      .order("fecha",{ascending:false});
-    if(!isAdmin && !isMedico) q = q.eq("sede_id", perfil.sede_id);
-    const {data} = await q;
-    setHcs(data||[]);
+    const { data } = await safeQuery(() => {
+      let q = supabase.from("evaluaciones_medicas")
+        .select("*, pacientes(nombres,apellidos,dni), sedes(nombre,color), perfiles(nombre)")
+        .order("fecha",{ascending:false});
+      if(!isAdmin && !isMedico) q = q.eq("sede_id", perfil.sede_id);
+      return q;
+    }, "HistoriasClinicas:load");
+    setHcs(data || []);
     setLoading(false);
   };
 
+  // FIX BUG 3: cleanup pattern.
   useEffect(()=>{
-    load();
-    supabase.from("sedes").select("id,nombre,color").then(({data})=>setSedes(data||[]));
+    let mounted = true;
+    (async () => {
+      await load();
+      const { data: sedesData } = await safeQuery(
+        () => supabase.from("sedes").select("id,nombre,color"),
+        "HistoriasClinicas:sedes"
+      );
+      if (mounted) setSedes(sedesData || []);
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const filtradas = sedeTab==="todas" ? hcs : hcs.filter(h=>h.sede_id===sedeTab);
@@ -519,11 +601,20 @@ function Sedes() {
   const [resumen, setResumen] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // FIX BUG 3: Promise.all envuelto con safeQuery + cleanup.
   useEffect(()=>{
-    Promise.all([
-      supabase.from("sedes").select("*"),
-      supabase.from("vista_resumen_sedes").select("*"),
-    ]).then(([{data:s},{data:r}])=>{ setSedes(s||[]); setResumen(r||[]); setLoading(false); });
+    let mounted = true;
+    (async () => {
+      const [r1, r2] = await Promise.all([
+        safeQuery(() => supabase.from("sedes").select("*"), "Sedes:sedes"),
+        safeQuery(() => supabase.from("vista_resumen_sedes").select("*"), "Sedes:resumen"),
+      ]);
+      if (!mounted) return;
+      setSedes(r1.data || []);
+      setResumen(r2.data || []);
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
   },[]);
 
   if(loading) return <div style={{color:"#4B5563",padding:20}}>Cargando...</div>;
@@ -568,13 +659,13 @@ function Sedes() {
 
 // ── FINANZAS ──────────────────────────────────────────────────
 function Finanzas() {
-  const [ingresos, setIngresos] = useState([]);
-  const [loading, setLoading]   = useState(true);
-
-  useEffect(()=>{
-    supabase.from("vista_ingresos_mensual").select("*")
-      .then(({data})=>{ setIngresos(data||[]); setLoading(false); });
-  },[]);
+  // FIX BUG 3: hook con cleanup + error handling.
+  const { data: ingresosData, loading } = useSupabaseQuery(
+    () => supabase.from("vista_ingresos_mensual").select("*"),
+    [],
+    "Finanzas:vista_ingresos_mensual"
+  );
+  const ingresos = ingresosData || [];
 
   const totalIngresos = ingresos.reduce((a,r)=>a+Number(r.ingresos||0),0);
   const totalEgresos  = ingresos.reduce((a,r)=>a+Number(r.egresos||0),0);
@@ -627,15 +718,30 @@ function Usuarios({perfil:adminPerfil}) {
   const [saving, setSaving]     = useState(false);
   const [msg, setMsg]           = useState("");
 
+  // FIX BUG 3: load con safeQuery.
   const load = async () => {
     setLoading(true);
-    const {data} = await supabase.from("perfiles").select("*, sedes(nombre)");
-    setUsuarios(data||[]); setLoading(false);
+    const { data } = await safeQuery(
+      () => supabase.from("perfiles").select("*, sedes(nombre)"),
+      "Usuarios:load"
+    );
+    setUsuarios(data || []);
+    setLoading(false);
   };
 
+  // FIX BUG 3: cleanup pattern.
   useEffect(()=>{
-    load();
-    supabase.from("sedes").select("id,nombre").then(({data})=>setSedes(data||[]));
+    let mounted = true;
+    (async () => {
+      await load();
+      const { data: sedesData } = await safeQuery(
+        () => supabase.from("sedes").select("id,nombre"),
+        "Usuarios:sedes"
+      );
+      if (mounted) setSedes(sedesData || []);
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const setF = (k,v) => setForm(f=>({...f,[k]:v}));
@@ -710,10 +816,21 @@ function AgendaMedico({perfil}) {
   const [agenda, setAgenda] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // FIX BUG 3: cleanup pattern + safeQuery.
   useEffect(()=>{
-    let q = supabase.from("vista_agenda_hoy").select("*");
-    if(perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
-    q.then(({data})=>{ setAgenda(data||[]); setLoading(false); });
+    let mounted = true;
+    (async () => {
+      const { data } = await safeQuery(() => {
+        let q = supabase.from("vista_agenda_hoy").select("*");
+        if(perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+        return q;
+      }, "AgendaMedico:vista_agenda_hoy");
+      if (!mounted) return;
+      setAgenda(data || []);
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const estadoColor = {programada:"#F59E0B",en_curso:"#00C4B4",completada:"#10B981",cancelada:"#F87171",no_asistio:"#6B7280"};
@@ -776,6 +893,10 @@ export default function App() {
 
   useEffect(()=>{
     let mounted = true;
+    // FIX BUG 5: refs para que el listener pueda comparar contra estado actual
+    // sin causar re-suscripciones. Cada SIGNED_IN redundante de Supabase NO
+    // debe disparar reload de perfil ni reset de vista.
+    let currentUserId = null;
 
     const loadPerfil = async (userId) => {
       try {
@@ -793,6 +914,7 @@ export default function App() {
       console.log("Auth event:", event);
 
       if(event === "SIGNED_OUT" || !session) {
+        currentUserId = null;
         setUser(null);
         setPerfil(null);
         setLoading(false);
@@ -800,19 +922,32 @@ export default function App() {
       }
 
       if(["SIGNED_IN","TOKEN_REFRESHED","INITIAL_SESSION"].includes(event)) {
-        if(session?.user) {
-          const p = await loadPerfil(session.user.id);
-          if(mounted) {
-            setUser(session.user);
-            setPerfil(p);
-            const defaultVista = p?.rol === "admin_general" ? "dashboard"
-              : p?.rol === "medico" ? "pacientes" : "agenda";
-            setVista(defaultVista);
-            setLoading(false);
-          }
-        } else {
+        if(!session?.user) {
           if(mounted) setLoading(false);
+          return;
         }
+
+        // FIX BUG 5: si el user.id es el mismo que ya tenemos cargado,
+        // ignoramos el evento. Supabase emite SIGNED_IN duplicados al sincronizar
+        // entre pestañas o al refresh de token, y antes esto causaba re-fetch
+        // del perfil + reset de vista, lo que desmontaba/remontaba componentes
+        // hijos en medio de sus queries → carga infinita en Dashboard.
+        if(session.user.id === currentUserId) {
+          // Solo aseguramos que loading esté en false (caso edge de TOKEN_REFRESHED muy rápido).
+          if(mounted) setLoading(false);
+          return;
+        }
+
+        currentUserId = session.user.id;
+        const p = await loadPerfil(session.user.id);
+        if(!mounted) return;
+        setUser(session.user);
+        setPerfil(p);
+        // setVista solo en el primer login real, no en cada SIGNED_IN redundante.
+        const defaultVista = p?.rol === "admin_general" ? "dashboard"
+          : p?.rol === "medico" ? "pacientes" : "agenda";
+        setVista(defaultVista);
+        setLoading(false);
       }
     });
 
