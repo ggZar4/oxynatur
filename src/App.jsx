@@ -2,8 +2,22 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── Supabase client ───────────────────────────────────────────
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://eyfwqcxcjunrpnqhbbek.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5ZndxY3hjanVucnBucWhiYmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjAwNTIsImV4cCI6MjA4ODEzNjA1Mn0.6pNYJTeFKs4Uf-KqqJ_H8pSQSOWGFUvy-UR_dk6fHGY";
+// FIX BUG 2: env vars obligatorias, sin fallback. Si faltan, fallamos ruidoso.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  const faltantes = [
+    !SUPABASE_URL && "VITE_SUPABASE_URL",
+    !SUPABASE_KEY && "VITE_SUPABASE_ANON_KEY",
+  ].filter(Boolean).join(", ");
+  throw new Error(
+    `[OxyNatur] Faltan variables de entorno: ${faltantes}. ` +
+    `Configúralas en Vercel (Settings → Environment Variables) ` +
+    `y en .env.local para desarrollo.`
+  );
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── Colores por sede ──────────────────────────────────────────
@@ -63,7 +77,10 @@ const Select = ({label,value,onChange,options=[],required=false}) => (
 );
 
 // ── LOGIN ─────────────────────────────────────────────────────
-function Login({onLogin}) {
+// FIX BUG 1: Login ya NO carga perfil ni llama onLogin.
+// Solo dispara signInWithPassword. onAuthStateChange en App() es la única
+// fuente de verdad para user/perfil/loading.
+function Login() {
   const [email, setEmail] = useState("");
   const [pass,  setPass]  = useState("");
   const [error, setError] = useState("");
@@ -72,11 +89,14 @@ function Login({onLogin}) {
   const handleLogin = async () => {
     if(!email||!pass){setError("Completa todos los campos");return;}
     setLoading(true); setError("");
-    const {data,error:e} = await supabase.auth.signInWithPassword({email,password:pass});
-    if(e){setError("Email o contraseña incorrectos");setLoading(false);return;}
-    const {data:perfil} = await supabase.from("perfiles").select("*").eq("id",data.user.id).single();
-    onLogin({...data.user, perfil});
-    setLoading(false);
+    const {error:e} = await supabase.auth.signInWithPassword({email,password:pass});
+    if(e){
+      setError("Email o contraseña incorrectos");
+      setLoading(false);
+      return;
+    }
+    // No seteamos nada más. onAuthStateChange dispara SIGNED_IN y App() reacciona.
+    // El loading local se mantiene true hasta que el componente se desmonte.
   };
 
   return (
@@ -808,13 +828,9 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = ({perfil:p,...u})=>{
-    setUser(u);
-    setPerfil(p);
-    const defaultVista = p?.rol === "admin_general" ? "dashboard"
-      : p?.rol === "medico" ? "pacientes" : "agenda";
-    setVista(defaultVista);
-  };
+  // FIX BUG 1: handleLogin ELIMINADO. onAuthStateChange en el useEffect de arriba
+  // es la única fuente de verdad. Login solo dispara signInWithPassword y el
+  // listener detecta SIGNED_IN, carga perfil y settea estado.
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -824,7 +840,7 @@ export default function App() {
   };
 
   if(loading) return <Spinner/>;
-  if(!user)   return <Login onLogin={handleLogin}/>;
+  if(!user)   return <Login/>;
 
   const renderVista = () => {
     switch(vista){
