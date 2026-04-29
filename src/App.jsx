@@ -18,7 +18,26 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   );
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// FIX BUG 6: lock huérfano de auth-token.
+// Supabase usa Web Locks API para sincronizar refresh de token entre pestañas.
+// Si un componente se desmonta mid-refresh, el lock queda huérfano y bloquea
+// futuros signInWithPassword por 5+ segundos hasta que Supabase lo fuerza.
+// Solución: pasar `lock: undefined` desactiva Web Locks y usa el fallback
+// in-memory simple. Para una app de una sola pestaña por usuario es suficiente
+// y previene el problema del "Ingresando..." infinito en navegador con sesión previa.
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    lock: async (_name, _acquireTimeout, fn) => {
+      // Lock no-op: ejecuta la función directamente sin coordinación entre pestañas.
+      // Tradeoff: si abren dos pestañas simultáneas, ambas pueden refrescar el token
+      // a la vez. Es aceptable para una clínica donde cada usuario usa 1 pestaña.
+      return await fn();
+    },
+  },
+});
 
 // ── Helpers para queries de Supabase ──────────────────────────
 // FIX BUG 3 (race conditions en mount/unmount): patrón seguro para queries.
@@ -893,10 +912,14 @@ export default function App() {
 
   useEffect(()=>{
     let mounted = true;
-    // FIX BUG 5: refs para que el listener pueda comparar contra estado actual
-    // sin causar re-suscripciones. Cada SIGNED_IN redundante de Supabase NO
-    // debe disparar reload de perfil ni reset de vista.
-    let currentUserId = null;
+    // FIX BUG 7: guard mejorado.
+    // - loadedUserId: id del último usuario cuyo PERFIL ya está cargado en estado.
+    //   Si llega un SIGNED_IN con este mismo id, lo ignoramos.
+    //   Si llega con otro id O con el mismo id pero perfil aún no cargado, procesamos.
+    // - inFlightUserId: id que estamos cargando AHORA mismo, para evitar disparar
+    //   loadPerfil en paralelo si llegan SIGNED_IN duplicados muy rápido.
+    let loadedUserId = null;
+    let inFlightUserId = null;
 
     const loadPerfil = async (userId) => {
       try {
@@ -909,51 +932,80 @@ export default function App() {
       }
     };
 
-    const {data:{subscription}} = supabase.auth.onAuthStateChange(async (event, session) => {
+    const handleSession = async (session, eventName) => {
       if(!mounted) return;
-      console.log("Auth event:", event);
 
-      if(event === "SIGNED_OUT" || !session) {
-        currentUserId = null;
+      if(!session?.user) {
+        loadedUserId = null;
+        inFlightUserId = null;
         setUser(null);
         setPerfil(null);
         setLoading(false);
         return;
       }
 
-      if(["SIGNED_IN","TOKEN_REFRESHED","INITIAL_SESSION"].includes(event)) {
-        if(!session?.user) {
-          if(mounted) setLoading(false);
-          return;
-        }
+      const uid = session.user.id;
 
-        // FIX BUG 5: si el user.id es el mismo que ya tenemos cargado,
-        // ignoramos el evento. Supabase emite SIGNED_IN duplicados al sincronizar
-        // entre pestañas o al refresh de token, y antes esto causaba re-fetch
-        // del perfil + reset de vista, lo que desmontaba/remontaba componentes
-        // hijos en medio de sus queries → carga infinita en Dashboard.
-        if(session.user.id === currentUserId) {
-          // Solo aseguramos que loading esté en false (caso edge de TOKEN_REFRESHED muy rápido).
-          if(mounted) setLoading(false);
-          return;
-        }
+      // Guard: si ya tenemos perfil cargado para este uid, no hacer nada.
+      if(uid === loadedUserId) {
+        if(mounted) setLoading(false);
+        return;
+      }
 
-        currentUserId = session.user.id;
-        const p = await loadPerfil(session.user.id);
-        if(!mounted) return;
-        setUser(session.user);
-        setPerfil(p);
-        // setVista solo en el primer login real, no en cada SIGNED_IN redundante.
+      // Guard: si YA estamos cargando perfil para este uid (otro evento llegó
+      // antes de que el primer load termine), no disparar otro load en paralelo.
+      if(uid === inFlightUserId) return;
+
+      inFlightUserId = uid;
+      const p = await loadPerfil(uid);
+      if(!mounted) return;
+      inFlightUserId = null;
+      loadedUserId = uid;
+
+      setUser(session.user);
+      setPerfil(p);
+      // FIX BUG 7: setVista solo en el primer load (no cuando recargamos perfil tras SIGNED_OUT/SIGNED_IN
+      // del mismo user dentro de la misma sesión de la app).
+      setVista(prevVista => {
+        // Si la vista actual es válida para este rol, mantenla. Sino, ir al default.
         const defaultVista = p?.rol === "admin_general" ? "dashboard"
           : p?.rol === "medico" ? "pacientes" : "agenda";
-        setVista(defaultVista);
-        setLoading(false);
+        return prevVista || defaultVista;
+      });
+      setLoading(false);
+    };
+
+    // FIX BUG 7: getSession() proactivo al boot.
+    // Antes dependíamos de que onAuthStateChange disparara INITIAL_SESSION, pero en
+    // F5 con sesión persistida ese evento a veces no llega y se queda en loading=true.
+    // Ahora consultamos directamente el estado de sesión y procesamos.
+    (async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if(error) {
+        console.error("Error obteniendo sesión inicial:", error);
+        if(mounted) setLoading(false);
+        return;
+      }
+      await handleSession(data.session, "BOOT");
+    })();
+
+    const {data:{subscription}} = supabase.auth.onAuthStateChange(async (event, session) => {
+      if(!mounted) return;
+      console.log("Auth event:", event);
+
+      if(event === "SIGNED_OUT") {
+        await handleSession(null, event);
+        return;
+      }
+
+      if(["SIGNED_IN","TOKEN_REFRESHED","INITIAL_SESSION","USER_UPDATED"].includes(event)) {
+        await handleSession(session, event);
       }
     });
 
     // Timeout de seguridad: si en 8 segundos no resuelve, fuerza login
     const timeout = setTimeout(() => {
-      if(mounted) setLoading(false);
+      if(mounted && loadedUserId === null) setLoading(false);
     }, 8000);
 
     return () => {
