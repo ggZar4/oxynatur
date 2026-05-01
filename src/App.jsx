@@ -19,35 +19,18 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 // FIX BUG 6: lock huérfano de auth-token.
-// Supabase usa Web Locks API para sincronizar refresh de token entre pestañas.
-// Si un componente se desmonta mid-refresh, el lock queda huérfano y bloquea
-// futuros signInWithPassword por 5+ segundos hasta que Supabase lo fuerza.
-// Solución: pasar `lock: undefined` desactiva Web Locks y usa el fallback
-// in-memory simple. Para una app de una sola pestaña por usuario es suficiente
-// y previene el problema del "Ingresando..." infinito en navegador con sesión previa.
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
     lock: async (_name, _acquireTimeout, fn) => {
-      // Lock no-op: ejecuta la función directamente sin coordinación entre pestañas.
-      // Tradeoff: si abren dos pestañas simultáneas, ambas pueden refrescar el token
-      // a la vez. Es aceptable para una clínica donde cada usuario usa 1 pestaña.
       return await fn();
     },
   },
 });
 
 // ── Helpers para queries de Supabase ──────────────────────────
-// FIX BUG 3 (race conditions en mount/unmount): patrón seguro para queries.
-// Captura errores, evita setState en componentes desmontados, log a consola.
-
-/**
- * Ejecuta una query de Supabase con manejo de errores robusto.
- * Siempre devuelve {data, error}, nunca lanza excepciones.
- * Si la query lanza una excepción, la captura y la devuelve como error.
- */
 async function safeQuery(queryFn, contexto = "query") {
   try {
     const result = await queryFn();
@@ -62,14 +45,6 @@ async function safeQuery(queryFn, contexto = "query") {
   }
 }
 
-/**
- * Hook custom: ejecuta una query al montar el componente.
- * - queryFn: función que devuelve la promesa de Supabase
- * - deps: array de dependencias (igual que useEffect)
- * - contexto: string descriptivo para los logs
- * Devuelve {data, loading, error, refetch}.
- * Maneja cleanup automático para evitar setState en componentes desmontados.
- */
 function useSupabaseQuery(queryFn, deps = [], contexto = "query") {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -79,14 +54,12 @@ function useSupabaseQuery(queryFn, deps = [], contexto = "query") {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-
     safeQuery(queryFn, contexto).then(({ data, error }) => {
       if (!mounted) return;
       setData(data);
       setError(error);
       setLoading(false);
     });
-
     return () => { mounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, refetchTick]);
@@ -101,6 +74,60 @@ const SEDE_COLOR = {
   "Clínica San Miguel Arcángel": "#7C6AF7",
 };
 const getColor = (nombre) => SEDE_COLOR[nombre] || "#00C4B4";
+
+// ── FASE B: Helper central de roles ──────────────────────────
+// ÚNICA fuente de verdad para permisos en toda la app.
+// Si cambia un rol, se cambia aquí y afecta todo.
+// Nunca uses perfil?.rol directamente en los componentes —
+// usa siempre los flags que devuelve esta función.
+function getRolFlags(perfil) {
+  const rol          = perfil?.rol;
+  const esEspecialista = perfil?.es_especialista === true;
+
+  const esAdmin      = rol === "admin_general";
+  const esMedico     = rol === "medico";
+  const esEnfermero  = rol === "enfermero";
+  const esMedicoEsp  = esMedico && esEspecialista;   // consultor remoto cross-sede
+  const esMedicoSede = esMedico && !esEspecialista;  // médico físico en una sede
+
+  return {
+    // ── Identidad ──
+    esAdmin,
+    esMedico,
+    esEnfermero,
+    esMedicoEsp,
+    esMedicoSede,
+
+    // ── Acceso a módulos ──
+    puedeVerDashboard:  esAdmin || esMedico,
+    puedeVerVentas:     esAdmin,
+    puedeVerFinanzas:   esAdmin,
+    puedeVerSedes:      esAdmin,
+    puedeVerUsuarios:   esAdmin,
+    puedeVerAlertas:    esAdmin || esMedico,
+
+    // ── Acceso a pacientes ──
+    puedeCrearPaciente:      esAdmin || esMedico || esEnfermero,
+    puedeEditarPaciente:     esAdmin,
+    puedeVerTodosPacientes:  esAdmin || esMedicoEsp,
+
+    // ── Acceso a historias clínicas ──
+    puedeEscribirProtocolo:    esAdmin || esMedicoEsp,
+    puedeEscribirObservacion:  esAdmin || esMedico || esEnfermero,
+    puedeVerTodasHC:           esAdmin || esMedicoEsp,
+
+    // ── UI helpers ──
+    rolLabel: esAdmin      ? "Admin General"
+            : esMedicoEsp  ? "Médico Especialista"
+            : esMedicoSede ? "Médico"
+            : esEnfermero  ? "Enfermero"
+            : "Usuario",
+
+    vistaDefault: esAdmin  ? "dashboard"
+                : esMedico ? "alertas"
+                : "agenda",
+  };
+}
 
 // ── Componentes base ──────────────────────────────────────────
 const Spinner = () => (
@@ -152,9 +179,6 @@ const Select = ({label,value,onChange,options=[],required=false}) => (
 );
 
 // ── LOGIN ─────────────────────────────────────────────────────
-// FIX BUG 1: Login ya NO carga perfil ni llama onLogin.
-// Solo dispara signInWithPassword. onAuthStateChange en App() es la única
-// fuente de verdad para user/perfil/loading.
 function Login() {
   const [email, setEmail] = useState("");
   const [pass,  setPass]  = useState("");
@@ -170,8 +194,6 @@ function Login() {
       setLoading(false);
       return;
     }
-    // No seteamos nada más. onAuthStateChange dispara SIGNED_IN y App() reacciona.
-    // El loading local se mantiene true hasta que el componente se desmonte.
   };
 
   return (
@@ -201,42 +223,41 @@ function Login() {
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────
-function Sidebar({vista, setVista, perfil, onLogout}) {
-  const isAdmin = perfil?.rol === "admin_general";
-  const isMedico = perfil?.rol === "medico";
-  const navAdmin = [
-    {id:"dashboard", icon:"▦",  label:"Dashboard"},
-    {id:"pacientes", icon:"👤", label:"Pacientes"},
-    {id:"sesiones",  icon:"⚡", label:"Sesiones"},
-    {id:"historias", icon:"📋", label:"Historias Clínicas"},
-    {id:"finanzas",  icon:"💰", label:"Finanzas"},
-    {id:"sedes",     icon:"📍", label:"Sedes"},
-    {id:"usuarios",  icon:"👥", label:"Usuarios"},
-  ];
-  const navMedico = [
-    {id:"pacientes", icon:"👤", label:"Pacientes"},
-    {id:"historias", icon:"📋", label:"Historias Clínicas"},
-    {id:"agenda",    icon:"📅", label:"Mi Agenda"},
-  ];
-  const navEnfermero = [
-    {id:"agenda",    icon:"📅", label:"Agenda del día"},
-    {id:"pacientes", icon:"👤", label:"Pacientes"},
-    {id:"historias", icon:"📋", label:"Historias Clínicas"},
-    {id:"sesiones",  icon:"⚡", label:"Sesiones"},
-  ];
-  const nav = isAdmin ? navAdmin : isMedico ? navMedico : navEnfermero;
-  const rolLabel = isAdmin ? "Admin General" : isMedico ? "Médico" : "Enfermero";
+// FASE B: Nav completamente dinámico basado en getRolFlags().
+// Badge de alertas recibe alertasNuevas como prop desde App.
+function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0}) {
+  const f = getRolFlags(perfil);
+
+  const navItems = [
+    { id:"dashboard", icon:"▦",  label:"Dashboard",         visible: f.puedeVerDashboard },
+    { id:"alertas",   icon:"🔔", label:"Alertas Clínicas",  visible: f.puedeVerAlertas,
+      badge: alertasNuevas > 0 ? alertasNuevas : null },
+    { id:"pacientes", icon:"👤", label:"Pacientes",         visible: true },
+    { id:"ventas",    icon:"💵", label:"Ventas",            visible: f.puedeVerVentas },
+    { id:"sesiones",  icon:"⚡", label:"Sesiones",          visible: true },
+    { id:"historias", icon:"📋", label:"Historias Clínicas", visible: true },
+    { id:"finanzas",  icon:"💰", label:"Finanzas",          visible: f.puedeVerFinanzas },
+    { id:"sedes",     icon:"📍", label:"Sedes",             visible: f.puedeVerSedes },
+    { id:"usuarios",  icon:"👥", label:"Usuarios",          visible: f.puedeVerUsuarios },
+    { id:"agenda",    icon:"📅", label:"Agenda",            visible: true },
+  ].filter(item => item.visible);
 
   return (
     <div style={{width:240,background:"#0D1320",borderRight:"1px solid #1E2535",padding:"20px 10px",display:"flex",flexDirection:"column",gap:2,flexShrink:0,minHeight:"100vh"}}>
       <div style={{padding:"0 8px 24px"}}>
         <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:20,color:"#00C4B4",letterSpacing:"-0.03em"}}>OxyNatur</div>
-        <div style={{fontSize:10,color:"#374151",marginTop:1,letterSpacing:"0.05em",textTransform:"uppercase"}}>{rolLabel}</div>
+        <div style={{fontSize:10,color:"#374151",marginTop:1,letterSpacing:"0.05em",textTransform:"uppercase"}}>{f.rolLabel}</div>
       </div>
-      {nav.map(item=>(
+      {navItems.map(item=>(
         <button key={item.id} onClick={()=>setVista(item.id)}
           style={{background:vista===item.id?"linear-gradient(135deg,#00C4B420,#7C6AF720)":"none",border:vista===item.id?"1px solid #00C4B430":"1px solid transparent",cursor:"pointer",padding:"10px 14px",borderRadius:10,color:vista===item.id?"#00C4B4":"#6B7280",fontFamily:"inherit",fontSize:14,fontWeight:500,display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",transition:"all .2s"}}>
-          <span style={{fontSize:15}}>{item.icon}</span>{item.label}
+          <span style={{fontSize:15}}>{item.icon}</span>
+          <span style={{flex:1}}>{item.label}</span>
+          {item.badge && (
+            <span style={{background:"#F87171",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"1px 7px",minWidth:20,textAlign:"center"}}>
+              {item.badge > 99 ? "99+" : item.badge}
+            </span>
+          )}
         </button>
       ))}
       <div style={{marginTop:"auto",padding:"16px 8px 0",borderTop:"1px solid #1E2535"}}>
@@ -252,7 +273,6 @@ function Sidebar({vista, setVista, perfil, onLogout}) {
 
 // ── DASHBOARD ADMIN ───────────────────────────────────────────
 function DashboardAdmin() {
-  // FIX BUG 3: hook con cleanup + error handling. Antes era .then() sin manejo de errores.
   const { data: resumen, loading } = useSupabaseQuery(
     () => supabase.from("vista_resumen_sedes").select("*"),
     [],
@@ -322,8 +342,7 @@ function DashboardAdmin() {
 
 // ── PACIENTES ─────────────────────────────────────────────────
 function Pacientes({perfil}) {
-  const isAdmin = perfil?.rol === "admin_general";
-  const isMedico = perfil?.rol === "medico";
+  const f = getRolFlags(perfil);
   const [pacs, setPacs]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [busq, setBusq]   = useState("");
@@ -333,19 +352,18 @@ function Pacientes({perfil}) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState({});
 
-  // FIX BUG 3: load reescrita con safeQuery. Captura errores, no se queda colgada.
   const load = async () => {
     setLoading(true);
     const { data } = await safeQuery(() => {
       let q = supabase.from("pacientes").select("*, sedes!sede_principal_id(nombre,color)").order("created_at",{ascending:false});
-      if(!isAdmin && !isMedico) q = q.eq("sede_principal_id", perfil.sede_id);
+      // admin_general y médico especialista ven todo; el resto solo su sede
+      if(!f.puedeVerTodosPacientes && perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
       return q;
     }, "Pacientes:load");
     setPacs(data || []);
     setLoading(false);
   };
 
-  // FIX BUG 3: cleanup pattern para evitar setState en componente desmontado.
   useEffect(()=>{
     let mounted = true;
     (async () => {
@@ -365,7 +383,7 @@ function Pacientes({perfil}) {
     return p.nombres?.toLowerCase().includes(q) || p.apellidos?.toLowerCase().includes(q) || p.dni?.includes(q);
   });
 
-  const setF = (k,v) => setForm(f=>({...f,[k]:v}));
+  const setF = (k,v) => setForm(fm=>({...fm,[k]:v}));
 
   const guardar = async () => {
     const e = {};
@@ -408,7 +426,8 @@ function Pacientes({perfil}) {
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>Pacientes</h1>
           <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>{filtrados.length} pacientes encontrados</p>
         </div>
-        <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>
+        {/* FASE B: solo roles con permiso ven el botón */}
+        {f.puedeCrearPaciente && <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>}
       </div>
       <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por nombre o DNI..."
         style={{background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 16px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:18}}/>
@@ -440,7 +459,7 @@ function Pacientes({perfil}) {
           </>
         )
       }
-      {modal && (
+      {modal && f.puedeCrearPaciente && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
           <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -482,29 +501,27 @@ function Pacientes({perfil}) {
 
 // ── HISTORIAS CLÍNICAS ────────────────────────────────────────
 function HistoriasClinicas({perfil}) {
-  const isAdmin = perfil?.rol === "admin_general";
-  const isMedico = perfil?.rol === "medico";
+  const f = getRolFlags(perfil);
   const [hcs, setHcs]     = useState([]);
   const [sedes, setSedes] = useState([]);
   const [sedeTab, setSedeTab] = useState("todas");
   const [loading, setLoading] = useState(true);
   const [verHC, setVerHC] = useState(null);
 
-  // FIX BUG 3: load con safeQuery.
   const load = async () => {
     setLoading(true);
     const { data } = await safeQuery(() => {
       let q = supabase.from("evaluaciones_medicas")
         .select("*, pacientes(nombres,apellidos,dni), sedes(nombre,color), perfiles(nombre)")
         .order("fecha",{ascending:false});
-      if(!isAdmin && !isMedico) q = q.eq("sede_id", perfil.sede_id);
+      // admin y especialista ven todo; médico de sede y enfermero solo su sede
+      if(!f.puedeVerTodasHC && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
       return q;
     }, "HistoriasClinicas:load");
     setHcs(data || []);
     setLoading(false);
   };
 
-  // FIX BUG 3: cleanup pattern.
   useEffect(()=>{
     let mounted = true;
     (async () => {
@@ -528,52 +545,49 @@ function HistoriasClinicas({perfil}) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
         <div>
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>Historias Clínicas</h1>
-          <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>Registro obligatorio por sesión</p>
+          <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>{filtradas.length} evaluaciones</p>
         </div>
       </div>
-      {(isAdmin || isMedico) && (
-        <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-          <button onClick={()=>setSedeTab("todas")} style={{background:sedeTab==="todas"?"#00C4B420":"#111827",border:`1px solid ${sedeTab==="todas"?"#00C4B455":"#1E2535"}`,color:sedeTab==="todas"?"#00C4B4":"#6B7280",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
-            Todas ({hcs.length})
-          </button>
-          {sedes.map(s=>{
-            const cnt = hcs.filter(h=>h.sede_id===s.id).length;
-            return (
-              <button key={s.id} onClick={()=>setSedeTab(s.id)} style={{background:sedeTab===s.id?`${getColor(s.nombre)}20`:"#111827",border:`1px solid ${sedeTab===s.id?getColor(s.nombre)+"55":"#1E2535"}`,color:sedeTab===s.id?getColor(s.nombre):"#6B7280",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sedeTab===s.id?700:400,display:"flex",alignItems:"center",gap:6}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:getColor(s.nombre),display:"inline-block"}}/>
-                {s.nombre} ({cnt})
-              </button>
-            );
-          })}
+      {/* Tabs de sede — solo si puede ver todas */}
+      {f.puedeVerTodasHC && sedes.length > 0 && (
+        <div style={{display:"flex",gap:8,marginBottom:20}}>
+          {[{id:"todas",nombre:"Todas"},...sedes].map(s=>(
+            <button key={s.id} onClick={()=>setSedeTab(s.id)}
+              style={{padding:"6px 16px",borderRadius:20,border:"1px solid",fontSize:13,cursor:"pointer",fontFamily:"inherit",
+                borderColor:sedeTab===s.id?"#00C4B4":"#2A3550",
+                background:sedeTab===s.id?"#00C4B415":"none",
+                color:sedeTab===s.id?"#00C4B4":"#6B7280"}}>
+              {s.nombre}
+            </button>
+          ))}
         </div>
       )}
       {loading
         ? <div style={{color:"#4B5563",padding:20}}>Cargando...</div>
-        : filtradas.length===0
-          ? <Card style={{textAlign:"center",padding:"50px 20px"}}><div style={{fontSize:40,marginBottom:12,opacity:.3}}>📋</div><div style={{color:"#6B7280"}}>Sin historias clínicas registradas</div></Card>
-          : (
-            <>
-              <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 80px 90px 100px 100px",padding:"0 18px 10px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-                <span>Paciente</span><span>Fecha</span><span>Sesión</span><span>Dolor</span><span>Estado</span><span>Acción</span>
-              </div>
-              {filtradas.map(hc=>(
-                <div key={hc.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"13px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"1.5fr 1fr 80px 90px 100px 100px",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{hc.pacientes?.nombres} {hc.pacientes?.apellidos}</div>
-                    <div style={{fontSize:12,color:"#6B7280",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
-                      <span style={{width:6,height:6,borderRadius:"50%",background:getColor(hc.sedes?.nombre),display:"inline-block"}}/>
-                      {hc.sedes?.nombre}
-                    </div>
-                  </div>
-                  <div style={{fontSize:13,color:"#E8EAF0"}}>{hc.fecha}<br/><span style={{color:"#6B7280",fontSize:11}}>{hc.hora?.slice(0,5)}</span></div>
-                  <div style={{fontSize:15,fontWeight:700,color:"#00C4B4"}}>#{hc.numero_sesion}</div>
-                  <div style={{fontSize:15,fontWeight:700,color:dolorColor(hc.nivel_dolor)}}>{hc.nivel_dolor}/10</div>
-                  <div><Badge color={estColor(hc.estado_general)}>{hc.estado_general}</Badge></div>
-                  <div><button onClick={()=>setVerHC(hc)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Ver</button></div>
+        : (
+          <>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 0.5fr",padding:"0 18px 10px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              <span>Paciente</span><span>Sede</span><span>Fecha</span><span>Dolor</span><span>Estado</span><span></span>
+            </div>
+            {filtradas.map(hc=>(
+              <div key={hc.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 0.5fr",alignItems:"center"}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{hc.pacientes?.nombres} {hc.pacientes?.apellidos}</div>
+                  <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>DNI: {hc.pacientes?.dni} · Sesión #{hc.numero_sesion}</div>
                 </div>
-              ))}
-            </>
-          )
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:getColor(hc.sedes?.nombre),display:"inline-block"}}/>
+                  <span style={{fontSize:13,color:"#E8EAF0"}}>{hc.sedes?.nombre||"—"}</span>
+                </div>
+                <div style={{fontSize:13,color:"#9CA3AF"}}>{hc.fecha}</div>
+                <div><Badge color={dolorColor(hc.nivel_dolor)}>{hc.nivel_dolor}/10</Badge></div>
+                <div><Badge color={estColor(hc.estado_general)}>{hc.estado_general}</Badge></div>
+                <div><button onClick={()=>setVerHC(hc)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Ver</button></div>
+              </div>
+            ))}
+            {filtradas.length===0 && <div style={{color:"#4B5563",textAlign:"center",padding:"40px 0",fontSize:14}}>No hay evaluaciones registradas</div>}
+          </>
+        )
       }
       {verHC && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
@@ -620,7 +634,6 @@ function Sedes() {
   const [resumen, setResumen] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // FIX BUG 3: Promise.all envuelto con safeQuery + cleanup.
   useEffect(()=>{
     let mounted = true;
     (async () => {
@@ -678,14 +691,12 @@ function Sedes() {
 
 // ── FINANZAS ──────────────────────────────────────────────────
 function Finanzas() {
-  // FIX BUG 3: hook con cleanup + error handling.
   const { data: ingresosData, loading } = useSupabaseQuery(
     () => supabase.from("vista_ingresos_mensual").select("*"),
     [],
     "Finanzas:vista_ingresos_mensual"
   );
   const ingresos = ingresosData || [];
-
   const totalIngresos = ingresos.reduce((a,r)=>a+Number(r.ingresos||0),0);
   const totalEgresos  = ingresos.reduce((a,r)=>a+Number(r.egresos||0),0);
 
@@ -733,11 +744,10 @@ function Usuarios({perfil:adminPerfil}) {
   const [sedes, setSedes]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [modal, setModal]       = useState(false);
-  const [form, setForm]         = useState({email:"",password:"",nombre:"",rol:"enfermero",sede_id:""});
+  const [form, setForm]         = useState({email:"",password:"",nombre:"",rol:"enfermero",sede_id:"",es_especialista:false});
   const [saving, setSaving]     = useState(false);
   const [msg, setMsg]           = useState("");
 
-  // FIX BUG 3: load con safeQuery.
   const load = async () => {
     setLoading(true);
     const { data } = await safeQuery(
@@ -748,7 +758,6 @@ function Usuarios({perfil:adminPerfil}) {
     setLoading(false);
   };
 
-  // FIX BUG 3: cleanup pattern.
   useEffect(()=>{
     let mounted = true;
     (async () => {
@@ -770,15 +779,27 @@ function Usuarios({perfil:adminPerfil}) {
     setSaving(true); setMsg("");
     const {error} = await supabase.auth.signUp({
       email:form.email, password:form.password,
-      options:{data:{nombre:form.nombre, rol:form.rol, sede_id:form.sede_id||null}}
+      options:{data:{
+        nombre:form.nombre,
+        rol:form.rol,
+        sede_id: form.rol==="medico" && form.es_especialista ? null : (form.sede_id||null),
+        es_especialista: form.rol==="medico" ? form.es_especialista : false,
+      }}
     });
     if(error){setMsg("Error: "+error.message);setSaving(false);return;}
     setSaving(false); setModal(false);
-    setForm({email:"",password:"",nombre:"",rol:"enfermero",sede_id:""});
+    setForm({email:"",password:"",nombre:"",rol:"enfermero",sede_id:"",es_especialista:false});
     setMsg(""); load();
   };
 
   const rolColor = {admin_general:"#00C4B4",admin_sede:"#7C6AF7",medico:"#F59E0B",enfermero:"#10B981"};
+  const rolLabel = (u) => {
+    if(u.rol === "medico" && u.es_especialista) return "Médico Especialista";
+    if(u.rol === "medico") return "Médico";
+    if(u.rol === "admin_general") return "Admin General";
+    if(u.rol === "enfermero") return "Enfermero";
+    return u.rol;
+  };
 
   return (
     <div>
@@ -791,15 +812,15 @@ function Usuarios({perfil:adminPerfil}) {
       </div>
       {loading ? <div style={{color:"#4B5563"}}>Cargando...</div>
         : <Card>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1.2fr",padding:"0 0 12px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr",padding:"0 0 12px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
               <span>Usuario</span><span>Email</span><span>Rol</span><span>Sede</span>
             </div>
             {usuarios.map(u=>(
-              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1.2fr",padding:"12px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
+              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr",padding:"12px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
                 <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{u.nombre}</div>
                 <div style={{fontSize:13,color:"#9CA3AF"}}>{u.email}</div>
-                <div><Badge color={rolColor[u.rol]||"#6B7280"}>{u.rol}</Badge></div>
-                <div style={{fontSize:13,color:"#9CA3AF"}}>{u.sedes?.nombre||"Todas"}</div>
+                <div><Badge color={rolColor[u.rol]||"#6B7280"}>{rolLabel(u)}</Badge></div>
+                <div style={{fontSize:13,color:"#9CA3AF"}}>{u.sedes?.nombre||"Todas las sedes"}</div>
               </div>
             ))}
           </Card>
@@ -817,8 +838,22 @@ function Usuarios({perfil:adminPerfil}) {
             <Input label="Contraseña temporal" value={form.password} onChange={v=>setF("password",v)} type="password" required/>
             <Select label="Rol" value={form.rol} onChange={v=>setF("rol",v)} required
               options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
-            <Select label="Sede asignada" value={form.sede_id} onChange={v=>setF("sede_id",v)} required
-              options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
+            {/* Si es médico, mostrar opción especialista */}
+            {form.rol === "medico" && (
+              <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#1A2035",borderRadius:10,border:"1px solid #2A3550"}}>
+                <input type="checkbox" id="esEsp" checked={form.es_especialista}
+                  onChange={e=>setF("es_especialista",e.target.checked)}
+                  style={{width:16,height:16,cursor:"pointer"}}/>
+                <label htmlFor="esEsp" style={{fontSize:14,color:"#E8EAF0",cursor:"pointer"}}>
+                  Médico Especialista <span style={{fontSize:12,color:"#6B7280"}}>(acceso cross-sede, sin sede fija)</span>
+                </label>
+              </div>
+            )}
+            {/* Sede solo si NO es especialista */}
+            {!(form.rol === "medico" && form.es_especialista) && (
+              <Select label="Sede asignada" value={form.sede_id} onChange={v=>setF("sede_id",v)} required
+                options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
+            )}
             <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
               <Btn variant="ghost" onClick={()=>setModal(false)}>Cancelar</Btn>
               <Btn onClick={crear} disabled={saving}>{saving?"Creando...":"Crear Usuario"}</Btn>
@@ -832,10 +867,10 @@ function Usuarios({perfil:adminPerfil}) {
 
 // ── AGENDA MÉDICO / ENFERMERO ─────────────────────────────────
 function AgendaMedico({perfil}) {
+  const f = getRolFlags(perfil);
   const [agenda, setAgenda] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // FIX BUG 3: cleanup pattern + safeQuery.
   useEffect(()=>{
     let mounted = true;
     (async () => {
@@ -858,7 +893,7 @@ function AgendaMedico({perfil}) {
     <div>
       <div style={{marginBottom:24}}>
         <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>
-          {perfil?.rol==="medico" ? "Mi Agenda" : "Agenda del día"}
+          {f.esMedico ? "Mi Agenda" : "Agenda del día"}
         </h1>
         <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>
           {new Date().toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})}
@@ -888,6 +923,275 @@ function AgendaMedico({perfil}) {
   );
 }
 
+// ── VENTAS ────────────────────────────────────────────────────
+function Ventas({perfil}) {
+  const isAdmin = perfil?.rol === "admin_general";
+
+  const { data: pacientesData } = useSupabaseQuery(
+    () => supabase.from("pacientes").select("id,nombres,apellidos,dni").order("apellidos"),
+    [], "Ventas:pacientes"
+  );
+  const { data: paquetesData } = useSupabaseQuery(
+    () => supabase.from("paquetes").select("*").eq("activo", true).order("cantidad_sesiones"),
+    [], "Ventas:paquetes"
+  );
+  const { data: sedesData } = useSupabaseQuery(
+    () => supabase.from("sedes").select("id,nombre").eq("estado", "activa"),
+    [], "Ventas:sedes"
+  );
+
+  const [ventas, setVentas] = useState([]);
+  const [loadingVentas, setLoadingVentas] = useState(true);
+
+  const loadVentas = async () => {
+    setLoadingVentas(true);
+    const { data } = await safeQuery(() => {
+      let q = supabase.from("compras_paciente")
+        .select(`
+          id, fecha_compra, monto_pagado, precio_sugerido, descuento_pct,
+          promo_aplicada, metodo_pago, notas,
+          pacientes(nombres,apellidos,dni),
+          paquetes(codigo,nombre),
+          sedes(nombre,color)
+        `)
+        .order("fecha_compra", {ascending:false})
+        .limit(50);
+      if(!isAdmin && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+      return q;
+    }, "Ventas:loadVentas");
+    setVentas(data || []);
+    setLoadingVentas(false);
+  };
+
+  useEffect(()=>{
+    loadVentas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({
+    paciente_id:"", sede_id:"", paquete_id:"",
+    monto_pagado:"", metodo_pago:"efectivo", notas:"",
+  });
+  const [calculo, setCalculo] = useState(null);
+  const [calculando, setCalculando] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState({});
+
+  useEffect(()=>{
+    let mounted = true;
+    if(!form.paquete_id) { setCalculo(null); return; }
+    setCalculando(true);
+    (async()=>{
+      const { data, error } = await safeQuery(
+        () => supabase.rpc("calcular_precio", {
+          p_paquete_id: form.paquete_id,
+          p_fecha: new Date().toISOString().slice(0,10),
+        }),
+        "Ventas:calcular_precio"
+      );
+      if(!mounted) return;
+      const desglose = Array.isArray(data) && data[0] ? data[0] : null;
+      setCalculo(desglose);
+      if(desglose) setForm(f=>({...f, monto_pagado: String(desglose.precio_final)}));
+      setCalculando(false);
+    })();
+    return ()=>{ mounted = false; };
+  }, [form.paquete_id]);
+
+  const openModal = () => {
+    setForm({paciente_id:"", sede_id: isAdmin ? "" : perfil?.sede_id || "", paquete_id:"", monto_pagado:"", metodo_pago:"efectivo", notas:""});
+    setCalculo(null); setErr({}); setModal(true);
+  };
+
+  const validar = () => {
+    const e = {};
+    if(!form.paciente_id) e.paciente_id = "Selecciona un paciente";
+    if(!form.sede_id)     e.sede_id     = "Selecciona la sede";
+    if(!form.paquete_id)  e.paquete_id  = "Selecciona un paquete";
+    if(!form.monto_pagado || isNaN(Number(form.monto_pagado)) || Number(form.monto_pagado) <= 0)
+      e.monto_pagado = "Monto inválido";
+    if(calculo && Number(form.monto_pagado) < Number(calculo.precio_final) && !form.notas.trim())
+      e.notas = "Obligatorio si el monto cobrado es menor al sugerido";
+    setErr(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const guardar = async () => {
+    if(!validar()) return;
+    setSaving(true);
+    const paquete = paquetesData?.find(p => p.id === form.paquete_id);
+    const fechaVencimiento = paquete?.vigencia_dias > 0
+      ? new Date(Date.now() + paquete.vigencia_dias*24*60*60*1000).toISOString().slice(0,10)
+      : null;
+    const payload = {
+      paciente_id: form.paciente_id, paquete_id: form.paquete_id, sede_id: form.sede_id,
+      fecha_compra: new Date().toISOString().slice(0,10),
+      monto_pagado: Number(form.monto_pagado),
+      precio_sugerido: calculo?.precio_final ? Number(calculo.precio_final) : null,
+      promo_aplicada: calculo?.promo_aplicada || null,
+      descuento_pct: calculo?.descuento_pct ? Number(calculo.descuento_pct) : 0,
+      metodo_pago: form.metodo_pago,
+      sesiones_totales: paquete?.cantidad_sesiones || 1,
+      sesiones_usadas: 0,
+      fecha_vencimiento: fechaVencimiento,
+      estado: "activa",
+      registrado_por: perfil?.id,
+      notas: form.notas.trim() || null,
+    };
+    const { error } = await safeQuery(() => supabase.from("compras_paciente").insert(payload), "Ventas:insert");
+    setSaving(false);
+    if(error) { alert("Error al guardar la venta: " + (error.message || "ver consola")); return; }
+    setModal(false); loadVentas();
+  };
+
+  const hoyMes = new Date().toISOString().slice(0,7);
+  const ventasMes = ventas.filter(v => (v.fecha_compra||"").startsWith(hoyMes));
+  const totalMes = ventasMes.reduce((a,v)=>a+Number(v.monto_pagado||0), 0);
+  const descuentosMes = ventasMes.reduce((a,v)=>{
+    const sug = Number(v.precio_sugerido||0);
+    const pag = Number(v.monto_pagado||0);
+    return a + Math.max(sug - pag, 0);
+  }, 0);
+  const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Ventas</h1>
+          <p style={{color:"#4B5563",fontSize:13}}>Registro de paquetes y sesiones vendidas</p>
+        </div>
+        <Btn onClick={openModal}>+ Nueva venta</Btn>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
+        <Card>
+          <div style={{fontSize:12,color:"#6B7280",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Ventas del mes</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#00C4B4",marginTop:8}}>{fmtSol(totalMes)}</div>
+          <div style={{fontSize:11,color:"#4B5563",marginTop:4}}>{ventasMes.length} ventas</div>
+        </Card>
+        <Card>
+          <div style={{fontSize:12,color:"#6B7280",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Descuentos otorgados</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#F59E0B",marginTop:8}}>{fmtSol(descuentosMes)}</div>
+          <div style={{fontSize:11,color:"#4B5563",marginTop:4}}>diferencia sugerido vs cobrado</div>
+        </Card>
+        <Card>
+          <div style={{fontSize:12,color:"#6B7280",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Total registrado</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#7C6AF7",marginTop:8}}>{ventas.length}</div>
+          <div style={{fontSize:11,color:"#4B5563",marginTop:4}}>últimos 50 movimientos</div>
+        </Card>
+      </div>
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",fontSize:13,fontWeight:700,color:"#9CA3AF",letterSpacing:"0.05em",textTransform:"uppercase"}}>Últimas ventas</div>
+        {loadingVentas ? (
+          <div style={{padding:40,textAlign:"center",color:"#4B5563"}}>Cargando...</div>
+        ) : ventas.length === 0 ? (
+          <div style={{padding:40,textAlign:"center",color:"#4B5563"}}>No hay ventas registradas</div>
+        ) : (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#0D1320"}}>
+                  {["Fecha","Paciente","Paquete","Sede","Sugerido","Pagado","Promo","Método"].map(h=>(
+                    <th key={h} style={{textAlign:"left",padding:"11px 14px",fontSize:11,fontWeight:700,color:"#6B7280",letterSpacing:"0.05em",textTransform:"uppercase"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ventas.map(v=>{
+                  const sug = Number(v.precio_sugerido||0);
+                  const pag = Number(v.monto_pagado||0);
+                  const conDescuentoManual = sug > 0 && pag < sug;
+                  return (
+                    <tr key={v.id} style={{borderTop:"1px solid #1E2535"}}>
+                      <td style={{padding:"11px 14px",fontSize:13,color:"#9CA3AF"}}>{v.fecha_compra}</td>
+                      <td style={{padding:"11px 14px",fontSize:13,color:"#E8EAF0"}}>
+                        {v.pacientes ? `${v.pacientes.nombres} ${v.pacientes.apellidos}` : "—"}
+                        {v.pacientes?.dni && <div style={{fontSize:11,color:"#4B5563"}}>DNI {v.pacientes.dni}</div>}
+                      </td>
+                      <td style={{padding:"11px 14px",fontSize:13,color:"#E8EAF0"}}>
+                        {v.paquetes?.codigo || "—"}
+                        <div style={{fontSize:11,color:"#4B5563"}}>{v.paquetes?.nombre}</div>
+                      </td>
+                      <td style={{padding:"11px 14px",fontSize:13,color:"#9CA3AF"}}>{v.sedes?.nombre || "—"}</td>
+                      <td style={{padding:"11px 14px",fontSize:13,color:"#6B7280"}}>{sug ? fmtSol(sug) : "—"}</td>
+                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color: conDescuentoManual ? "#F59E0B" : "#00C4B4"}}>{fmtSol(pag)}</td>
+                      <td style={{padding:"11px 14px",fontSize:12,color:"#9CA3AF"}}>
+                        {v.promo_aplicada ? <Badge color="#7C6AF7">{v.promo_aplicada} -{v.descuento_pct}%</Badge> : "—"}
+                      </td>
+                      <td style={{padding:"11px 14px",fontSize:12,color:"#6B7280"}}>{v.metodo_pago}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+      {modal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"#0D1320",border:"1px solid #1E2535",borderRadius:14,maxWidth:520,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"#E8EAF0"}}>Nueva venta</div>
+              <button onClick={()=>setModal(false)} style={{background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontSize:22}}>×</button>
+            </div>
+            <Select label="Paciente" value={form.paciente_id} onChange={v=>setForm({...form, paciente_id:v})}
+              options={(pacientesData||[]).map(p=>({value:p.id, label:`${p.apellidos}, ${p.nombres}${p.dni?` — DNI ${p.dni}`:""}`}))} required/>
+            {err.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paciente_id}</div>}
+            <Select label="Sede" value={form.sede_id} onChange={v=>setForm({...form, sede_id:v})}
+              options={(sedesData||[]).map(s=>({value:s.id, label:s.nombre}))} required/>
+            {err.sede_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.sede_id}</div>}
+            <Select label="Paquete" value={form.paquete_id} onChange={v=>setForm({...form, paquete_id:v})}
+              options={(paquetesData||[]).map(p=>({value:p.id, label:`${p.codigo} — ${p.nombre} — ${fmtSol(p.precio_total)}`}))} required/>
+            {err.paquete_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
+            {calculando && <div style={{padding:14,background:"#0A0F1F",borderRadius:10,fontSize:13,color:"#6B7280",marginBottom:14}}>Calculando precio...</div>}
+            {calculo && !calculando && (
+              <div style={{padding:14,background:"#0A0F1F",border:"1px solid #1E2535",borderRadius:10,marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#9CA3AF",marginBottom:6}}>
+                  <span>Precio base</span><span>{fmtSol(calculo.precio_base)}</span>
+                </div>
+                {calculo.promo_aplicada && (
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#7C6AF7",marginBottom:6}}>
+                    <span>{calculo.promo_aplicada} (-{calculo.descuento_pct}%)</span>
+                    <span>-{fmtSol(Number(calculo.precio_base) - Number(calculo.precio_final))}</span>
+                  </div>
+                )}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:700,color:"#00C4B4",borderTop:"1px solid #1E2535",paddingTop:8,marginTop:8}}>
+                  <span>Sugerido</span><span>{fmtSol(calculo.precio_final)}</span>
+                </div>
+              </div>
+            )}
+            <Input label="Monto cobrado (S/)" type="number" value={form.monto_pagado}
+              onChange={v=>setForm({...form, monto_pagado:v})} placeholder="0.00" required error={err.monto_pagado}/>
+            {calculo && form.monto_pagado && Number(form.monto_pagado) !== Number(calculo.precio_final) && (
+              <div style={{padding:"8px 12px",background: Number(form.monto_pagado) < Number(calculo.precio_final) ? "#F59E0B20" : "#00C4B420",border:`1px solid ${Number(form.monto_pagado) < Number(calculo.precio_final) ? "#F59E0B40" : "#00C4B440"}`,borderRadius:8,fontSize:12,color:"#E8EAF0",marginBottom:14}}>
+                {Number(form.monto_pagado) < Number(calculo.precio_final)
+                  ? `Estás cobrando ${fmtSol(Number(calculo.precio_final) - Number(form.monto_pagado))} menos que el sugerido. Anota la razón abajo.`
+                  : `Estás cobrando ${fmtSol(Number(form.monto_pagado) - Number(calculo.precio_final))} más que el sugerido.`}
+              </div>
+            )}
+            <Select label="Método de pago" value={form.metodo_pago} onChange={v=>setForm({...form, metodo_pago:v})}
+              options={[{value:"efectivo",label:"Efectivo"},{value:"transferencia",label:"Transferencia"},{value:"tarjeta",label:"Tarjeta"},{value:"yape",label:"Yape / Plin"},{value:"otro",label:"Otro"}]}/>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color: err.notas ? "#F87171" : "#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>
+                Notas {calculo && form.monto_pagado && Number(form.monto_pagado) < Number(calculo.precio_final) && <span style={{color:"#F87171"}}> *</span>}
+              </label>
+              <textarea value={form.notas} onChange={e=>setForm({...form, notas:e.target.value})}
+                placeholder="Razón del descuento, paciente referido, observaciones..."
+                style={{width:"100%",background:"#1A2035",border:`1px solid ${err.notas?"#F87171":"#2A3550"}`,borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",minHeight:70,resize:"vertical"}}/>
+              {err.notas && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.notas}</div>}
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}>
+              <Btn variant="ghost" onClick={()=>setModal(false)} disabled={saving}>Cancelar</Btn>
+              <Btn onClick={guardar} disabled={saving || calculando}>{saving ? "Guardando..." : "Registrar venta"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── SESIONES (placeholder) ────────────────────────────────────
 function Sesiones({perfil}) {
   return (
@@ -903,6 +1207,32 @@ function Sesiones({perfil}) {
   );
 }
 
+// ── ALERTAS CLÍNICAS ──────────────────────────────────────────
+// FASE C: se implementará con query real a alertas_clinicas.
+// Por ahora placeholder funcional — el módulo ya aparece en el sidebar
+// para admin y médicos, con el badge listo para conectar.
+function Alertas({perfil}) {
+  const f = getRolFlags(perfil);
+  return (
+    <div>
+      <div style={{marginBottom:24}}>
+        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Alertas Clínicas</h1>
+        <p style={{color:"#4B5563",fontSize:14}}>
+          {f.esMedicoEsp ? "Observaciones y consultas de todas las sedes" : "Observaciones pendientes de tu sede"}
+        </p>
+      </div>
+      <Card style={{textAlign:"center",padding:"60px 20px"}}>
+        <div style={{fontSize:48,marginBottom:16,opacity:.3}}>🔔</div>
+        <div style={{color:"#6B7280",fontSize:16,marginBottom:8}}>Módulo en construcción</div>
+        <div style={{color:"#4B5563",fontSize:13}}>
+          Próximamente: bandeja de alertas clínicas, respuesta médica integrada
+          {f.esMedicoEsp && " y consulta por Meet/Zoom"}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ── APP PRINCIPAL ─────────────────────────────────────────────
 export default function App() {
   const [user,    setUser]    = useState(null);
@@ -912,12 +1242,6 @@ export default function App() {
 
   useEffect(()=>{
     let mounted = true;
-    // FIX BUG 7: guard mejorado.
-    // - loadedUserId: id del último usuario cuyo PERFIL ya está cargado en estado.
-    //   Si llega un SIGNED_IN con este mismo id, lo ignoramos.
-    //   Si llega con otro id O con el mismo id pero perfil aún no cargado, procesamos.
-    // - inFlightUserId: id que estamos cargando AHORA mismo, para evitar disparar
-    //   loadPerfil en paralelo si llegan SIGNED_IN duplicados muy rápido.
     let loadedUserId = null;
     let inFlightUserId = null;
 
@@ -934,112 +1258,70 @@ export default function App() {
 
     const handleSession = async (session, eventName) => {
       if(!mounted) return;
-
       if(!session?.user) {
-        loadedUserId = null;
-        inFlightUserId = null;
-        setUser(null);
-        setPerfil(null);
-        setLoading(false);
+        loadedUserId = null; inFlightUserId = null;
+        setUser(null); setPerfil(null); setLoading(false);
         return;
       }
-
       const uid = session.user.id;
-
-      // Guard: si ya tenemos perfil cargado para este uid, no hacer nada.
-      if(uid === loadedUserId) {
-        if(mounted) setLoading(false);
-        return;
-      }
-
-      // Guard: si YA estamos cargando perfil para este uid (otro evento llegó
-      // antes de que el primer load termine), no disparar otro load en paralelo.
+      if(uid === loadedUserId) { if(mounted) setLoading(false); return; }
       if(uid === inFlightUserId) return;
-
       inFlightUserId = uid;
       const p = await loadPerfil(uid);
       if(!mounted) return;
-      inFlightUserId = null;
-      loadedUserId = uid;
-
+      inFlightUserId = null; loadedUserId = uid;
       setUser(session.user);
       setPerfil(p);
-      // FIX BUG 7: setVista solo en el primer load (no cuando recargamos perfil tras SIGNED_OUT/SIGNED_IN
-      // del mismo user dentro de la misma sesión de la app).
-      setVista(prevVista => {
-        // Si la vista actual es válida para este rol, mantenla. Sino, ir al default.
-        const defaultVista = p?.rol === "admin_general" ? "dashboard"
-          : p?.rol === "medico" ? "pacientes" : "agenda";
-        return prevVista || defaultVista;
-      });
+      // FASE B: vistaDefault viene de getRolFlags
+      setVista(prevVista => prevVista || getRolFlags(p).vistaDefault);
       setLoading(false);
     };
 
-    // FIX BUG 7: getSession() proactivo al boot.
-    // Antes dependíamos de que onAuthStateChange disparara INITIAL_SESSION, pero en
-    // F5 con sesión persistida ese evento a veces no llega y se queda en loading=true.
-    // Ahora consultamos directamente el estado de sesión y procesamos.
     (async () => {
       const { data, error } = await supabase.auth.getSession();
-      if(error) {
-        console.error("Error obteniendo sesión inicial:", error);
-        if(mounted) setLoading(false);
-        return;
-      }
+      if(error) { console.error("Error obteniendo sesión inicial:", error); if(mounted) setLoading(false); return; }
       await handleSession(data.session, "BOOT");
     })();
 
     const {data:{subscription}} = supabase.auth.onAuthStateChange(async (event, session) => {
       if(!mounted) return;
       console.log("Auth event:", event);
-
-      if(event === "SIGNED_OUT") {
-        await handleSession(null, event);
-        return;
-      }
-
+      if(event === "SIGNED_OUT") { await handleSession(null, event); return; }
       if(["SIGNED_IN","TOKEN_REFRESHED","INITIAL_SESSION","USER_UPDATED"].includes(event)) {
         await handleSession(session, event);
       }
     });
 
-    // Timeout de seguridad: si en 8 segundos no resuelve, fuerza login
     const timeout = setTimeout(() => {
       if(mounted && loadedUserId === null) setLoading(false);
     }, 8000);
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+    return () => { mounted = false; subscription.unsubscribe(); clearTimeout(timeout); };
   }, []);
-
-  // FIX BUG 1: handleLogin ELIMINADO. onAuthStateChange en el useEffect de arriba
-  // es la única fuente de verdad. Login solo dispara signInWithPassword y el
-  // listener detecta SIGNED_IN, carga perfil y settea estado.
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setPerfil(null);
-    setVista("dashboard");
+    setUser(null); setPerfil(null); setVista("dashboard");
   };
 
   if(loading) return <Spinner/>;
   if(!user)   return <Login/>;
 
+  const f = getRolFlags(perfil);
+
   const renderVista = () => {
     switch(vista){
-      case "dashboard": return <DashboardAdmin/>;
-      case "pacientes": return <Pacientes perfil={perfil}/>;
-      case "historias": return <HistoriasClinicas perfil={perfil}/>;
-      case "finanzas":  return <Finanzas/>;
-      case "sedes":     return <Sedes/>;
-      case "usuarios":  return <Usuarios perfil={perfil}/>;
-      case "sesiones":  return <Sesiones perfil={perfil}/>;
-      case "agenda":    return <AgendaMedico perfil={perfil}/>;
-      default:          return <DashboardAdmin/>;
+      case "dashboard": return f.puedeVerDashboard  ? <DashboardAdmin/>              : null;
+      case "pacientes": return                         <Pacientes perfil={perfil}/>;
+      case "ventas":    return f.puedeVerVentas      ? <Ventas perfil={perfil}/>      : null;
+      case "historias": return                         <HistoriasClinicas perfil={perfil}/>;
+      case "finanzas":  return f.puedeVerFinanzas    ? <Finanzas/>                    : null;
+      case "sedes":     return f.puedeVerSedes       ? <Sedes/>                       : null;
+      case "usuarios":  return f.puedeVerUsuarios    ? <Usuarios perfil={perfil}/>    : null;
+      case "sesiones":  return                         <Sesiones perfil={perfil}/>;
+      case "alertas":   return f.puedeVerAlertas     ? <Alertas perfil={perfil}/>     : null;
+      case "agenda":    return                         <AgendaMedico perfil={perfil}/>;
+      default:          return f.puedeVerDashboard   ? <DashboardAdmin/>              : <Pacientes perfil={perfil}/>;
     }
   };
 
@@ -1048,7 +1330,8 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#1E2535;border-radius:3px}select option{background:#1A2035}input::placeholder{color:#4B5563}textarea::placeholder{color:#4B5563}textarea{box-sizing:border-box}`}</style>
       <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
-        <Sidebar vista={vista} setVista={setVista} perfil={perfil} onLogout={handleLogout}/>
+        {/* alertasNuevas=0 hasta FASE C cuando conectemos la query real */}
+        <Sidebar vista={vista} setVista={setVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={0}/>
         <div style={{flex:1,overflow:"auto",padding:"28px 40px"}}>
           {renderVista()}
         </div>
@@ -1056,5 +1339,3 @@ export default function App() {
     </div>
   );
 }
- 
- 
