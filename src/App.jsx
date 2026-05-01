@@ -1295,17 +1295,446 @@ function Ventas({perfil}) {
   );
 }
 
-// ── SESIONES (placeholder) ────────────────────────────────────
+// ── SESIONES ──────────────────────────────────────────────────
+// FASE 3: agenda del día + programar + completar con registro clínico
 function Sesiones({perfil}) {
+  const f = getRolFlags(perfil);
+
+  const ESTADO_COLOR = {
+    programada:"#F59E0B", en_curso:"#00C4B4",
+    completada:"#10B981", cancelada:"#F87171", no_asistio:"#6B7280"
+  };
+  const ESTADO_LABEL = {
+    programada:"Programada", en_curso:"En curso",
+    completada:"Completada", cancelada:"Cancelada", no_asistio:"No asistió"
+  };
+
+  // Fecha seleccionada — default hoy
+  const hoy = new Date().toISOString().slice(0,10);
+  const [fecha, setFecha]       = useState(hoy);
+  const [sesiones, setSesiones] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [verSesion, setVerSesion] = useState(null);  // modal detalle/completar
+  const [modalNueva, setModalNueva] = useState(false);
+
+  // Data de soporte
+  const { data: pacientesData } = useSupabaseQuery(
+    () => {
+      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni,sede_principal_id").order("apellidos");
+      if(perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
+      return q;
+    }, [], "Sesiones:pacientes"
+  );
+  const { data: camarasData } = useSupabaseQuery(
+    () => {
+      let q = supabase.from("camaras").select("id,numero,modelo,sede_id").eq("estado","operativa");
+      if(perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+      return q;
+    }, [], "Sesiones:camaras"
+  );
+  const { data: comprasData } = useSupabaseQuery(
+    () => supabase.from("compras_paciente")
+      .select("id,paciente_id,sesiones_usadas,sesiones_totales,paquetes(nombre)")
+      .eq("estado","activa"),
+    [], "Sesiones:compras"
+  );
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await safeQuery(() => {
+      let q = supabase.from("vista_agenda_hoy").select("*").eq("fecha", fecha).order("hora_inicio");
+      if(perfil?.sede_id && !f.esAdmin && !f.esMedicoEsp) q = q.eq("sede_id", perfil.sede_id);
+      return q;
+    }, "Sesiones:load");
+    setSesiones(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [fecha]); // eslint-disable-line
+
+  // Form nueva sesión
+  const formInicial = {
+    paciente_id:"", camara_id:"", compra_id:"",
+    fecha: hoy, hora_inicio:"08:00", hora_fin:"09:30",
+    presion_aplicada:"2.0", duracion_minutos:"90",
+    numero_sesion:"",
+  };
+  const [formNueva, setFormNueva] = useState(formInicial);
+  const [savingNueva, setSavingNueva] = useState(false);
+  const [errNueva, setErrNueva] = useState({});
+
+  // Form completar sesión
+  const [formCompletar, setFormCompletar] = useState({
+    hora_inicio_real:"", hora_fin_real:"",
+    nivel_dolor:0, estado_general:"Bueno", tolerancia:"Buena",
+    observaciones:"", requiere_atencion:false,
+  });
+  const [savingCompletar, setSavingCompletar] = useState(false);
+
+  const programar = async () => {
+    const e = {};
+    if(!formNueva.paciente_id) e.paciente_id = "Requerido";
+    if(!formNueva.camara_id)   e.camara_id   = "Requerido";
+    if(!formNueva.fecha)       e.fecha       = "Requerido";
+    if(!formNueva.hora_inicio) e.hora_inicio = "Requerido";
+    if(!formNueva.numero_sesion) e.numero_sesion = "Requerido";
+    setErrNueva(e);
+    if(Object.keys(e).length) return;
+    setSavingNueva(true);
+
+    // Obtener sede del paciente o del perfil
+    const pac = pacientesData?.find(p => p.id === formNueva.paciente_id);
+    const sede_id = pac?.sede_principal_id || perfil?.sede_id;
+
+    const { error } = await safeQuery(() => supabase.from("sesiones").insert({
+      paciente_id:       formNueva.paciente_id,
+      sede_id,
+      camara_id:         formNueva.camara_id,
+      compra_id:         formNueva.compra_id || null,
+      fecha:             formNueva.fecha,
+      hora_inicio:       formNueva.hora_inicio,
+      hora_fin:          formNueva.hora_fin,
+      presion_aplicada:  parseFloat(formNueva.presion_aplicada) || 2.0,
+      duracion_minutos:  parseInt(formNueva.duracion_minutos) || 90,
+      numero_sesion:     parseInt(formNueva.numero_sesion),
+      estado:            "programada",
+      enfermero_id:      f.esEnfermero ? perfil.id : null,
+      medico_id:         f.esMedico ? perfil.id : null,
+    }), "Sesiones:programar");
+
+    setSavingNueva(false);
+    if(error) { alert("Error al programar: " + error.message); return; }
+    setModalNueva(false);
+    setFormNueva(formInicial);
+    setErrNueva({});
+    load();
+  };
+
+  const iniciar = async (sesion) => {
+    await safeQuery(() => supabase.from("sesiones").update({
+      estado: "en_curso",
+      hora_inicio_real: new Date().toTimeString().slice(0,5),
+    }).eq("id", sesion.id), "Sesiones:iniciar");
+    load();
+  };
+
+  const completar = async () => {
+    setSavingCompletar(true);
+    const { error } = await safeQuery(() => supabase.from("sesiones").update({
+      estado:            "completada",
+      hora_fin_real:     formCompletar.hora_fin_real || new Date().toTimeString().slice(0,5),
+      hora_inicio_real:  formCompletar.hora_inicio_real || verSesion.hora_inicio,
+      nivel_dolor:       formCompletar.nivel_dolor,
+      estado_general:    formCompletar.estado_general,
+      tolerancia:        formCompletar.tolerancia,
+      observaciones:     formCompletar.observaciones || null,
+      requiere_atencion: formCompletar.requiere_atencion,
+      hc_completada:     true,
+    }).eq("id", verSesion.id), "Sesiones:completar");
+
+    // Si requiere atención, crear alerta automáticamente
+    if(!error && formCompletar.requiere_atencion) {
+      await safeQuery(() => supabase.from("alertas_clinicas").insert({
+        paciente_id:  verSesion.paciente_id,
+        sede_id:      verSesion.sede_id,
+        generada_por: perfil.id,
+        origen:       "sesion",
+        origen_id:    verSesion.id,
+        tipo:         "observacion_critica",
+        prioridad:    formCompletar.nivel_dolor >= 7 ? "alta" : "media",
+        mensaje:      `Sesión #${verSesion.numero_sesion} completada con observación. ${formCompletar.observaciones || ""}`.trim(),
+        estado:       "nueva",
+      }), "Sesiones:crearAlerta");
+    }
+
+    setSavingCompletar(false);
+    if(error) { alert("Error al completar: " + error.message); return; }
+    setVerSesion(null);
+    load();
+  };
+
+  const cancelar = async (sesion) => {
+    if(!confirm("¿Cancelar esta sesión?")) return;
+    await safeQuery(() => supabase.from("sesiones").update({ estado:"cancelada" }).eq("id", sesion.id), "Sesiones:cancelar");
+    load();
+  };
+
+  // KPIs del día
+  const total      = sesiones.length;
+  const completadas = sesiones.filter(s => s.estado === "completada").length;
+  const enCurso    = sesiones.filter(s => s.estado === "en_curso").length;
+  const pendientes = sesiones.filter(s => s.estado === "programada").length;
+
+  const comprasDelPaciente = (paciente_id) =>
+    (comprasData || []).filter(c => c.paciente_id === paciente_id && c.sesiones_usadas < c.sesiones_totales);
+
   return (
     <div>
-      <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:8}}>Sesiones</h1>
-      <p style={{color:"#4B5563",fontSize:14,marginBottom:24}}>Gestión de sesiones hiperbáricas</p>
-      <Card style={{textAlign:"center",padding:"60px 20px"}}>
-        <div style={{fontSize:48,marginBottom:16,opacity:.3}}>⚡</div>
-        <div style={{color:"#6B7280",fontSize:16,marginBottom:8}}>Módulo en construcción</div>
-        <div style={{color:"#4B5563",fontSize:13}}>Próximamente: programar sesiones, marcar como completadas y vincular HC</div>
-      </Card>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Sesiones</h1>
+          <p style={{color:"#4B5563",fontSize:14}}>Agenda de sesiones hiperbáricas</p>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
+            style={{background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"8px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+          {(f.esAdmin || f.esMedico || f.esEnfermero) && (
+            <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
+          )}
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+        {[
+          {label:"Total del día",  val:total,      color:"#E8EAF0"},
+          {label:"En curso",       val:enCurso,    color:"#00C4B4"},
+          {label:"Completadas",    val:completadas, color:"#10B981"},
+          {label:"Pendientes",     val:pendientes, color:"#F59E0B"},
+        ].map((k,i)=>(
+          <Card key={i}>
+            <div style={{fontSize:11,color:"#6B7280",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:30,fontWeight:700,color:k.color,marginTop:6}}>{k.val}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Lista sesiones */}
+      {loading
+        ? <div style={{color:"#4B5563",padding:20}}>Cargando agenda...</div>
+        : sesiones.length === 0
+          ? <Card style={{textAlign:"center",padding:"50px"}}>
+              <div style={{fontSize:36,opacity:.3,marginBottom:12}}>⚡</div>
+              <div style={{color:"#6B7280"}}>No hay sesiones para esta fecha</div>
+            </Card>
+          : sesiones.map(s => (
+            <div key={s.id} style={{
+              background:"#111827", border:"1px solid #1E2535",
+              borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"#374151"}`,
+              borderRadius:12, padding:"14px 18px", marginBottom:8,
+              display:"grid", gridTemplateColumns:"80px 2fr 1fr 1fr 1fr auto",
+              alignItems:"center", gap:12,
+            }}>
+              {/* Hora */}
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:16,fontWeight:700,color:"#00C4B4",fontFamily:"Syne,sans-serif"}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+                <div style={{fontSize:11,color:"#4B5563"}}>{s.hora_fin?.slice(0,5)||""}</div>
+              </div>
+
+              {/* Paciente */}
+              <div>
+                <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{s.paciente}</div>
+                <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
+                  DNI {s.dni} · Sesión #{s.numero_sesion}
+                  {s.sesiones_restantes != null && (
+                    <span style={{color: s.sesiones_restantes <= 2 ? "#F87171" : "#6B7280"}}>
+                      {" "}· {s.sesiones_restantes} restantes
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Cámara */}
+              <div style={{fontSize:13,color:"#9CA3AF"}}>
+                {s.camara_numero ? `Cámara #${s.camara_numero}` : "—"}
+                <div style={{fontSize:11,color:"#4B5563"}}>{s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
+              </div>
+
+              {/* Sede */}
+              <div style={{fontSize:13,color:"#9CA3AF"}}>{s.sede_nombre}</div>
+
+              {/* Estado */}
+              <Badge color={ESTADO_COLOR[s.estado]||"#6B7280"}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
+
+              {/* Acciones */}
+              <div style={{display:"flex",gap:6}}>
+                {s.estado === "programada" && (
+                  <>
+                    <button onClick={()=>iniciar(s)}
+                      style={{background:"#00C4B420",border:"1px solid #00C4B440",color:"#00C4B4",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                      ▶ Iniciar
+                    </button>
+                    <button onClick={()=>cancelar(s)}
+                      style={{background:"#F8717115",border:"1px solid #F8717130",color:"#F87171",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                      ✕
+                    </button>
+                  </>
+                )}
+                {s.estado === "en_curso" && (
+                  <button onClick={()=>{ setVerSesion(s); setFormCompletar({hora_inicio_real:s.hora_inicio_real||s.hora_inicio?.slice(0,5)||"",hora_fin_real:new Date().toTimeString().slice(0,5),nivel_dolor:0,estado_general:"Bueno",tolerancia:"Buena",observaciones:"",requiere_atencion:false}); }}
+                    style={{background:"#10B98120",border:"1px solid #10B98140",color:"#10B981",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    ✓ Completar
+                  </button>
+                )}
+                {s.estado === "completada" && (
+                  <button onClick={()=>setVerSesion(s)}
+                    style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                    Ver
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+      }
+
+      {/* Modal programar nueva sesión */}
+      {modalNueva && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0"}}>Programar Sesión</div>
+              <button onClick={()=>setModalNueva(false)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+              <Select label="Paciente" value={formNueva.paciente_id}
+                onChange={v=>{ setFormNueva(f=>({...f,paciente_id:v,compra_id:""})); }}
+                options={(pacientesData||[]).map(p=>({value:p.id,label:`${p.apellidos}, ${p.nombres} — DNI ${p.dni}`}))} required/>
+              {errNueva.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.paciente_id}</div>}
+
+              {/* Paquete activo del paciente */}
+              {formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length > 0 && (
+                <Select label="Paquete a descontar" value={formNueva.compra_id}
+                  onChange={v=>setFormNueva(f=>({...f,compra_id:v}))}
+                  options={comprasDelPaciente(formNueva.paciente_id).map(c=>({
+                    value:c.id,
+                    label:`${c.paquetes?.nombre} — ${c.sesiones_usadas}/${c.sesiones_totales} usadas`
+                  }))}/>
+              )}
+
+              <Select label="Cámara" value={formNueva.camara_id}
+                onChange={v=>setFormNueva(f=>({...f,camara_id:v}))}
+                options={(camarasData||[]).map(c=>({value:c.id,label:`Cámara #${c.numero} — ${c.modelo}`}))} required/>
+              {errNueva.camara_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.camara_id}</div>}
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Input label="Fecha" type="date" value={formNueva.fecha}
+                  onChange={v=>setFormNueva(f=>({...f,fecha:v}))} required error={errNueva.fecha}/>
+                <Input label="N° de sesión" type="number" value={formNueva.numero_sesion}
+                  onChange={v=>setFormNueva(f=>({...f,numero_sesion:v}))} required error={errNueva.numero_sesion}/>
+                <Input label="Hora inicio" type="time" value={formNueva.hora_inicio}
+                  onChange={v=>setFormNueva(f=>({...f,hora_inicio:v}))} required error={errNueva.hora_inicio}/>
+                <Input label="Hora fin estimada" type="time" value={formNueva.hora_fin}
+                  onChange={v=>setFormNueva(f=>({...f,hora_fin:v}))}/>
+                <Input label="Presión (ATA)" type="number" value={formNueva.presion_aplicada}
+                  onChange={v=>setFormNueva(f=>({...f,presion_aplicada:v}))}/>
+                <Input label="Duración (min)" type="number" value={formNueva.duracion_minutos}
+                  onChange={v=>setFormNueva(f=>({...f,duracion_minutos:v}))}/>
+              </div>
+            </div>
+            <div style={{padding:"14px 24px",borderTop:"1px solid #1E2535",display:"flex",justifyContent:"flex-end",gap:10}}>
+              <Btn variant="ghost" onClick={()=>setModalNueva(false)}>Cancelar</Btn>
+              <Btn onClick={programar} disabled={savingNueva}>{savingNueva?"Guardando...":"Programar"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal completar / ver sesión */}
+      {verSesion && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <div style={{fontSize:10,color:"#00C4B4",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
+                  Sesión #{verSesion.numero_sesion} · {verSesion.camara_numero ? `Cámara #${verSesion.camara_numero}` : ""}
+                </div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0"}}>{verSesion.paciente}</div>
+                <div style={{fontSize:12,color:"#6B7280",marginTop:3}}>
+                  {verSesion.sede_nombre} · {verSesion.fecha} · {verSesion.presion_aplicada} ATA · {verSesion.duracion_minutos} min
+                </div>
+              </div>
+              <button onClick={()=>setVerSesion(null)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+
+              {/* Si completada — mostrar registro */}
+              {verSesion.estado === "completada" ? (
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  {[
+                    ["Hora inicio real", verSesion.hora_inicio_real?.slice(0,5)],
+                    ["Hora fin real",    verSesion.hora_fin_real?.slice(0,5)],
+                    ["Nivel de dolor",   verSesion.nivel_dolor != null ? `${verSesion.nivel_dolor}/10` : null],
+                    ["Estado general",   verSesion.estado_general],
+                    ["Tolerancia",       verSesion.tolerancia],
+                    ["Observaciones",    verSesion.observaciones],
+                  ].filter(([,v])=>v).map(([k,v])=>(
+                    <div key={k} style={{background:"#0D1320",borderRadius:10,padding:"10px 14px",gridColumn:k==="Observaciones"?"1/-1":undefined}}>
+                      <div style={{fontSize:11,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:4}}>{k}</div>
+                      <div style={{fontSize:14,color:"#E8EAF0"}}>{v}</div>
+                    </div>
+                  ))}
+                  {verSesion.requiere_atencion && (
+                    <div style={{gridColumn:"1/-1",background:"#F8717115",border:"1px solid #F8717130",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F87171"}}>
+                      ⚠ Esta sesión generó una alerta clínica
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Si en_curso — formulario completar */
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+                    <Input label="Hora inicio real" type="time" value={formCompletar.hora_inicio_real}
+                      onChange={v=>setFormCompletar(f=>({...f,hora_inicio_real:v}))}/>
+                    <Input label="Hora fin real" type="time" value={formCompletar.hora_fin_real}
+                      onChange={v=>setFormCompletar(f=>({...f,hora_fin_real:v}))}/>
+                  </div>
+
+                  {/* Nivel de dolor */}
+                  <div style={{marginBottom:14}}>
+                    <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:8}}>
+                      Nivel de dolor: <span style={{color: formCompletar.nivel_dolor>=7?"#F87171":formCompletar.nivel_dolor>=4?"#F59E0B":"#10B981",fontWeight:700}}>{formCompletar.nivel_dolor}/10</span>
+                    </label>
+                    <input type="range" min="0" max="10" value={formCompletar.nivel_dolor}
+                      onChange={e=>setFormCompletar(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
+                      style={{width:"100%",accentColor:"#00C4B4"}}/>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#4B5563",marginTop:2}}>
+                      <span>Sin dolor</span><span>Dolor máximo</span>
+                    </div>
+                  </div>
+
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <Select label="Estado general" value={formCompletar.estado_general}
+                      onChange={v=>setFormCompletar(f=>({...f,estado_general:v}))}
+                      options={["Excelente","Bueno","Regular","Malo"].map(v=>({value:v,label:v}))}/>
+                    <Select label="Tolerancia a presión" value={formCompletar.tolerancia}
+                      onChange={v=>setFormCompletar(f=>({...f,tolerancia:v}))}
+                      options={["Buena","Regular","Mala","Intolerante"].map(v=>({value:v,label:v}))}/>
+                  </div>
+
+                  <div style={{marginBottom:14}}>
+                    <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Observaciones</label>
+                    <textarea value={formCompletar.observaciones}
+                      onChange={e=>setFormCompletar(f=>({...f,observaciones:e.target.value}))}
+                      placeholder="Incidencias, reacciones, notas del operador..."
+                      rows={3}
+                      style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                  </div>
+
+                  {/* Flag alerta */}
+                  <div style={{padding:"12px 14px",background:"#1A2035",borderRadius:10,border:"1px solid #2A3550",display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                    <input type="checkbox" id="reqAtencion" checked={formCompletar.requiere_atencion}
+                      onChange={e=>setFormCompletar(f=>({...f,requiere_atencion:e.target.checked}))}
+                      style={{width:16,height:16,cursor:"pointer",accentColor:"#F87171"}}/>
+                    <label htmlFor="reqAtencion" style={{fontSize:14,color:"#E8EAF0",cursor:"pointer"}}>
+                      🔔 Requiere atención médica
+                      <span style={{fontSize:12,color:"#6B7280",display:"block"}}>Genera alerta automática al especialista y médico de sede</span>
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{padding:"14px 24px",borderTop:"1px solid #1E2535",display:"flex",justifyContent:"flex-end",gap:10}}>
+              <Btn variant="ghost" onClick={()=>setVerSesion(null)}>Cerrar</Btn>
+              {verSesion.estado === "en_curso" && (
+                <Btn onClick={completar} disabled={savingCompletar}>
+                  {savingCompletar ? "Guardando..." : "✓ Marcar completada"}
+                </Btn>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
