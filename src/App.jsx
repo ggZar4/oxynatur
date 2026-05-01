@@ -1713,7 +1713,8 @@ function Alertas({perfil}) {
 
 // ── APP PRINCIPAL ─────────────────────────────────────────────
 export default function App() {
-  const [user,    setUser]    = useState(null);
+  const [user,          setUser]          = useState(null);
+  const [alertasNuevas, setAlertasNuevas] = useState(0);
   const [perfil,  setPerfil]  = useState(null);
   const [loading, setLoading] = useState(true);
   const [vista,   setVista]   = useState("dashboard");
@@ -1782,14 +1783,10 @@ export default function App() {
     setUser(null); setPerfil(null); setVista("dashboard");
   };
 
-  if(loading) return <Spinner/>;
-  if(!user)   return <Login/>;
-
-  const f = getRolFlags(perfil);
-
-  // FASE C: badge de alertas nuevas en sidebar — query liviana cada 60 segundos
-  const [alertasNuevas, setAlertasNuevas] = useState(0);
+  // FASE C: badge de alertas nuevas — query liviana cada 60 segundos
   useEffect(() => {
+    if(!perfil) return;
+    const f = getRolFlags(perfil);
     if(!f.puedeVerAlertas) return;
     const fetchCount = async () => {
       const { count } = await supabase
@@ -1802,6 +1799,11 @@ export default function App() {
     const interval = setInterval(fetchCount, 60_000);
     return () => clearInterval(interval);
   }, [perfil?.id]); // eslint-disable-line
+
+  if(loading) return <Spinner/>;
+  if(!user)   return <Login/>;
+
+  const f = getRolFlags(perfil);
 
   const renderVista = () => {
     switch(vista){
