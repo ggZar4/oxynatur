@@ -100,11 +100,14 @@ function getRolFlags(perfil) {
 
     // ── Acceso a módulos ──
     puedeVerDashboard:  esAdmin || esMedico,
-    puedeVerVentas:     esAdmin,
+    puedeVerVentas:     esAdmin || esEnfermero,  // enfermero registra ventas en mostrador
     puedeVerFinanzas:   esAdmin,
     puedeVerSedes:      esAdmin,
     puedeVerUsuarios:   esAdmin,
     puedeVerAlertas:    esAdmin || esMedico,
+
+    // ── Restricciones dentro de Ventas ──
+    ventasSoloSuSede:   esEnfermero,  // enfermero solo ve/registra ventas de su sede
 
     // ── Acceso a pacientes ──
     puedeCrearPaciente:      esAdmin || esMedico || esEnfermero,
@@ -925,10 +928,16 @@ function AgendaMedico({perfil}) {
 
 // ── VENTAS ────────────────────────────────────────────────────
 function Ventas({perfil}) {
-  const isAdmin = perfil?.rol === "admin_general";
+  const f = getRolFlags(perfil);
+  // Enfermero solo ve su sede; admin ve todo
+  const sedeFija = f.ventasSoloSuSede ? perfil?.sede_id : null;
 
   const { data: pacientesData } = useSupabaseQuery(
-    () => supabase.from("pacientes").select("id,nombres,apellidos,dni").order("apellidos"),
+    () => {
+      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni").order("apellidos");
+      if(sedeFija) q = q.eq("sede_principal_id", sedeFija);
+      return q;
+    },
     [], "Ventas:pacientes"
   );
   const { data: paquetesData } = useSupabaseQuery(
@@ -936,7 +945,11 @@ function Ventas({perfil}) {
     [], "Ventas:paquetes"
   );
   const { data: sedesData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("id,nombre").eq("estado", "activa"),
+    () => {
+      let q = supabase.from("sedes").select("id,nombre").eq("estado", "activa");
+      if(sedeFija) q = q.eq("id", sedeFija);
+      return q;
+    },
     [], "Ventas:sedes"
   );
 
@@ -949,46 +962,46 @@ function Ventas({perfil}) {
       let q = supabase.from("compras_paciente")
         .select(`
           id, fecha_compra, monto_pagado, precio_sugerido, descuento_pct,
-          promo_aplicada, metodo_pago, notas,
+          promo_aplicada, metodo_pago, notas, numero_comprobante, comprobante_url,
           pacientes(nombres,apellidos,dni),
           paquetes(codigo,nombre),
           sedes(nombre,color)
         `)
         .order("fecha_compra", {ascending:false})
         .limit(50);
-      if(!isAdmin && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+      if(sedeFija) q = q.eq("sede_id", sedeFija);
       return q;
     }, "Ventas:loadVentas");
     setVentas(data || []);
     setLoadingVentas(false);
   };
 
-  useEffect(()=>{
-    loadVentas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(()=>{ loadVentas(); }, []); // eslint-disable-line
 
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({
-    paciente_id:"", sede_id:"", paquete_id:"",
+  const formInicial = {
+    paciente_id:"", sede_id: sedeFija || "", paquete_id:"",
     monto_pagado:"", metodo_pago:"efectivo", notas:"",
-  });
-  const [calculo, setCalculo] = useState(null);
+    numero_comprobante:"", fotoFile: null, fotoPreview: null,
+  };
+  const [modal, setModal]       = useState(false);
+  const [form, setForm]         = useState(formInicial);
+  const [calculo, setCalculo]   = useState(null);
   const [calculando, setCalculando] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState({});
+  const [saving, setSaving]     = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // "subiendo" | null
+  const [err, setErr]           = useState({});
 
+  // Cálculo automático de precio al cambiar paquete
   useEffect(()=>{
     let mounted = true;
     if(!form.paquete_id) { setCalculo(null); return; }
     setCalculando(true);
     (async()=>{
-      const { data, error } = await safeQuery(
+      const { data } = await safeQuery(
         () => supabase.rpc("calcular_precio", {
           p_paquete_id: form.paquete_id,
           p_fecha: new Date().toISOString().slice(0,10),
-        }),
-        "Ventas:calcular_precio"
+        }), "Ventas:calcular_precio"
       );
       if(!mounted) return;
       const desglose = Array.isArray(data) && data[0] ? data[0] : null;
@@ -999,20 +1012,24 @@ function Ventas({perfil}) {
     return ()=>{ mounted = false; };
   }, [form.paquete_id]);
 
-  const openModal = () => {
-    setForm({paciente_id:"", sede_id: isAdmin ? "" : perfil?.sede_id || "", paquete_id:"", monto_pagado:"", metodo_pago:"efectivo", notas:""});
-    setCalculo(null); setErr({}); setModal(true);
+  const openModal = () => { setForm(formInicial); setCalculo(null); setErr({}); setModal(true); };
+
+  const handleFoto = (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    setForm(f=>({...f, fotoFile: file, fotoPreview: URL.createObjectURL(file)}));
   };
 
   const validar = () => {
     const e = {};
-    if(!form.paciente_id) e.paciente_id = "Selecciona un paciente";
-    if(!form.sede_id)     e.sede_id     = "Selecciona la sede";
-    if(!form.paquete_id)  e.paquete_id  = "Selecciona un paquete";
+    if(!form.paciente_id)          e.paciente_id        = "Selecciona un paciente";
+    if(!form.sede_id)               e.sede_id            = "Selecciona la sede";
+    if(!form.paquete_id)            e.paquete_id         = "Selecciona un paquete";
+    if(!form.numero_comprobante.trim()) e.numero_comprobante = "El número de comprobante es obligatorio";
     if(!form.monto_pagado || isNaN(Number(form.monto_pagado)) || Number(form.monto_pagado) <= 0)
       e.monto_pagado = "Monto inválido";
     if(calculo && Number(form.monto_pagado) < Number(calculo.precio_final) && !form.notas.trim())
-      e.notas = "Obligatorio si el monto cobrado es menor al sugerido";
+      e.notas = "Obligatorio cuando el monto cobrado es menor al sugerido";
     setErr(e);
     return Object.keys(e).length === 0;
   };
@@ -1020,50 +1037,81 @@ function Ventas({perfil}) {
   const guardar = async () => {
     if(!validar()) return;
     setSaving(true);
+
+    // 1. Upload foto si existe
+    let comprobante_url = null;
+    if(form.fotoFile) {
+      setUploadProgress("subiendo");
+      const ext  = form.fotoFile.name.split(".").pop();
+      const path = `${form.sede_id}/${Date.now()}_${form.numero_comprobante.replace(/\s/g,"_")}.${ext}`;
+      const { data: upData, error: upErr } = await supabase.storage
+        .from("comprobantes")
+        .upload(path, form.fotoFile, { upsert: false });
+      setUploadProgress(null);
+      if(upErr) {
+        alert("Error subiendo foto: " + upErr.message);
+        setSaving(false);
+        return;
+      }
+      // Generar signed URL de 10 años (~315 millones de segundos)
+      const { data: signed } = await supabase.storage
+        .from("comprobantes")
+        .createSignedUrl(upData.path, 315_360_000);
+      comprobante_url = signed?.signedUrl || null;
+    }
+
+    // 2. Insert en compras_paciente
     const paquete = paquetesData?.find(p => p.id === form.paquete_id);
     const fechaVencimiento = paquete?.vigencia_dias > 0
       ? new Date(Date.now() + paquete.vigencia_dias*24*60*60*1000).toISOString().slice(0,10)
       : null;
     const payload = {
-      paciente_id: form.paciente_id, paquete_id: form.paquete_id, sede_id: form.sede_id,
-      fecha_compra: new Date().toISOString().slice(0,10),
-      monto_pagado: Number(form.monto_pagado),
-      precio_sugerido: calculo?.precio_final ? Number(calculo.precio_final) : null,
-      promo_aplicada: calculo?.promo_aplicada || null,
-      descuento_pct: calculo?.descuento_pct ? Number(calculo.descuento_pct) : 0,
-      metodo_pago: form.metodo_pago,
-      sesiones_totales: paquete?.cantidad_sesiones || 1,
-      sesiones_usadas: 0,
-      fecha_vencimiento: fechaVencimiento,
-      estado: "activa",
-      registrado_por: perfil?.id,
-      notas: form.notas.trim() || null,
+      paciente_id:        form.paciente_id,
+      paquete_id:         form.paquete_id,
+      sede_id:            form.sede_id,
+      fecha_compra:       new Date().toISOString().slice(0,10),
+      monto_pagado:       Number(form.monto_pagado),
+      precio_sugerido:    calculo?.precio_final ? Number(calculo.precio_final) : null,
+      promo_aplicada:     calculo?.promo_aplicada || null,
+      descuento_pct:      calculo?.descuento_pct ? Number(calculo.descuento_pct) : 0,
+      metodo_pago:        form.metodo_pago,
+      sesiones_totales:   paquete?.cantidad_sesiones || 1,
+      sesiones_usadas:    0,
+      fecha_vencimiento:  fechaVencimiento,
+      estado:             "activa",
+      registrado_por:     perfil?.id,
+      notas:              form.notas.trim() || null,
+      numero_comprobante: form.numero_comprobante.trim(),
+      comprobante_url,
     };
-    const { error } = await safeQuery(() => supabase.from("compras_paciente").insert(payload), "Ventas:insert");
+    const { error } = await safeQuery(
+      () => supabase.from("compras_paciente").insert(payload), "Ventas:insert"
+    );
     setSaving(false);
     if(error) { alert("Error al guardar la venta: " + (error.message || "ver consola")); return; }
-    setModal(false); loadVentas();
+    setModal(false);
+    loadVentas();
   };
 
-  const hoyMes = new Date().toISOString().slice(0,7);
-  const ventasMes = ventas.filter(v => (v.fecha_compra||"").startsWith(hoyMes));
-  const totalMes = ventasMes.reduce((a,v)=>a+Number(v.monto_pagado||0), 0);
-  const descuentosMes = ventasMes.reduce((a,v)=>{
-    const sug = Number(v.precio_sugerido||0);
-    const pag = Number(v.monto_pagado||0);
-    return a + Math.max(sug - pag, 0);
-  }, 0);
-  const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+  const hoyMes      = new Date().toISOString().slice(0,7);
+  const ventasMes   = ventas.filter(v => (v.fecha_compra||"").startsWith(hoyMes));
+  const totalMes    = ventasMes.reduce((a,v)=>a+Number(v.monto_pagado||0), 0);
+  const descuentosMes = ventasMes.reduce((a,v)=>a+Math.max(Number(v.precio_sugerido||0)-Number(v.monto_pagado||0),0), 0);
+  const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
         <div>
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Ventas</h1>
-          <p style={{color:"#4B5563",fontSize:13}}>Registro de paquetes y sesiones vendidas</p>
+          <p style={{color:"#4B5563",fontSize:13}}>
+            {sedeFija ? `Ventas de tu sede` : "Registro de paquetes y sesiones vendidas"}
+          </p>
         </div>
         <Btn onClick={openModal}>+ Nueva venta</Btn>
       </div>
+
+      {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
         <Card>
           <div style={{fontSize:12,color:"#6B7280",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Ventas del mes</div>
@@ -1081,6 +1129,8 @@ function Ventas({perfil}) {
           <div style={{fontSize:11,color:"#4B5563",marginTop:4}}>últimos 50 movimientos</div>
         </Card>
       </div>
+
+      {/* Tabla */}
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",fontSize:13,fontWeight:700,color:"#9CA3AF",letterSpacing:"0.05em",textTransform:"uppercase"}}>Últimas ventas</div>
         {loadingVentas ? (
@@ -1092,7 +1142,7 @@ function Ventas({perfil}) {
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"#0D1320"}}>
-                  {["Fecha","Paciente","Paquete","Sede","Sugerido","Pagado","Promo","Método"].map(h=>(
+                  {["Fecha","Comprobante","Paciente","Paquete","Pagado","Método","Doc"].map(h=>(
                     <th key={h} style={{textAlign:"left",padding:"11px 14px",fontSize:11,fontWeight:700,color:"#6B7280",letterSpacing:"0.05em",textTransform:"uppercase"}}>{h}</th>
                   ))}
                 </tr>
@@ -1101,10 +1151,13 @@ function Ventas({perfil}) {
                 {ventas.map(v=>{
                   const sug = Number(v.precio_sugerido||0);
                   const pag = Number(v.monto_pagado||0);
-                  const conDescuentoManual = sug > 0 && pag < sug;
+                  const conDesc = sug > 0 && pag < sug;
                   return (
                     <tr key={v.id} style={{borderTop:"1px solid #1E2535"}}>
                       <td style={{padding:"11px 14px",fontSize:13,color:"#9CA3AF"}}>{v.fecha_compra}</td>
+                      <td style={{padding:"11px 14px",fontSize:13,color:"#E8EAF0",fontWeight:600}}>
+                        {v.numero_comprobante || <span style={{color:"#4B5563"}}>—</span>}
+                      </td>
                       <td style={{padding:"11px 14px",fontSize:13,color:"#E8EAF0"}}>
                         {v.pacientes ? `${v.pacientes.nombres} ${v.pacientes.apellidos}` : "—"}
                         {v.pacientes?.dni && <div style={{fontSize:11,color:"#4B5563"}}>DNI {v.pacientes.dni}</div>}
@@ -1113,13 +1166,15 @@ function Ventas({perfil}) {
                         {v.paquetes?.codigo || "—"}
                         <div style={{fontSize:11,color:"#4B5563"}}>{v.paquetes?.nombre}</div>
                       </td>
-                      <td style={{padding:"11px 14px",fontSize:13,color:"#9CA3AF"}}>{v.sedes?.nombre || "—"}</td>
-                      <td style={{padding:"11px 14px",fontSize:13,color:"#6B7280"}}>{sug ? fmtSol(sug) : "—"}</td>
-                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color: conDescuentoManual ? "#F59E0B" : "#00C4B4"}}>{fmtSol(pag)}</td>
-                      <td style={{padding:"11px 14px",fontSize:12,color:"#9CA3AF"}}>
-                        {v.promo_aplicada ? <Badge color="#7C6AF7">{v.promo_aplicada} -{v.descuento_pct}%</Badge> : "—"}
-                      </td>
+                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color:conDesc?"#F59E0B":"#00C4B4"}}>{fmtSol(pag)}</td>
                       <td style={{padding:"11px 14px",fontSize:12,color:"#6B7280"}}>{v.metodo_pago}</td>
+                      <td style={{padding:"11px 14px"}}>
+                        {v.comprobante_url
+                          ? <a href={v.comprobante_url} target="_blank" rel="noreferrer"
+                              style={{fontSize:12,color:"#00C4B4",textDecoration:"none"}}>Ver 📎</a>
+                          : <span style={{fontSize:12,color:"#374151"}}>—</span>
+                        }
+                      </td>
                     </tr>
                   );
                 })}
@@ -1128,22 +1183,36 @@ function Ventas({perfil}) {
           </div>
         )}
       </Card>
+
+      {/* Modal nueva venta */}
       {modal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
-          <div style={{background:"#0D1320",border:"1px solid #1E2535",borderRadius:14,maxWidth:520,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"#0D1320",border:"1px solid #1E2535",borderRadius:14,maxWidth:540,width:"100%",maxHeight:"92vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"#E8EAF0"}}>Nueva venta</div>
               <button onClick={()=>setModal(false)} style={{background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontSize:22}}>×</button>
             </div>
-            <Select label="Paciente" value={form.paciente_id} onChange={v=>setForm({...form, paciente_id:v})}
-              options={(pacientesData||[]).map(p=>({value:p.id, label:`${p.apellidos}, ${p.nombres}${p.dni?` — DNI ${p.dni}`:""}`}))} required/>
+
+            <Select label="Paciente" value={form.paciente_id} onChange={v=>setForm({...form,paciente_id:v})}
+              options={(pacientesData||[]).map(p=>({value:p.id,label:`${p.apellidos}, ${p.nombres}${p.dni?` — DNI ${p.dni}`:""}`}))} required/>
             {err.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paciente_id}</div>}
-            <Select label="Sede" value={form.sede_id} onChange={v=>setForm({...form, sede_id:v})}
-              options={(sedesData||[]).map(s=>({value:s.id, label:s.nombre}))} required/>
-            {err.sede_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.sede_id}</div>}
-            <Select label="Paquete" value={form.paquete_id} onChange={v=>setForm({...form, paquete_id:v})}
-              options={(paquetesData||[]).map(p=>({value:p.id, label:`${p.codigo} — ${p.nombre} — ${fmtSol(p.precio_total)}`}))} required/>
+
+            {/* Sede: fija para enfermero, seleccionable para admin */}
+            {sedeFija
+              ? <div style={{marginBottom:14,padding:"10px 14px",background:"#1A2035",borderRadius:10,fontSize:14,color:"#9CA3AF"}}>
+                  Sede: <strong style={{color:"#E8EAF0"}}>{sedesData?.[0]?.nombre || "Tu sede"}</strong>
+                </div>
+              : <>
+                  <Select label="Sede" value={form.sede_id} onChange={v=>setForm({...form,sede_id:v})}
+                    options={(sedesData||[]).map(s=>({value:s.id,label:s.nombre}))} required/>
+                  {err.sede_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.sede_id}</div>}
+                </>
+            }
+
+            <Select label="Paquete" value={form.paquete_id} onChange={v=>setForm({...form,paquete_id:v})}
+              options={(paquetesData||[]).map(p=>({value:p.id,label:`${p.codigo} — ${p.nombre} — ${fmtSol(p.precio_total)}`}))} required/>
             {err.paquete_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
+
             {calculando && <div style={{padding:14,background:"#0A0F1F",borderRadius:10,fontSize:13,color:"#6B7280",marginBottom:14}}>Calculando precio...</div>}
             {calculo && !calculando && (
               <div style={{padding:14,background:"#0A0F1F",border:"1px solid #1E2535",borderRadius:10,marginBottom:14}}>
@@ -1153,7 +1222,7 @@ function Ventas({perfil}) {
                 {calculo.promo_aplicada && (
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#7C6AF7",marginBottom:6}}>
                     <span>{calculo.promo_aplicada} (-{calculo.descuento_pct}%)</span>
-                    <span>-{fmtSol(Number(calculo.precio_base) - Number(calculo.precio_final))}</span>
+                    <span>-{fmtSol(Number(calculo.precio_base)-Number(calculo.precio_final))}</span>
                   </div>
                 )}
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:700,color:"#00C4B4",borderTop:"1px solid #1E2535",paddingTop:8,marginTop:8}}>
@@ -1161,29 +1230,63 @@ function Ventas({perfil}) {
                 </div>
               </div>
             )}
+
             <Input label="Monto cobrado (S/)" type="number" value={form.monto_pagado}
-              onChange={v=>setForm({...form, monto_pagado:v})} placeholder="0.00" required error={err.monto_pagado}/>
+              onChange={v=>setForm({...form,monto_pagado:v})} placeholder="0.00" required error={err.monto_pagado}/>
             {calculo && form.monto_pagado && Number(form.monto_pagado) !== Number(calculo.precio_final) && (
-              <div style={{padding:"8px 12px",background: Number(form.monto_pagado) < Number(calculo.precio_final) ? "#F59E0B20" : "#00C4B420",border:`1px solid ${Number(form.monto_pagado) < Number(calculo.precio_final) ? "#F59E0B40" : "#00C4B440"}`,borderRadius:8,fontSize:12,color:"#E8EAF0",marginBottom:14}}>
-                {Number(form.monto_pagado) < Number(calculo.precio_final)
-                  ? `Estás cobrando ${fmtSol(Number(calculo.precio_final) - Number(form.monto_pagado))} menos que el sugerido. Anota la razón abajo.`
-                  : `Estás cobrando ${fmtSol(Number(form.monto_pagado) - Number(calculo.precio_final))} más que el sugerido.`}
+              <div style={{padding:"8px 12px",background:Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B20":"#00C4B420",border:`1px solid ${Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B40":"#00C4B440"}`,borderRadius:8,fontSize:12,color:"#E8EAF0",marginBottom:14}}>
+                {Number(form.monto_pagado)<Number(calculo.precio_final)
+                  ?`Cobrando ${fmtSol(Number(calculo.precio_final)-Number(form.monto_pagado))} menos del sugerido. Anota la razón abajo.`
+                  :`Cobrando ${fmtSol(Number(form.monto_pagado)-Number(calculo.precio_final))} más del sugerido.`}
               </div>
             )}
-            <Select label="Método de pago" value={form.metodo_pago} onChange={v=>setForm({...form, metodo_pago:v})}
+
+            <Select label="Método de pago" value={form.metodo_pago} onChange={v=>setForm({...form,metodo_pago:v})}
               options={[{value:"efectivo",label:"Efectivo"},{value:"transferencia",label:"Transferencia"},{value:"tarjeta",label:"Tarjeta"},{value:"yape",label:"Yape / Plin"},{value:"otro",label:"Otro"}]}/>
+
+            {/* Número de comprobante — OBLIGATORIO */}
+            <Input label="N° de comprobante (boleta/factura)" value={form.numero_comprobante}
+              onChange={v=>setForm({...form,numero_comprobante:v})}
+              placeholder="Ej: B001-00123" required error={err.numero_comprobante}/>
+
+            {/* Upload foto del comprobante — OPCIONAL */}
             <div style={{marginBottom:14}}>
-              <label style={{fontSize:12,color: err.notas ? "#F87171" : "#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>
-                Notas {calculo && form.monto_pagado && Number(form.monto_pagado) < Number(calculo.precio_final) && <span style={{color:"#F87171"}}> *</span>}
+              <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>
+                Foto del comprobante <span style={{color:"#4B5563",fontWeight:400}}>(opcional)</span>
               </label>
-              <textarea value={form.notas} onChange={e=>setForm({...form, notas:e.target.value})}
+              <label style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,cursor:"pointer"}}>
+                <span style={{fontSize:18}}>📷</span>
+                <span style={{fontSize:13,color:"#6B7280"}}>
+                  {form.fotoFile ? form.fotoFile.name : "Toca para adjuntar foto"}
+                </span>
+                <input type="file" accept="image/*" capture="environment"
+                  onChange={handleFoto} style={{display:"none"}}/>
+              </label>
+              {form.fotoPreview && (
+                <div style={{marginTop:8,position:"relative",display:"inline-block"}}>
+                  <img src={form.fotoPreview} alt="preview" style={{width:120,height:80,objectFit:"cover",borderRadius:8,border:"1px solid #2A3550"}}/>
+                  <button onClick={()=>setForm(f=>({...f,fotoFile:null,fotoPreview:null}))}
+                    style={{position:"absolute",top:-6,right:-6,background:"#F87171",border:"none",borderRadius:"50%",width:18,height:18,color:"white",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                </div>
+              )}
+            </div>
+
+            {/* Notas */}
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:err.notas?"#F87171":"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>
+                Notas {calculo&&form.monto_pagado&&Number(form.monto_pagado)<Number(calculo.precio_final)&&<span style={{color:"#F87171"}}> *</span>}
+              </label>
+              <textarea value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})}
                 placeholder="Razón del descuento, paciente referido, observaciones..."
-                style={{width:"100%",background:"#1A2035",border:`1px solid ${err.notas?"#F87171":"#2A3550"}`,borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",minHeight:70,resize:"vertical"}}/>
+                style={{width:"100%",background:"#1A2035",border:`1px solid ${err.notas?"#F87171":"#2A3550"}`,borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",minHeight:60,resize:"vertical"}}/>
               {err.notas && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.notas}</div>}
             </div>
+
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}>
               <Btn variant="ghost" onClick={()=>setModal(false)} disabled={saving}>Cancelar</Btn>
-              <Btn onClick={guardar} disabled={saving || calculando}>{saving ? "Guardando..." : "Registrar venta"}</Btn>
+              <Btn onClick={guardar} disabled={saving||calculando}>
+                {uploadProgress==="subiendo" ? "Subiendo foto..." : saving ? "Guardando..." : "Registrar venta"}
+              </Btn>
             </div>
           </div>
         </div>
