@@ -1735,6 +1735,84 @@ function Sesiones({perfil}) {
           </div>
         </div>
       )}
+
+      {/* ── MIS OBSERVACIONES — solo enfermero ── */}
+      {f.esEnfermero && (
+        <MisObservaciones perfil={perfil}/>
+      )}
+    </div>
+  );
+}
+
+// ── MIS OBSERVACIONES (para enfermero) ───────────────────────
+function MisObservaciones({perfil}) {
+  const [obs, setObs]         = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const ESTADO_COLOR = { nueva:"#F87171", vista:"#F59E0B", resuelta:"#10B981" };
+  const ESTADO_LABEL = { nueva:"Pendiente de revisión", vista:"En revisión", resuelta:"Revisada ✓" };
+  const ESTADO_ICON  = { nueva:"🔔", vista:"👁", resuelta:"✓" };
+
+  useEffect(()=>{
+    let mounted = true;
+    (async()=>{
+      const { data } = await safeQuery(()=>
+        supabase.from("alertas_clinicas")
+          .select("id,tipo,prioridad,estado,mensaje,respuesta,created_at,pacientes(nombres,apellidos)")
+          .eq("generada_por", perfil.id)
+          .order("created_at",{ascending:false})
+          .limit(20),
+        "MisObservaciones:load"
+      );
+      if(mounted){ setObs(data||[]); setLoading(false); }
+    })();
+    return ()=>{ mounted=false; };
+  },[perfil.id]);
+
+  if(loading || obs.length===0) return null;
+
+  return (
+    <div style={{marginTop:32}}>
+      <div style={{fontSize:11,color:"#6B7280",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12,paddingTop:20,borderTop:"1px solid #1E2535"}}>
+        Mis observaciones registradas
+      </div>
+      {obs.map(o=>(
+        <div key={o.id} style={{
+          background:"#111827",border:"1px solid #1E2535",
+          borderLeft:`3px solid ${ESTADO_COLOR[o.estado]}`,
+          borderRadius:12,padding:"12px 16px",marginBottom:8,
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:14}}>{ESTADO_ICON[o.estado]}</span>
+                <span style={{fontSize:13,fontWeight:600,color:"#E8EAF0"}}>
+                  {o.pacientes?.nombres} {o.pacientes?.apellidos}
+                </span>
+                <span style={{fontSize:11,color:"#4B5563"}}>
+                  · {new Date(o.created_at).toLocaleDateString("es-PE",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+                </span>
+              </div>
+              <div style={{fontSize:13,color:"#9CA3AF",lineHeight:1.5,marginBottom:o.respuesta?8:0}}>
+                {o.mensaje.length>100 ? o.mensaje.slice(0,100)+"..." : o.mensaje}
+              </div>
+              {o.respuesta && (
+                <div style={{background:"#10B98115",border:"1px solid #10B98130",borderRadius:8,padding:"8px 12px",marginTop:6}}>
+                  <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>Respuesta médica</div>
+                  <div style={{fontSize:13,color:"#E8EAF0",lineHeight:1.5}}>{o.respuesta}</div>
+                </div>
+              )}
+            </div>
+            <span style={{
+              background:`${ESTADO_COLOR[o.estado]}15`,color:ESTADO_COLOR[o.estado],
+              border:`1px solid ${ESTADO_COLOR[o.estado]}30`,
+              borderRadius:99,fontSize:11,fontWeight:700,padding:"3px 10px",whiteSpace:"nowrap",flexShrink:0
+            }}>
+              {ESTADO_LABEL[o.estado]}
+            </span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
