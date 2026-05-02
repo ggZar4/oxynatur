@@ -1889,7 +1889,7 @@ function Sesiones({perfil}) {
   const { data: comprasData } = useSupabaseQuery(
     () => supabase.from("compras_paciente")
       .select("id,paciente_id,sesiones_usadas,sesiones_totales,paquetes(nombre)")
-      .eq("estado","activa"),
+      .eq("estado","activo"),
     [], "Sesiones:compras"
   );
 
@@ -2409,7 +2409,7 @@ function Alertas({perfil}) {
     [], "Alertas:pacientes"
   );
   const { data: sedesData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("id,nombre").eq("estado","activa"),
+    () => supabase.from("sedes").select("id,nombre").eq("estado","activo"),
     [], "Alertas:sedes"
   );
 
