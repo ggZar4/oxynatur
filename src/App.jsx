@@ -1804,56 +1804,238 @@ function Usuarios({perfil:adminPerfil}) {
 // ── AGENDA MÉDICO / ENFERMERO ─────────────────────────────────
 function AgendaMedico({perfil}) {
   const f = getRolFlags(perfil);
-  const [agenda, setAgenda] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  const hoy = new Date().toISOString().slice(0,10);
+  const [fechaSelec, setFechaSelec] = useState(hoy);
+  const [vistaMode, setVistaMode]   = useState("dia");    // "dia" | "semana"
+  const [agenda, setAgenda]         = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [sedesData, setSedesData]   = useState([]);
+  const [sedeTab, setSedeTab]       = useState("todas");
+
+  const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"#00C4B4",completada:"#10B981",cancelada:"#F87171",no_asistio:"#6B7280"};
+  const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
+
+  // Generar rango de fechas para vista semanal
+  const getSemana = (fecha) => {
+    const d = new Date(fecha+"T00:00:00");
+    const lunes = new Date(d);
+    lunes.setDate(d.getDate() - (d.getDay()===0?6:d.getDay()-1));
+    return Array.from({length:7},(_,i)=>{
+      const dia = new Date(lunes);
+      dia.setDate(lunes.getDate()+i);
+      return dia.toISOString().slice(0,10);
+    });
+  };
+  const semana = getSemana(fechaSelec);
+
+  const load = async () => {
+    setLoading(true);
+    const fechas = vistaMode==="semana" ? semana : [fechaSelec];
+    const { data } = await safeQuery(() => {
+      let q = supabase.from("vista_agenda_hoy")
+        .select("*")
+        .in("fecha", fechas)
+        .order("fecha")
+        .order("hora_inicio");
+      if(!f.esAdmin && !f.esMedicoEsp && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+      return q;
+    }, "Agenda:load");
+    setAgenda(data||[]);
+    setLoading(false);
+  };
 
   useEffect(()=>{
     let mounted = true;
-    (async () => {
-      const { data } = await safeQuery(() => {
-        let q = supabase.from("vista_agenda_hoy").select("*");
-        if(perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
-        return q;
-      }, "AgendaMedico:vista_agenda_hoy");
-      if (!mounted) return;
-      setAgenda(data || []);
-      setLoading(false);
+    (async()=>{
+      await load();
+      const { data: s } = await safeQuery(()=>supabase.from("sedes").select("id,nombre"), "Agenda:sedes");
+      if(mounted) setSedesData(s||[]);
     })();
-    return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+    return ()=>{ mounted=false; };
+  },[fechaSelec, vistaMode]); // eslint-disable-line
 
-  const estadoColor = {programada:"#F59E0B",en_curso:"#00C4B4",completada:"#10B981",cancelada:"#F87171",no_asistio:"#6B7280"};
+  // Navegar días/semanas
+  const navegar = (dir) => {
+    const d = new Date(fechaSelec+"T00:00:00");
+    d.setDate(d.getDate() + (vistaMode==="semana" ? dir*7 : dir));
+    setFechaSelec(d.toISOString().slice(0,10));
+  };
+
+  const fmtDia = (iso) => new Date(iso+"T00:00:00").toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"});
+  const esHoy  = (iso) => iso === hoy;
+
+  // Filtrar por sede
+  const agendaFiltrada = sedeTab==="todas" ? agenda : agenda.filter(s=>s.sede_id===sedeTab);
+
+  // KPIs
+  const total      = agendaFiltrada.length;
+  const completadas = agendaFiltrada.filter(s=>s.estado==="completada").length;
+  const enCurso    = agendaFiltrada.filter(s=>s.estado==="en_curso").length;
+  const pendientes = agendaFiltrada.filter(s=>s.estado==="programada").length;
 
   return (
     <div>
-      <div style={{marginBottom:24}}>
-        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>
-          {f.esMedico ? "Mi Agenda" : "Agenda del día"}
-        </h1>
-        <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>
-          {new Date().toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})}
-        </p>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>Agenda</h1>
+          <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>
+            {vistaMode==="dia"
+              ? new Date(fechaSelec+"T00:00:00").toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
+              : `${fmtDia(semana[0])} — ${fmtDia(semana[6])}`
+            }
+          </p>
+        </div>
+        {/* Controles de navegación */}
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {/* Toggle vista */}
+          <div style={{display:"flex",background:"#1A2035",borderRadius:8,border:"1px solid #2A3550",overflow:"hidden"}}>
+            {["dia","semana"].map(v=>(
+              <button key={v} onClick={()=>setVistaMode(v)}
+                style={{padding:"6px 14px",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,
+                  background:vistaMode===v?"#2A3550":"transparent",
+                  color:vistaMode===v?"#E8EAF0":"#6B7280",
+                  fontWeight:vistaMode===v?600:400}}>
+                {v==="dia"?"Día":"Semana"}
+              </button>
+            ))}
+          </div>
+          {/* Navegación */}
+          <button onClick={()=>navegar(-1)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>‹</button>
+          <button onClick={()=>setFechaSelec(hoy)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#00C4B4",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
+          <button onClick={()=>navegar(1)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>›</button>
+          {/* Selector de fecha */}
+          <input type="date" value={fechaSelec} onChange={e=>setFechaSelec(e.target.value)}
+            style={{background:"#1A2035",border:"1px solid #2A3550",borderRadius:8,color:"#E8EAF0",padding:"6px 10px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+        </div>
       </div>
-      {loading
-        ? <div style={{color:"#4B5563"}}>Cargando agenda...</div>
-        : agenda.length===0
-          ? <Card style={{textAlign:"center",padding:"50px"}}><div style={{fontSize:40,marginBottom:12,opacity:.3}}>📅</div><div style={{color:"#6B7280"}}>Sin sesiones programadas para hoy</div></Card>
-          : agenda.map(s=>(
-            <Card key={s.id} style={{marginBottom:10,display:"flex",alignItems:"center",gap:16}}>
-              <div style={{background:"#1A2035",borderRadius:12,padding:"10px 16px",textAlign:"center",minWidth:70}}>
-                <div style={{fontSize:18,fontWeight:700,color:"#00C4B4",fontFamily:"Syne,sans-serif"}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+        {[
+          {label:"Total",       val:total,       color:"#E8EAF0"},
+          {label:"Completadas", val:completadas,  color:"#10B981"},
+          {label:"En curso",    val:enCurso,     color:"#00C4B4"},
+          {label:"Pendientes",  val:pendientes,  color:"#F59E0B"},
+        ].map((k,i)=>(
+          <div key={i} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"12px 16px"}}>
+            <div style={{fontSize:10,color:"#6B7280",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:700,color:k.color,marginTop:4}}>{k.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs sede — solo si ve varias */}
+      {(f.esAdmin || f.esMedicoEsp) && sedesData.length > 0 && (
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          {[{id:"todas",nombre:"Todas"},...sedesData].map(s=>(
+            <button key={s.id} onClick={()=>setSedeTab(s.id)}
+              style={{padding:"5px 14px",borderRadius:20,border:"1px solid",fontSize:12,cursor:"pointer",fontFamily:"inherit",
+                borderColor:sedeTab===s.id?"#00C4B4":"#2A3550",
+                background:sedeTab===s.id?"#00C4B415":"none",
+                color:sedeTab===s.id?"#00C4B4":"#6B7280"}}>
+              {s.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {loading ? <div style={{color:"#4B5563",padding:20}}>Cargando agenda...</div>
+
+      /* Vista semanal */
+      : vistaMode==="semana" ? (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
+          {semana.map(fecha=>{
+            const sesiones = agendaFiltrada.filter(s=>s.fecha===fecha);
+            return (
+              <div key={fecha} style={{
+                background: esHoy(fecha)?"#1A2035":"#111827",
+                border:`1px solid ${esHoy(fecha)?"#00C4B440":"#1E2535"}`,
+                borderRadius:12, padding:"10px 8px", minHeight:120,
+              }}>
+                {/* Cabecera día */}
+                <div style={{textAlign:"center",marginBottom:8}}>
+                  <div style={{fontSize:10,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+                    {new Date(fecha+"T00:00:00").toLocaleDateString("es-PE",{weekday:"short"})}
+                  </div>
+                  <div style={{
+                    fontSize:18,fontWeight:700,fontFamily:"Syne,sans-serif",
+                    color:esHoy(fecha)?"#00C4B4":"#E8EAF0",
+                    background:esHoy(fecha)?"#00C4B420":"none",
+                    borderRadius:8,padding:"2px 6px",display:"inline-block",marginTop:2,
+                  }}>
+                    {new Date(fecha+"T00:00:00").getDate()}
+                  </div>
+                </div>
+                {sesiones.length===0
+                  ? <div style={{textAlign:"center",color:"#2A3550",fontSize:11,marginTop:8}}>—</div>
+                  : sesiones.map(s=>(
+                    <div key={s.id} style={{
+                      background:`${ESTADO_COLOR[s.estado]||"#374151"}20`,
+                      border:`1px solid ${ESTADO_COLOR[s.estado]||"#374151"}40`,
+                      borderRadius:6,padding:"4px 6px",marginBottom:4,
+                    }}>
+                      <div style={{fontSize:11,fontWeight:600,color:"#E8EAF0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.paciente?.split(" ")[0]}</div>
+                      <div style={{fontSize:10,color:"#6B7280"}}>{s.hora_inicio?.slice(0,5)} · #{s.numero_sesion}</div>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:ESTADO_COLOR[s.estado],display:"inline-block",marginTop:2}}/>
+                    </div>
+                  ))
+                }
               </div>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:600,fontSize:15,color:"#E8EAF0"}}>{s.paciente}</div>
-                <div style={{fontSize:12,color:"#6B7280",marginTop:3}}>DNI: {s.dni} · Sesión #{s.numero_sesion} · Cámara {s.camara||"—"}</div>
+            );
+          })}
+        </div>
+
+      /* Vista día */
+      ) : agendaFiltrada.length===0
+        ? <div style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"50px",textAlign:"center"}}>
+            <div style={{fontSize:36,opacity:.3,marginBottom:12}}>📅</div>
+            <div style={{color:"#6B7280"}}>Sin sesiones para este día</div>
+          </div>
+        : agendaFiltrada.map(s=>(
+          <div key={s.id} style={{
+            background:"#111827",
+            border:`1px solid #1E2535`,
+            borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"#374151"}`,
+            borderRadius:12,padding:"14px 18px",marginBottom:8,
+            display:"grid",gridTemplateColumns:"70px 2fr 1fr 1fr auto",
+            alignItems:"center",gap:12,
+          }}>
+            {/* Hora */}
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:16,fontWeight:700,color:"#00C4B4",fontFamily:"Syne,sans-serif"}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+              <div style={{fontSize:11,color:"#4B5563"}}>{s.hora_fin?.slice(0,5)||""}</div>
+            </div>
+            {/* Paciente */}
+            <div>
+              <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{s.paciente}</div>
+              <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
+                DNI {s.dni} · Sesión #{s.numero_sesion}
+                {s.sesiones_restantes != null && (
+                  <span style={{color:s.sesiones_restantes<=2?"#F87171":"#6B7280"}}> · {s.sesiones_restantes} restantes</span>
+                )}
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                {!s.hc_completada && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
-                <Badge color={estadoColor[s.estado]||"#6B7280"}>{s.estado}</Badge>
+            </div>
+            {/* Cámara + parámetros */}
+            <div style={{fontSize:13,color:"#9CA3AF"}}>
+              {s.camara_numero ? `Cámara #${s.camara_numero}` : "—"}
+              <div style={{fontSize:11,color:"#4B5563",marginTop:2}}>{s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
+            </div>
+            {/* Sede — solo si ve varias */}
+            {(f.esAdmin||f.esMedicoEsp) && (
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:getColor(s.sede_nombre),display:"inline-block"}}/>
+                <span style={{fontSize:12,color:"#9CA3AF"}}>{s.sede_nombre}</span>
               </div>
-            </Card>
-          ))
+            )}
+            {/* Estado */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+              <Badge color={ESTADO_COLOR[s.estado]||"#6B7280"}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
+              {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
+            </div>
+          </div>
+        ))
       }
     </div>
   );
