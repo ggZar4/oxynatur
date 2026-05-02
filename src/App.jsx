@@ -521,6 +521,7 @@ function HistoriasClinicas({perfil}) {
   const [pacSelec, setPacSelec]   = useState(null); // paciente seleccionado → ver HC maestra + evaluaciones
   const [modalEval, setModalEval] = useState(null); // evaluación a ver/editar
   const [modalNuevaEval, setModalNuevaEval] = useState(false);
+  const [comprasPaciente, setComprasPaciente] = useState([]); // compras activas del paciente seleccionado
 
   // Form nueva evaluación (enfermero)
   const evalInicial = {
@@ -529,7 +530,7 @@ function HistoriasClinicas({perfil}) {
     otitis:"No", claustrofobia:"No", embarazo:"No", fiebre_activa:"No",
     presion_indicada:"2.0", duracion_minutos:"90",
     incidencias:"", observaciones:"", numero_sesion:"",
-    evolucion:"", firma_medico:"",
+    evolucion:"", firma_medico:"", compra_id:"",
   };
   const [formEval, setFormEval]   = useState(evalInicial);
   const [savingEval, setSavingEval] = useState(false);
@@ -586,6 +587,17 @@ function HistoriasClinicas({perfil}) {
       observaciones_generales: hc.observaciones_generales||"",
       apto_hiperbarica: hc.apto_hiperbarica !== false,
     });
+
+    // Cargar compras activas del paciente para el selector de episodio
+    const { data: compras } = await safeQuery(()=>
+      supabase.from("compras_paciente")
+        .select("id,sesiones_usadas,sesiones_totales,paquetes(nombre,cantidad_sesiones)")
+        .eq("paciente_id", hc.paciente_id)
+        .eq("estado","activo")
+        .order("created_at",{ascending:false}),
+      "HC:compras"
+    );
+    setComprasPaciente(compras||[]);
     setLoadingEvals(true);
     const { data } = await safeQuery(()=>
       supabase.from("evaluaciones_medicas")
@@ -660,6 +672,7 @@ function HistoriasClinicas({perfil}) {
           ? formEval.firma_medico
           : null,
         es_borrador:         !esMedFirmando,
+        compra_id:           formEval.compra_id || null,
       }),
       "HC:guardarEval"
     );
@@ -942,6 +955,16 @@ function HistoriasClinicas({perfil}) {
               {/* N° sesión */}
               <Input label="N° de sesión" type="number" value={formEval.numero_sesion}
                 onChange={v=>setFormEval(f=>({...f,numero_sesion:v}))} required error={errEval.numero_sesion}/>
+
+              {/* Selector de paquete/episodio */}
+              {comprasPaciente.length > 0 && (
+                <Select label="Paquete / Episodio a descontar" value={formEval.compra_id||""}
+                  onChange={v=>setFormEval(f=>({...f,compra_id:v}))}
+                  options={comprasPaciente.map(c=>({
+                    value:c.id,
+                    label:`${c.paquetes?.nombre||"Paquete"} — ${c.sesiones_usadas}/${c.sesiones_totales} sesiones usadas`
+                  }))}/>
+              )}
 
               {/* SECCIÓN ENFERMERO — Signos vitales */}
               <div style={{fontSize:11,color:"#00C4B4",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
