@@ -1890,7 +1890,7 @@ function Usuarios({perfil:adminPerfil}) {
                     ✏ Editar
                   </button>
                   <button onClick={()=>toggleActivo(u)}
-                    style={{background:u.activo===false?"#10B98115":"#F8717115",border:`1px solid ${u.activo===false?"#10B98130":"#F8717130"}`,color:u.activo===false?"#10B981":"#F87171",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
+                    style={{background:u.activo===false?"#10B98115":"#F8717115",border:u.activo===false?"1px solid #10B98130":"1px solid #F8717130",color:u.activo===false?"#10B981":"#F87171",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
                     {u.activo===false?"Activar":"Desactivar"}
                   </button>
                 </div>
