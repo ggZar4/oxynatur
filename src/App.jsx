@@ -535,6 +535,10 @@ function Pacientes({perfil}) {
   const [compras, setCompras]     = useState([]);
   const [ultimasSesiones, setUltimasSesiones] = useState([]);
   const [loadingPerfil, setLoadingPerfil] = useState(false);
+  // Edición del paciente
+  const [modalEditar, setModalEditar] = useState(false);
+  const [formEditar, setFormEditar]   = useState({});
+  const [savingEditar, setSavingEditar] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -595,6 +599,46 @@ function Pacientes({perfil}) {
     setCompras(r2.data||[]);
     setUltimasSesiones(r3.data||[]);
     setLoadingPerfil(false);
+  };
+
+  const abrirEditar = (pac) => {
+    setFormEditar({
+      nombres: pac.nombres||"",
+      apellidos: pac.apellidos||"",
+      dni: pac.dni||"",
+      telefono: pac.telefono||"",
+      email: pac.email||"",
+      genero: pac.genero||"",
+      fecha_nacimiento: pac.fecha_nacimiento||"",
+      total_sesiones_prescritas: pac.total_sesiones_prescritas||"",
+      estado: pac.estado||"activo",
+    });
+    setModalEditar(true);
+  };
+
+  const guardarEdicion = async () => {
+    setSavingEditar(true);
+    const { error } = await safeQuery(()=>
+      supabase.from("pacientes").update({
+        nombres:   formEditar.nombres,
+        apellidos: formEditar.apellidos,
+        dni:       formEditar.dni,
+        telefono:  formEditar.telefono||null,
+        email:     formEditar.email||null,
+        genero:    formEditar.genero||null,
+        fecha_nacimiento: formEditar.fecha_nacimiento||null,
+        total_sesiones_prescritas: parseInt(formEditar.total_sesiones_prescritas)||0,
+        estado:    formEditar.estado,
+      }).eq("id", pacSelec.id),
+      "Pacientes:editar"
+    );
+    setSavingEditar(false);
+    if(!error){
+      setModalEditar(false);
+      // Refrescar datos del perfil
+      await abrirPerfil({...pacSelec, ...formEditar});
+      load();
+    }
   };
 
   const filtrados = pacs.filter(p=>{
@@ -659,7 +703,15 @@ function Pacientes({perfil}) {
             </div>
           </div>
         </div>
-        <Badge color={estadoColor[pacSelec.estado]||"#6B7280"}>{pacSelec.estado}</Badge>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <Badge color={estadoColor[pacSelec.estado]||"#6B7280"}>{pacSelec.estado}</Badge>
+          {f.puedeEditarPaciente && (
+            <button onClick={()=>abrirEditar(pacSelec)}
+              style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+              ✏ Editar
+            </button>
+          )}
+        </div>
       </div>
 
       {loadingPerfil ? <div style={{color:"#4B5563"}}>Cargando perfil...</div> : (
@@ -773,6 +825,39 @@ function Pacientes({perfil}) {
             }
           </Card>
         </>
+      )}
+    </div>
+  );
+
+      {/* Modal editar paciente */}
+      {modalEditar && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0"}}>Editar Paciente</div>
+              <button onClick={()=>setModalEditar(false)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Input label="Nombres" value={formEditar.nombres} onChange={v=>setFormEditar(f=>({...f,nombres:v}))} required/>
+                <Input label="Apellidos" value={formEditar.apellidos} onChange={v=>setFormEditar(f=>({...f,apellidos:v}))} required/>
+                <Input label="DNI" value={formEditar.dni} onChange={v=>setFormEditar(f=>({...f,dni:v}))} required/>
+                <Input label="Teléfono" value={formEditar.telefono} onChange={v=>setFormEditar(f=>({...f,telefono:v}))}/>
+                <Input label="Email" value={formEditar.email} onChange={v=>setFormEditar(f=>({...f,email:v}))} type="email"/>
+                <Input label="Fecha Nacimiento" value={formEditar.fecha_nacimiento} onChange={v=>setFormEditar(f=>({...f,fecha_nacimiento:v}))} type="date"/>
+              </div>
+              <Select label="Género" value={formEditar.genero} onChange={v=>setFormEditar(f=>({...f,genero:v}))}
+                options={[{value:"M",label:"Masculino"},{value:"F",label:"Femenino"},{value:"Otro",label:"Otro"}]}/>
+              <Input label="Sesiones Prescritas" value={formEditar.total_sesiones_prescritas} onChange={v=>setFormEditar(f=>({...f,total_sesiones_prescritas:v}))} type="number"/>
+              <Select label="Estado" value={formEditar.estado} onChange={v=>setFormEditar(f=>({...f,estado:v}))}
+                options={[{value:"activo",label:"Activo"},{value:"inactivo",label:"Inactivo"},{value:"completado",label:"Completado"},{value:"suspendido",label:"Suspendido"}]}/>
+            </div>
+            <div style={{padding:"14px 24px",borderTop:"1px solid #1E2535",display:"flex",justifyContent:"flex-end",gap:10}}>
+              <Btn variant="ghost" onClick={()=>setModalEditar(false)}>Cancelar</Btn>
+              <Btn onClick={guardarEdicion} disabled={savingEditar}>{savingEditar?"Guardando...":"Guardar cambios"}</Btn>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1683,6 +1768,10 @@ function Usuarios({perfil:adminPerfil}) {
   const [form, setForm]         = useState({email:"",password:"",nombre:"",rol:"enfermero",sede_id:"",es_especialista:false});
   const [saving, setSaving]     = useState(false);
   const [msg, setMsg]           = useState("");
+  // Edición de usuario
+  const [modalEdit, setModalEdit] = useState(null);
+  const [formEdit, setFormEdit]   = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -1726,6 +1815,44 @@ function Usuarios({perfil:adminPerfil}) {
     setSaving(false); setModal(false);
     setForm({email:"",password:"",nombre:"",rol:"enfermero",sede_id:"",es_especialista:false});
     setMsg(""); load();
+  };
+
+  const abrirEditUsuario = (u) => {
+    setFormEdit({
+      nombre: u.nombre||"",
+      rol: u.rol||"enfermero",
+      es_especialista: u.es_especialista||false,
+      sede_id: u.sede_id||"",
+      activo: u.activo !== false,
+    });
+    setModalEdit(u);
+  };
+
+  const guardarEditUsuario = async () => {
+    setSavingEdit(true);
+    await safeQuery(()=>
+      supabase.from("perfiles").update({
+        nombre:         formEdit.nombre,
+        rol:            formEdit.rol,
+        es_especialista: formEdit.rol==="medico" ? formEdit.es_especialista : false,
+        sede_id:        (formEdit.rol==="medico" && formEdit.es_especialista) ? null : (formEdit.sede_id||null),
+        activo:         formEdit.activo,
+      }).eq("id", modalEdit.id),
+      "Usuarios:editar"
+    );
+    setSavingEdit(false);
+    setModalEdit(null);
+    load();
+  };
+
+  const toggleActivo = async (u) => {
+    const accion = u.activo !== false ? "desactivar" : "activar";
+    if(!confirm(`¿${accion} al usuario ${u.nombre}?`)) return;
+    await safeQuery(()=>
+      supabase.from("perfiles").update({ activo: u.activo === false }).eq("id", u.id),
+      "Usuarios:toggleActivo"
+    );
+    load();
   };
 
   const rolColor = {admin_general:"#00C4B4",admin_sede:"#7C6AF7",medico:"#F59E0B",enfermero:"#10B981"};
@@ -1793,6 +1920,42 @@ function Usuarios({perfil:adminPerfil}) {
             <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
               <Btn variant="ghost" onClick={()=>setModal(false)}>Cancelar</Btn>
               <Btn onClick={crear} disabled={saving}>{saving?"Creando...":"Crear Usuario"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal editar usuario */}
+      {modalEdit && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0"}}>Editar Usuario</div>
+              <button onClick={()=>setModalEdit(null)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+            </div>
+            <Input label="Nombre completo" value={formEdit.nombre} onChange={v=>setFormEdit(f=>({...f,nombre:v}))} required/>
+            <Select label="Rol" value={formEdit.rol} onChange={v=>setFormEdit(f=>({...f,rol:v}))}
+              options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
+            {formEdit.rol==="medico" && (
+              <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#1A2035",borderRadius:10,border:"1px solid #2A3550"}}>
+                <input type="checkbox" checked={formEdit.es_especialista}
+                  onChange={e=>setFormEdit(f=>({...f,es_especialista:e.target.checked}))}
+                  style={{width:16,height:16,cursor:"pointer"}}/>
+                <label style={{fontSize:14,color:"#E8EAF0",cursor:"pointer"}}>Médico Especialista (cross-sede)</label>
+              </div>
+            )}
+            {!(formEdit.rol==="medico" && formEdit.es_especialista) && (
+              <Select label="Sede asignada" value={formEdit.sede_id} onChange={v=>setFormEdit(f=>({...f,sede_id:v}))}
+                options={(sedes||[]).map(s=>({value:s.id,label:s.nombre}))}/>
+            )}
+            <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#1A2035",borderRadius:10,border:"1px solid #2A3550"}}>
+              <input type="checkbox" checked={formEdit.activo!==false}
+                onChange={e=>setFormEdit(f=>({...f,activo:e.target.checked}))}
+                style={{width:16,height:16,cursor:"pointer"}}/>
+              <label style={{fontSize:14,color:"#E8EAF0",cursor:"pointer"}}>Usuario activo</label>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
+              <Btn variant="ghost" onClick={()=>setModalEdit(null)}>Cancelar</Btn>
+              <Btn onClick={guardarEditUsuario} disabled={savingEdit}>{savingEdit?"Guardando...":"Guardar"}</Btn>
             </div>
           </div>
         </div>
@@ -2093,6 +2256,15 @@ function Ventas({perfil}) {
 
   useEffect(()=>{ loadVentas(); }, []); // eslint-disable-line
 
+  const anularVenta = async (venta) => {
+    if(!confirm(`¿Anular venta de ${venta.paquetes?.nombre||"paquete"} por ${fmtSol(venta.monto_pagado)}? Esta acción no se puede deshacer.`)) return;
+    await safeQuery(()=>
+      supabase.from("compras_paciente").update({ estado:"cancelado" }).eq("id", venta.id),
+      "Ventas:anular"
+    );
+    loadVentas();
+  };
+
   const formInicial = {
     paciente_id:"", sede_id: sedeFija || "", paquete_id:"",
     monto_pagado:"", metodo_pago:"efectivo", notas:"",
@@ -2257,7 +2429,7 @@ function Ventas({perfil}) {
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"#0D1320"}}>
-                  {["Fecha","Comprobante","Paciente","Paquete","Pagado","Método","Doc"].map(h=>(
+                  {["Fecha","Comprobante","Paciente","Paquete","Pagado","Método","Doc",""].map(h=>(
                     <th key={h} style={{textAlign:"left",padding:"11px 14px",fontSize:11,fontWeight:700,color:"#6B7280",letterSpacing:"0.05em",textTransform:"uppercase"}}>{h}</th>
                   ))}
                 </tr>
@@ -2289,6 +2461,15 @@ function Ventas({perfil}) {
                               style={{fontSize:12,color:"#00C4B4",textDecoration:"none"}}>Ver 📎</a>
                           : <span style={{fontSize:12,color:"#374151"}}>—</span>
                         }
+                      </td>
+                      <td style={{padding:"11px 14px"}}>
+                        {f.esAdmin && v.estado !== "cancelado" && (
+                          <button onClick={()=>anularVenta(v)}
+                            style={{background:"#F8717115",border:"1px solid #F8717130",color:"#F87171",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
+                            Anular
+                          </button>
+                        )}
+                        {v.estado === "cancelado" && <span style={{fontSize:11,color:"#4B5563"}}>Anulada</span>}
                       </td>
                     </tr>
                   );
@@ -2574,6 +2755,29 @@ function Sesiones({perfil}) {
     load();
   };
 
+  const [modalReprog, setModalReprog] = useState(null);
+  const [formReprog, setFormReprog]   = useState({fecha:"", hora_inicio:"", hora_fin:""});
+  const [savingReprog, setSavingReprog] = useState(false);
+
+  const reprogramar = async () => {
+    if(!formReprog.fecha || !formReprog.hora_inicio) return;
+    setSavingReprog(true);
+    await safeQuery(()=>
+      supabase.from("sesiones").update({
+        fecha:       formReprog.fecha,
+        hora_inicio: formReprog.hora_inicio,
+        hora_fin:    formReprog.hora_fin||null,
+        estado:      "programada",
+      }).eq("id", modalReprog.id),
+      "Sesiones:reprogramar"
+    );
+    setSavingReprog(false);
+    setModalReprog(null);
+    // Si la nueva fecha es diferente a la seleccionada, ir a esa fecha
+    setFecha(formReprog.fecha);
+    load();
+  };
+
   // KPIs del día
   const total      = sesiones.length;
   const completadas = sesiones.filter(s => s.estado === "completada").length;
@@ -2682,6 +2886,12 @@ function Sesiones({perfil}) {
                     ✓ Completar
                   </button>
                 )}
+                {s.estado === "cancelada" && (f.esAdmin || f.esEnfermero || f.esMedico) && (
+                  <button onClick={()=>{ setModalReprog(s); setFormReprog({fecha:fecha,hora_inicio:s.hora_inicio?.slice(0,5)||"08:00",hora_fin:s.hora_fin?.slice(0,5)||"09:30"}); }}
+                    style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    📅 Reprogramar
+                  </button>
+                )}
                 {s.estado === "completada" && (
                   <button onClick={()=>setVerSesion(s)}
                     style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
@@ -2740,6 +2950,27 @@ function Sesiones({perfil}) {
             <div style={{padding:"14px 24px",borderTop:"1px solid #1E2535",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setModalNueva(false)}>Cancelar</Btn>
               <Btn onClick={programar} disabled={savingNueva}>{savingNueva?"Guardando...":"Programar"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reprogramar sesión */}
+      {modalReprog && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:420,padding:28}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Reprogramar Sesión</div>
+            <div style={{fontSize:12,color:"#6B7280",marginBottom:20}}>{modalReprog.paciente} · Sesión #{modalReprog.numero_sesion}</div>
+            <Input label="Nueva fecha" type="date" value={formReprog.fecha} onChange={v=>setFormReprog(f=>({...f,fecha:v}))} required/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <Input label="Hora inicio" type="time" value={formReprog.hora_inicio} onChange={v=>setFormReprog(f=>({...f,hora_inicio:v}))} required/>
+              <Input label="Hora fin estimada" type="time" value={formReprog.hora_fin} onChange={v=>setFormReprog(f=>({...f,hora_fin:v}))}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
+              <Btn variant="ghost" onClick={()=>setModalReprog(null)}>Cancelar</Btn>
+              <Btn onClick={reprogramar} disabled={savingReprog||!formReprog.fecha||!formReprog.hora_inicio}>
+                {savingReprog?"Guardando...":"Reprogramar"}
+              </Btn>
             </div>
           </div>
         </div>
