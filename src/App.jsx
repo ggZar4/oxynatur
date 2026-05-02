@@ -503,57 +503,581 @@ function Pacientes({perfil}) {
 }
 
 // ── HISTORIAS CLÍNICAS ────────────────────────────────────────
+// Dos capas: HC Maestra (por paciente) + Evaluaciones por sesión.
+// Enfermero: registra signos vitales y datos operativos.
+// Médico: agrega evolución clínica y firma de supervisión.
+// Especialista: ve todo, puede editar HC maestra y protocolos.
 function HistoriasClinicas({perfil}) {
   const f = getRolFlags(perfil);
-  const [hcs, setHcs]     = useState([]);
-  const [sedes, setSedes] = useState([]);
-  const [sedeTab, setSedeTab] = useState("todas");
-  const [loading, setLoading] = useState(true);
-  const [verHC, setVerHC] = useState(null);
 
+  // Vista principal: lista de pacientes con HC
+  const [pacientes, setPacientes] = useState([]);
+  const [sedes, setSedes]         = useState([]);
+  const [sedeTab, setSedeTab]     = useState("todas");
+  const [loading, setLoading]     = useState(true);
+  const [busq, setBusq]           = useState("");
+
+  // Vistas de detalle
+  const [pacSelec, setPacSelec]   = useState(null); // paciente seleccionado → ver HC maestra + evaluaciones
+  const [modalEval, setModalEval] = useState(null); // evaluación a ver/editar
+  const [modalNuevaEval, setModalNuevaEval] = useState(false);
+
+  // Form nueva evaluación (enfermero)
+  const evalInicial = {
+    presion_arterial:"", frecuencia_cardiaca:"", saturacion_o2:"", temperatura:"", peso:"",
+    nivel_dolor:0, estado_general:"Bueno",
+    otitis:"No", claustrofobia:"No", embarazo:"No", fiebre_activa:"No",
+    presion_indicada:"2.0", duracion_minutos:"90",
+    incidencias:"", observaciones:"", numero_sesion:"",
+    evolucion:"", firma_medico:"",
+  };
+  const [formEval, setFormEval]   = useState(evalInicial);
+  const [savingEval, setSavingEval] = useState(false);
+  const [errEval, setErrEval]     = useState({});
+
+  // Evaluaciones del paciente seleccionado
+  const [evals, setEvals]         = useState([]);
+  const [loadingEvals, setLoadingEvals] = useState(false);
+
+  // HC maestra del paciente
+  const [hcMaestra, setHcMaestra] = useState(null);
+  const [editandoHC, setEditandoHC] = useState(false);
+  const [formHC, setFormHC]       = useState({});
+  const [savingHC, setSavingHC]   = useState(false);
+
+  const dolorColor = (n) => parseInt(n)>=7?"#F87171":parseInt(n)>=4?"#F59E0B":"#10B981";
+  const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"#10B981":e==="Regular"?"#F59E0B":"#F87171";
+
+  // Cargar lista de pacientes con HC
   const load = async () => {
     setLoading(true);
     const { data } = await safeQuery(() => {
-      let q = supabase.from("evaluaciones_medicas")
-        .select("*, pacientes(nombres,apellidos,dni), sedes(nombre,color), perfiles(nombre)")
-        .order("fecha",{ascending:false});
-      // admin y especialista ven todo; médico de sede y enfermero solo su sede
-      if(!f.puedeVerTodasHC && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+      let q = supabase.from("historias_clinicas")
+        .select("*, pacientes(id,nombres,apellidos,dni,estado,sesiones_realizadas,total_sesiones_prescritas), sedes!sede_apertura_id(nombre)")
+        .order("created_at",{ascending:false});
+      if(!f.puedeVerTodasHC && perfil?.sede_id) q = q.eq("sede_apertura_id", perfil.sede_id);
       return q;
-    }, "HistoriasClinicas:load");
-    setHcs(data || []);
+    }, "HC:load");
+    setPacientes(data || []);
     setLoading(false);
   };
 
   useEffect(()=>{
     let mounted = true;
-    (async () => {
+    (async()=>{
       await load();
-      const { data: sedesData } = await safeQuery(
-        () => supabase.from("sedes").select("id,nombre,color"),
-        "HistoriasClinicas:sedes"
-      );
-      if (mounted) setSedes(sedesData || []);
+      const { data: s } = await safeQuery(()=>supabase.from("sedes").select("id,nombre"), "HC:sedes");
+      if(mounted) setSedes(s||[]);
     })();
-    return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+    return ()=>{ mounted=false; };
+  },[]); // eslint-disable-line
 
-  const filtradas = sedeTab==="todas" ? hcs : hcs.filter(h=>h.sede_id===sedeTab);
-  const dolorColor = (n) => parseInt(n)>=7?"#F87171":parseInt(n)>=4?"#F59E0B":"#10B981";
-  const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"#10B981":e==="Regular"?"#F59E0B":"#F87171";
+  // Al seleccionar paciente — cargar HC maestra + evaluaciones
+  const abrirPaciente = async (hc) => {
+    setPacSelec(hc);
+    setHcMaestra(hc);
+    setFormHC({
+      diagnostico_principal: hc.diagnostico_principal||"",
+      antecedentes_personales: hc.antecedentes_personales||"",
+      antecedentes_familiares: hc.antecedentes_familiares||"",
+      alergias: hc.alergias||"",
+      medicamentos_habituales: hc.medicamentos_habituales||"",
+      contraindicaciones: hc.contraindicaciones||"",
+      observaciones_generales: hc.observaciones_generales||"",
+      apto_hiperbarica: hc.apto_hiperbarica !== false,
+    });
+    setLoadingEvals(true);
+    const { data } = await safeQuery(()=>
+      supabase.from("evaluaciones_medicas")
+        .select("*, sedes(nombre), perfiles!medico_id(nombre)")
+        .eq("paciente_id", hc.paciente_id)
+        .order("fecha",{ascending:false})
+        .order("numero_sesion",{ascending:false}),
+      "HC:evals"
+    );
+    setEvals(data||[]);
+    setLoadingEvals(false);
+  };
 
+  const guardarHCMaestra = async () => {
+    setSavingHC(true);
+    const { error } = await safeQuery(()=>
+      supabase.from("historias_clinicas").update({
+        diagnostico_principal:    formHC.diagnostico_principal,
+        antecedentes_personales:  formHC.antecedentes_personales,
+        antecedentes_familiares:  formHC.antecedentes_familiares,
+        alergias:                 formHC.alergias,
+        medicamentos_habituales:  formHC.medicamentos_habituales,
+        contraindicaciones:       formHC.contraindicaciones,
+        observaciones_generales:  formHC.observaciones_generales,
+        apto_hiperbarica:         formHC.apto_hiperbarica,
+      }).eq("id", hcMaestra.id),
+      "HC:guardarMaestra"
+    );
+    setSavingHC(false);
+    if(!error){ setEditandoHC(false); load(); }
+  };
+
+  const guardarEval = async () => {
+    const e = {};
+    if(!formEval.presion_arterial)    e.presion_arterial    = "Requerido";
+    if(!formEval.frecuencia_cardiaca) e.frecuencia_cardiaca = "Requerido";
+    if(!formEval.saturacion_o2)       e.saturacion_o2       = "Requerido";
+    if(!formEval.numero_sesion)       e.numero_sesion       = "Requerido";
+    setErrEval(e);
+    if(Object.keys(e).length) return;
+    setSavingEval(true);
+
+    // Si médico, verificar que pone firma
+    const esMedFirmando = (f.esMedico || f.esAdmin) && formEval.firma_medico.trim();
+
+    const { error } = await safeQuery(()=>
+      supabase.from("evaluaciones_medicas").insert({
+        historia_id:         pacSelec.id,
+        paciente_id:         pacSelec.paciente_id,
+        sede_id:             pacSelec.sede_apertura_id,
+        medico_id:           (f.esMedico||f.esAdmin) ? perfil.id : null,
+        numero_sesion:       parseInt(formEval.numero_sesion),
+        fecha:               new Date().toISOString().slice(0,10),
+        hora:                new Date().toTimeString().slice(0,8),
+        presion_arterial:    formEval.presion_arterial,
+        frecuencia_cardiaca: formEval.frecuencia_cardiaca,
+        saturacion_o2:       formEval.saturacion_o2,
+        temperatura:         formEval.temperatura||null,
+        peso:                formEval.peso ? parseFloat(formEval.peso) : null,
+        nivel_dolor:         parseInt(formEval.nivel_dolor),
+        estado_general:      formEval.estado_general,
+        otitis:              formEval.otitis,
+        claustrofobia:       formEval.claustrofobia,
+        embarazo:            formEval.embarazo,
+        fiebre_activa:       formEval.fiebre_activa,
+        presion_indicada:    parseFloat(formEval.presion_indicada)||2.0,
+        duracion_minutos:    parseInt(formEval.duracion_minutos)||90,
+        incidencias:         formEval.incidencias||null,
+        observaciones:       formEval.observaciones||null,
+        evolucion:           formEval.evolucion||null,
+        firma_medico:        esMedFirmando
+          ? formEval.firma_medico
+          : null,
+        es_borrador:         !esMedFirmando,
+      }),
+      "HC:guardarEval"
+    );
+    setSavingEval(false);
+    if(!error){
+      setModalNuevaEval(false);
+      setFormEval(evalInicial);
+      setErrEval({});
+      await abrirPaciente(pacSelec);
+    }
+  };
+
+  // Médico firma una evaluación borrador
+  const firmarEval = async (ev) => {
+    const firma = prompt("Escriba su nombre completo como firma de supervisión:");
+    if(!firma?.trim()) return;
+    await safeQuery(()=>
+      supabase.from("evaluaciones_medicas").update({
+        evolucion:   ev.evolucion || "",
+        firma_medico: firma.trim(),
+        es_borrador:  false,
+        medico_id:    perfil.id,
+      }).eq("id", ev.id),
+      "HC:firmar"
+    );
+    await abrirPaciente(pacSelec);
+  };
+
+  // Vista filtrada por sede
+  const filtrados = (sedeTab==="todas" ? pacientes : pacientes.filter(p=>p.sede_apertura_id===sedeTab))
+    .filter(p=>!busq || `${p.pacientes?.nombres} ${p.pacientes?.apellidos} ${p.pacientes?.dni}`.toLowerCase().includes(busq.toLowerCase()));
+
+  // ── Si hay paciente seleccionado — mostrar detalle ──
+  if(pacSelec) return (
+    <div>
+      {/* Header detalle */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>{ setPacSelec(null); setEvals([]); setEditandoHC(false); }}
+            style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+            ← Volver
+          </button>
+          <div>
+            <h1 style={{fontFamily:"Syne,sans-serif",fontSize:20,fontWeight:700,color:"#E8EAF0"}}>
+              {pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}
+            </h1>
+            <div style={{fontSize:12,color:"#6B7280"}}>
+              DNI {pacSelec.pacientes?.dni} · {pacSelec.sedes?.nombre} · {pacSelec.pacientes?.sesiones_realizadas}/{pacSelec.pacientes?.total_sesiones_prescritas} sesiones
+            </div>
+          </div>
+        </div>
+        {(f.esEnfermero || f.esMedico || f.esAdmin) && (
+          <Btn onClick={()=>{ setFormEval(evalInicial); setErrEval({}); setModalNuevaEval(true); }}>
+            + Nueva evaluación
+          </Btn>
+        )}
+      </div>
+
+      {/* HC MAESTRA */}
+      <Card style={{marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontSize:11,color:"#00C4B4",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+            Historia Clínica Maestra
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Badge color={pacSelec.apto_hiperbarica!==false?"#10B981":"#F87171"}>
+              {pacSelec.apto_hiperbarica!==false?"Apto HBOT":"No apto HBOT"}
+            </Badge>
+            {f.puedeEscribirProtocolo && !editandoHC && (
+              <button onClick={()=>setEditandoHC(true)}
+                style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                ✏ Editar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {editandoHC ? (
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              {[
+                ["Diagnóstico principal","diagnostico_principal"],
+                ["Antecedentes personales","antecedentes_personales"],
+                ["Antecedentes familiares","antecedentes_familiares"],
+                ["Alergias","alergias"],
+                ["Medicamentos habituales","medicamentos_habituales"],
+                ["Contraindicaciones","contraindicaciones"],
+              ].map(([label,key])=>(
+                <div key={key} style={{gridColumn:["diagnostico_principal","contraindicaciones"].includes(key)?"1/-1":undefined}}>
+                  <label style={{fontSize:11,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</label>
+                  <textarea value={formHC[key]||""} onChange={e=>setFormHC(f=>({...f,[key]:e.target.value}))}
+                    rows={2} style={{width:"100%",background:"#0D1320",border:"1px solid #2A3550",borderRadius:8,color:"#E8EAF0",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                </div>
+              ))}
+            </div>
+            <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#0D1320",borderRadius:8}}>
+              <input type="checkbox" checked={formHC.apto_hiperbarica!==false}
+                onChange={e=>setFormHC(f=>({...f,apto_hiperbarica:e.target.checked}))}
+                style={{width:16,height:16,accentColor:"#00C4B4"}}/>
+              <span style={{fontSize:14,color:"#E8EAF0"}}>Paciente apto para terapia hiperbárica</span>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setEditandoHC(false)}>Cancelar</Btn>
+              <Btn onClick={guardarHCMaestra} disabled={savingHC}>{savingHC?"Guardando...":"Guardar HC"}</Btn>
+            </div>
+          </div>
+        ) : (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {[
+              ["Diagnóstico",         hcMaestra?.diagnostico_principal,    true],
+              ["Antec. personales",   hcMaestra?.antecedentes_personales,   false],
+              ["Antec. familiares",   hcMaestra?.antecedentes_familiares,   false],
+              ["Alergias",            hcMaestra?.alergias,                  false],
+              ["Medicamentos",        hcMaestra?.medicamentos_habituales,   false],
+              ["Contraindicaciones",  hcMaestra?.contraindicaciones,        true],
+            ].map(([label,val,full])=> val ? (
+              <div key={label} style={{background:"#0D1320",borderRadius:10,padding:"10px 14px",gridColumn:full?"1/-1":undefined}}>
+                <div style={{fontSize:10,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>{label}</div>
+                <div style={{fontSize:13,color:"#E8EAF0",lineHeight:1.5}}>{val}</div>
+              </div>
+            ) : null)}
+          </div>
+        )}
+      </Card>
+
+      {/* EVALUACIONES POR SESIÓN */}
+      <div style={{fontSize:11,color:"#6B7280",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
+        Evaluaciones por sesión ({evals.length})
+      </div>
+
+      {loadingEvals
+        ? <div style={{color:"#4B5563"}}>Cargando evaluaciones...</div>
+        : evals.length === 0
+          ? <Card style={{textAlign:"center",padding:"30px",color:"#6B7280"}}>Sin evaluaciones registradas aún</Card>
+          : evals.map(ev=>(
+            <div key={ev.id} style={{
+              background:"#111827",
+              border:`1px solid ${ev.es_borrador?"#F59E0B40":"#1E2535"}`,
+              borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"#00C4B4"}`,
+              borderRadius:12,padding:"14px 18px",marginBottom:8,
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                    <span style={{fontFamily:"Syne,sans-serif",fontSize:15,fontWeight:700,color:"#E8EAF0"}}>Sesión #{ev.numero_sesion}</span>
+                    <span style={{fontSize:12,color:"#6B7280"}}>{ev.fecha} · {ev.hora?.slice(0,5)}</span>
+                    <span style={{fontSize:12,color:"#6B7280"}}>{ev.sedes?.nombre}</span>
+                    {ev.es_borrador && <Badge color="#F59E0B">Borrador</Badge>}
+                    {!ev.es_borrador && ev.firma_medico && <Badge color="#10B981">✓ Firmado</Badge>}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:ev.evolucion?10:0}}>
+                    {[
+                      ["PA",       ev.presion_arterial],
+                      ["FC",       ev.frecuencia_cardiaca],
+                      ["SatO₂",   ev.saturacion_o2],
+                      ["Dolor",   ev.nivel_dolor!=null?`${ev.nivel_dolor}/10`:null],
+                      ["Estado",  ev.estado_general],
+                    ].filter(([,v])=>v).map(([k,v])=>(
+                      <div key={k} style={{background:"#0D1320",borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+                        <div style={{fontSize:10,color:"#4B5563",textTransform:"uppercase"}}>{k}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:"#E8EAF0",marginTop:2}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Parámetros cámara */}
+                  <div style={{fontSize:12,color:"#6B7280",marginBottom:ev.evolucion?8:0}}>
+                    {ev.presion_indicada} ATA · {ev.duracion_minutos} min
+                    {ev.incidencias && <span style={{color:"#F59E0B"}}> · ⚠ {ev.incidencias}</span>}
+                  </div>
+                  {/* Evolución médica */}
+                  {ev.evolucion && (
+                    <div style={{background:"#7C6AF715",border:"1px solid #7C6AF730",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+                      <div style={{fontSize:10,color:"#7C6AF7",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Evolución médica</div>
+                      <div style={{fontSize:13,color:"#E8EAF0",lineHeight:1.5}}>{ev.evolucion}</div>
+                    </div>
+                  )}
+                  {/* Firma */}
+                  {ev.firma_medico && (
+                    <div style={{fontSize:11,color:"#10B981",marginTop:4}}>
+                      ✓ Supervisado por: {ev.firma_medico} · {ev.perfiles?.nombre||""}
+                    </div>
+                  )}
+                </div>
+                {/* Botón firmar — solo médico y admin, solo si es borrador */}
+                {(f.esMedico||f.esAdmin) && ev.es_borrador && (
+                  <button onClick={()=>setModalEval(ev)}
+                    style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,flexShrink:0}}>
+                    ✍ Firmar
+                  </button>
+                )}
+                {!ev.es_borrador && (
+                  <button onClick={()=>setModalEval(ev)}
+                    style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,flexShrink:0}}>
+                    Ver
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+      }
+
+      {/* Modal nueva evaluación */}
+      {modalNuevaEval && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:10,color:"#00C4B4",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Nueva Evaluación</div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"#E8EAF0"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
+              </div>
+              <button onClick={()=>setModalNuevaEval(false)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+
+              {/* N° sesión */}
+              <Input label="N° de sesión" type="number" value={formEval.numero_sesion}
+                onChange={v=>setFormEval(f=>({...f,numero_sesion:v}))} required error={errEval.numero_sesion}/>
+
+              {/* SECCIÓN ENFERMERO — Signos vitales */}
+              <div style={{fontSize:11,color:"#00C4B4",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                📋 Signos Vitales
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+                <Input label="Presión arterial" value={formEval.presion_arterial}
+                  onChange={v=>setFormEval(f=>({...f,presion_arterial:v}))} placeholder="120/80" required error={errEval.presion_arterial}/>
+                <Input label="Frec. cardíaca (bpm)" value={formEval.frecuencia_cardiaca}
+                  onChange={v=>setFormEval(f=>({...f,frecuencia_cardiaca:v}))} placeholder="72" required error={errEval.frecuencia_cardiaca}/>
+                <Input label="Saturación O₂ (%)" value={formEval.saturacion_o2}
+                  onChange={v=>setFormEval(f=>({...f,saturacion_o2:v}))} placeholder="98" required error={errEval.saturacion_o2}/>
+                <Input label="Temperatura (°C)" value={formEval.temperatura}
+                  onChange={v=>setFormEval(f=>({...f,temperatura:v}))} placeholder="36.5"/>
+                <Input label="Peso (kg)" type="number" value={formEval.peso}
+                  onChange={v=>setFormEval(f=>({...f,peso:v}))} placeholder="70"/>
+              </div>
+
+              {/* Nivel de dolor */}
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:8}}>
+                  Nivel de dolor pre-sesión: <span style={{color:dolorColor(formEval.nivel_dolor),fontWeight:700}}>{formEval.nivel_dolor}/10</span>
+                </label>
+                <input type="range" min="0" max="10" value={formEval.nivel_dolor}
+                  onChange={e=>setFormEval(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
+                  style={{width:"100%",accentColor:"#00C4B4"}}/>
+              </div>
+
+              <Select label="Estado general" value={formEval.estado_general}
+                onChange={v=>setFormEval(f=>({...f,estado_general:v}))}
+                options={["Excelente","Bueno","Regular","Malo"].map(v=>({value:v,label:v}))}/>
+
+              {/* Contraindicaciones del día */}
+              <div style={{fontSize:11,color:"#F59E0B",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                ⚠ Contraindicaciones del día
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+                {["otitis","claustrofobia","embarazo","fiebre_activa"].map(campo=>(
+                  <Select key={campo} label={campo.replace("_"," ").replace(/\w/g,l=>l.toUpperCase())} value={formEval[campo]}
+                    onChange={v=>setFormEval(f=>({...f,[campo]:v}))}
+                    options={[{value:"No",label:"No"},{value:"Sí",label:"Sí"},{value:"Posible",label:"Posible"}]}/>
+                ))}
+              </div>
+
+              {/* Parámetros cámara */}
+              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                🫁 Parámetros de sesión
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+                <Input label="Presión indicada (ATA)" type="number" value={formEval.presion_indicada}
+                  onChange={v=>setFormEval(f=>({...f,presion_indicada:v}))}/>
+                <Input label="Duración (min)" type="number" value={formEval.duracion_minutos}
+                  onChange={v=>setFormEval(f=>({...f,duracion_minutos:v}))}/>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Incidencias</label>
+                <textarea value={formEval.incidencias} onChange={e=>setFormEval(f=>({...f,incidencias:e.target.value}))}
+                  placeholder="Describe cualquier incidencia durante la sesión..." rows={2}
+                  style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Observaciones del operador</label>
+                <textarea value={formEval.observaciones} onChange={e=>setFormEval(f=>({...f,observaciones:e.target.value}))}
+                  placeholder="Observaciones post-sesión..." rows={2}
+                  style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+              </div>
+
+              {/* SECCIÓN MÉDICO — solo si es médico o admin */}
+              {(f.esMedico || f.esAdmin) && (
+                <>
+                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                    🩺 Sección médica
+                  </div>
+                  <div style={{marginBottom:14}}>
+                    <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Evolución clínica</label>
+                    <textarea value={formEval.evolucion} onChange={e=>setFormEval(f=>({...f,evolucion:e.target.value}))}
+                      placeholder="Evolución del paciente, respuesta al tratamiento, ajustes de protocolo..." rows={3}
+                      style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                  </div>
+                  <Input label="Firma de supervisión (nombre completo)" value={formEval.firma_medico}
+                    onChange={v=>setFormEval(f=>({...f,firma_medico:v}))}
+                    placeholder="Dr. Raúl Aguado Quevedo — CMP 12345"/>
+                  <div style={{padding:"8px 12px",background:"#10B98110",border:"1px solid #10B98130",borderRadius:8,fontSize:12,color:"#10B981",marginBottom:4}}>
+                    Al firmar confirma: "Ordené verbalmente la terapia hiperbárica. El tratamiento estuvo bajo mi dirección y control general."
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{padding:"14px 24px",borderTop:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:12,color:"#4B5563"}}>
+                {!(f.esMedico||f.esAdmin) ? "Se guardará como borrador hasta firma médica" : formEval.firma_medico ? "Se guardará como firmada" : "Sin firma — se guardará como borrador"}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <Btn variant="ghost" onClick={()=>setModalNuevaEval(false)}>Cancelar</Btn>
+                <Btn onClick={guardarEval} disabled={savingEval}>{savingEval?"Guardando...":"Registrar evaluación"}</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal firmar evaluación borrador */}
+      {modalEval && (f.esMedico||f.esAdmin) && modalEval.es_borrador && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Firmar evaluación — Sesión #{modalEval.numero_sesion}</div>
+            <div style={{fontSize:12,color:"#6B7280",marginBottom:20}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos} · {modalEval.fecha}</div>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Evolución clínica</label>
+              <textarea defaultValue={modalEval.evolucion||""} id="evol-firma" rows={3}
+                style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+            </div>
+            <Input label="Firma (nombre completo)" value={formEval.firma_medico}
+              onChange={v=>setFormEval(f=>({...f,firma_medico:v}))} placeholder="Dr. Nombre Apellido — CMP"/>
+            <div style={{padding:"8px 12px",background:"#10B98110",border:"1px solid #10B98130",borderRadius:8,fontSize:12,color:"#10B981",marginBottom:16}}>
+              Al firmar confirma supervisión general del tratamiento hiperbárico.
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
+              <Btn variant="ghost" onClick={()=>{ setModalEval(null); setFormEval(f=>({...f,firma_medico:""})); }}>Cancelar</Btn>
+              <Btn onClick={async()=>{
+                const evol = document.getElementById("evol-firma")?.value||"";
+                if(!formEval.firma_medico?.trim()) return;
+                await safeQuery(()=>supabase.from("evaluaciones_medicas").update({
+                  evolucion: evol, firma_medico: formEval.firma_medico.trim(),
+                  es_borrador:false, medico_id: perfil.id,
+                }).eq("id",modalEval.id),"HC:firmarModal");
+                setModalEval(null); setFormEval(f=>({...f,firma_medico:""}));
+                await abrirPaciente(pacSelec);
+              }}>✍ Firmar y cerrar evaluación</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ver evaluación firmada */}
+      {modalEval && !modalEval.es_borrador && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Evaluación Firmada · Sesión #{modalEval.numero_sesion}</div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"#E8EAF0"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
+                <div style={{fontSize:12,color:"#6B7280",marginTop:3}}>{modalEval.fecha} · {modalEval.hora?.slice(0,5)} · {modalEval.sedes?.nombre}</div>
+              </div>
+              <button onClick={()=>setModalEval(null)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+              {[
+                {titulo:"Signos Vitales", color:"#00C4B4", campos:[
+                  ["Presión arterial",modalEval.presion_arterial],["FC",modalEval.frecuencia_cardiaca],
+                  ["SatO₂",modalEval.saturacion_o2],["Temperatura",modalEval.temperatura],["Peso",modalEval.peso?`${modalEval.peso} kg`:null],
+                  ["Dolor",`${modalEval.nivel_dolor}/10`],["Estado",modalEval.estado_general],
+                ]},
+                {titulo:"Contraindicaciones del día", color:"#F59E0B", campos:[
+                  ["Otitis",modalEval.otitis],["Claustrofobia",modalEval.claustrofobia],
+                  ["Embarazo",modalEval.embarazo],["Fiebre",modalEval.fiebre_activa],
+                ]},
+                {titulo:"Parámetros de sesión", color:"#7C6AF7", campos:[
+                  ["Presión",`${modalEval.presion_indicada} ATA`],["Duración",`${modalEval.duracion_minutos} min`],
+                  ["Incidencias",modalEval.incidencias],["Observaciones",modalEval.observaciones],
+                ]},
+                {titulo:"Evolución médica", color:"#10B981", campos:[
+                  ["Evolución",modalEval.evolucion],["Firmado por",modalEval.firma_medico],
+                ]},
+              ].map(sec=>(
+                <div key={sec.titulo} style={{marginBottom:16}}>
+                  <div style={{fontSize:10,color:sec.color,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #1A2035"}}>{sec.titulo}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {sec.campos.filter(([,v])=>v).map(([k,v])=>(
+                      <div key={k} style={{background:"#0D1320",borderRadius:8,padding:"8px 12px",gridColumn:["Evolución","Incidencias","Observaciones"].includes(k)?"1/-1":undefined}}>
+                        <div style={{fontSize:10,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3}}>{k}</div>
+                        <div style={{fontSize:13,color:"#E8EAF0",lineHeight:1.5}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Vista lista de pacientes ──
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
         <div>
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>Historias Clínicas</h1>
-          <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>{filtradas.length} evaluaciones</p>
+          <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>{filtrados.length} pacientes con HC</p>
         </div>
       </div>
-      {/* Tabs de sede — solo si puede ver todas */}
+
+      {/* Búsqueda */}
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar paciente..."
+        style={{background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 16px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:16}}/>
+
+      {/* Tabs sede */}
       {f.puedeVerTodasHC && sedes.length > 0 && (
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
           {[{id:"todas",nombre:"Todas"},...sedes].map(s=>(
             <button key={s.id} onClick={()=>setSedeTab(s.id)}
               style={{padding:"6px 16px",borderRadius:20,border:"1px solid",fontSize:13,cursor:"pointer",fontFamily:"inherit",
@@ -565,68 +1089,33 @@ function HistoriasClinicas({perfil}) {
           ))}
         </div>
       )}
-      {loading
-        ? <div style={{color:"#4B5563",padding:20}}>Cargando...</div>
-        : (
-          <>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 0.5fr",padding:"0 18px 10px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              <span>Paciente</span><span>Sede</span><span>Fecha</span><span>Dolor</span><span>Estado</span><span></span>
-            </div>
-            {filtradas.map(hc=>(
-              <div key={hc.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 0.5fr",alignItems:"center"}}>
-                <div>
-                  <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{hc.pacientes?.nombres} {hc.pacientes?.apellidos}</div>
-                  <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>DNI: {hc.pacientes?.dni} · Sesión #{hc.numero_sesion}</div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{width:7,height:7,borderRadius:"50%",background:getColor(hc.sedes?.nombre),display:"inline-block"}}/>
-                  <span style={{fontSize:13,color:"#E8EAF0"}}>{hc.sedes?.nombre||"—"}</span>
-                </div>
-                <div style={{fontSize:13,color:"#9CA3AF"}}>{hc.fecha}</div>
-                <div><Badge color={dolorColor(hc.nivel_dolor)}>{hc.nivel_dolor}/10</Badge></div>
-                <div><Badge color={estColor(hc.estado_general)}>{hc.estado_general}</Badge></div>
-                <div><button onClick={()=>setVerHC(hc)} style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Ver</button></div>
-              </div>
-            ))}
-            {filtradas.length===0 && <div style={{color:"#4B5563",textAlign:"center",padding:"40px 0",fontSize:14}}>No hay evaluaciones registradas</div>}
-          </>
-        )
-      }
-      {verHC && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#111827",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:600,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+
+      {loading ? <div style={{color:"#4B5563"}}>Cargando...</div>
+        : filtrados.length === 0
+          ? <Card style={{textAlign:"center",padding:"40px",color:"#6B7280"}}>No hay historias clínicas registradas</Card>
+          : filtrados.map(hc=>(
+            <div key={hc.id} onClick={()=>abrirPaciente(hc)}
+              style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
+              onMouseLeave={e=>e.currentTarget.style.borderColor="#1E2535"}>
               <div>
-                <div style={{fontSize:10,color:"#00C4B4",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Historia Clínica · Sesión #{verHC.numero_sesion}</div>
-                <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#E8EAF0"}}>{verHC.pacientes?.nombres} {verHC.pacientes?.apellidos}</div>
-                <div style={{fontSize:12,color:"#6B7280",marginTop:3}}>{verHC.sedes?.nombre} · {verHC.fecha} · {verHC.hora?.slice(0,5)}</div>
-              </div>
-              <button onClick={()=>setVerHC(null)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
-            </div>
-            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
-              {[
-                {titulo:"Signos Vitales", campos:[["Presión Arterial",verHC.presion_arterial],["Frec. Cardíaca",verHC.frecuencia_cardiaca],["Saturación O₂",verHC.saturacion_o2],["Temperatura",verHC.temperatura],["Peso",verHC.peso?`${verHC.peso} kg`:null]]},
-                {titulo:"Evaluación Clínica", campos:[["Nivel de Dolor",`${verHC.nivel_dolor}/10`],["Estado General",verHC.estado_general],["Evolución",verHC.evolucion]]},
-                {titulo:"Contraindicaciones", campos:[["Otitis",verHC.otitis],["Claustrofobia",verHC.claustrofobia],["Embarazo",verHC.embarazo],["Fiebre",verHC.fiebre_activa]]},
-                {titulo:"Parámetros", campos:[["Presión Cámara",`${verHC.presion_indicada} ATA`],["Duración",`${verHC.duracion_minutos} min`]]},
-                {titulo:"Post-Sesión", campos:[["Incidencias",verHC.incidencias],["Observaciones",verHC.observaciones],["Médico",verHC.firma_medico]]},
-              ].map(sec=>(
-                <div key={sec.titulo} style={{marginBottom:20}}>
-                  <div style={{fontSize:10,color:"#00C4B4",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>{sec.titulo}</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    {sec.campos.filter(([,v])=>v).map(([k,v])=>(
-                      <div key={k} style={{background:"#0D1320",borderRadius:10,padding:"10px 14px",gridColumn:["Evolución","Incidencias","Observaciones"].includes(k)?"1/-1":undefined}}>
-                        <div style={{fontSize:11,color:"#4B5563",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>{k}</div>
-                        <div style={{fontSize:14,color:"#E8EAF0",lineHeight:1.5}}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
+                <div style={{fontWeight:600,fontSize:15,color:"#E8EAF0",marginBottom:4}}>
+                  {hc.pacientes?.nombres} {hc.pacientes?.apellidos}
                 </div>
-              ))}
+                <div style={{fontSize:12,color:"#6B7280"}}>
+                  DNI {hc.pacientes?.dni} · {hc.sedes?.nombre} · {hc.pacientes?.sesiones_realizadas}/{hc.pacientes?.total_sesiones_prescritas} sesiones
+                </div>
+                <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>{hc.diagnostico_principal}</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <Badge color={hc.apto_hiperbarica!==false?"#10B981":"#F87171"}>
+                  {hc.apto_hiperbarica!==false?"Apto":"No apto"}
+                </Badge>
+                <span style={{color:"#4B5563",fontSize:18}}>›</span>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          ))
+      }
     </div>
   );
 }
