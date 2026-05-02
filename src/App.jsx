@@ -1567,7 +1567,7 @@ function Ventas({perfil}) {
       sesiones_totales:   paquete?.cantidad_sesiones || 1,
       sesiones_usadas:    0,
       fecha_vencimiento:  fechaVencimiento,
-      estado:             "activa",
+      estado:             "activo",
       registrado_por:     perfil?.id,
       notas:              form.notas.trim() || null,
       numero_comprobante: form.numero_comprobante.trim(),
