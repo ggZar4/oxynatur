@@ -826,9 +826,6 @@ function Pacientes({perfil}) {
           </Card>
         </>
       )}
-    </div>
-  );
-
       {/* Modal editar paciente */}
       {modalEditar && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
