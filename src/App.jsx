@@ -1875,15 +1875,25 @@ function Usuarios({perfil:adminPerfil}) {
       </div>
       {loading ? <div style={{color:"#4B5563"}}>Cargando...</div>
         : <Card>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr",padding:"0 0 12px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              <span>Usuario</span><span>Email</span><span>Rol</span><span>Sede</span>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr auto",padding:"0 0 12px",fontSize:11,color:"#4B5563",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              <span>Usuario</span><span>Email</span><span>Rol</span><span>Sede</span><span>Acciones</span>
             </div>
             {usuarios.map(u=>(
-              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr",padding:"12px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
+              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr auto",padding:"12px 0",borderTop:"1px solid #1A2035",alignItems:"center",opacity:u.activo===false?0.5:1}}>
                 <div style={{fontWeight:600,fontSize:14,color:"#E8EAF0"}}>{u.nombre}</div>
                 <div style={{fontSize:13,color:"#9CA3AF"}}>{u.email}</div>
                 <div><Badge color={rolColor[u.rol]||"#6B7280"}>{rolLabel(u)}</Badge></div>
                 <div style={{fontSize:13,color:"#9CA3AF"}}>{u.sedes?.nombre||"Todas las sedes"}</div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <button onClick={()=>abrirEditUsuario(u)}
+                    style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
+                    ✏ Editar
+                  </button>
+                  <button onClick={()=>toggleActivo(u)}
+                    style={{background:u.activo===false?"#10B98115":"#F8717115",border:`1px solid ${u.activo===false?"#10B98130":"#F8717130"}`,color:u.activo===false?"#10B981":"#F87171",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
+                    {u.activo===false?"Activar":"Desactivar"}
+                  </button>
+                </div>
               </div>
             ))}
           </Card>
