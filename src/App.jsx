@@ -274,8 +274,182 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0}) {
   );
 }
 
-// ── DASHBOARD ADMIN ───────────────────────────────────────────
-function DashboardAdmin() {
+// ── DASHBOARD — detecta rol y muestra vista correcta ─────────
+function DashboardAdmin({perfil}) {
+  const f = getRolFlags(perfil);
+  if(f.esMedico) return <DashboardMedico perfil={perfil}/>;
+  return <DashboardFinanciero/>;
+}
+
+// ── DASHBOARD CLÍNICO — Dr. Raúl y médicos ───────────────────
+function DashboardMedico({perfil}) {
+  const f = getRolFlags(perfil);
+  const hoy = new Date().toISOString().slice(0,10);
+
+  const [alertas,    setAlertas]    = useState([]);
+  const [sinProtocolo, setSinProtocolo] = useState([]);
+  const [sesionesHoy,  setSesionesHoy]  = useState([]);
+  const [resumen,    setResumen]    = useState([]);
+  const [loading,    setLoading]    = useState(true);
+
+  useEffect(()=>{
+    let mounted = true;
+    (async()=>{
+      const [r1,r2,r3,r4] = await Promise.all([
+        // Alertas pendientes
+        safeQuery(()=> {
+          let q = supabase.from("alertas_clinicas")
+            .select("id,tipo,prioridad,mensaje,created_at,pacientes(nombres,apellidos),sedes(nombre)")
+            .neq("estado","resuelta")
+            .order("created_at",{ascending:false})
+            .limit(5);
+          return q;
+        }, "DashMed:alertas"),
+        // Pacientes sin protocolo (HC sin evolución médica firmada)
+        safeQuery(()=>
+          supabase.from("historias_clinicas")
+            .select("id,paciente_id,diagnostico_principal,pacientes(nombres,apellidos),sedes!sede_apertura_id(nombre)")
+            .eq("estado","activo")
+            .limit(10),
+          "DashMed:sinProtocolo"
+        ),
+        // Sesiones del día
+        safeQuery(()=> {
+          let q = supabase.from("vista_agenda_hoy")
+            .select("*").eq("fecha", hoy).order("hora_inicio");
+          return q;
+        }, "DashMed:sesiones"),
+        // Resumen por sede
+        safeQuery(()=>
+          supabase.from("vista_resumen_sedes").select("*"),
+          "DashMed:resumen"
+        ),
+      ]);
+      if(!mounted) return;
+      setAlertas(r1.data||[]);
+      setSinProtocolo(r2.data||[]);
+      setSesionesHoy(r3.data||[]);
+      setResumen(r4.data||[]);
+      setLoading(false);
+    })();
+    return ()=>{ mounted=false; };
+  },[]); // eslint-disable-line
+
+  const PRIORIDAD_COLOR = {alta:"#F87171",media:"#F59E0B",baja:"#6B7280"};
+  const ESTADO_COLOR    = {programada:"#F59E0B",en_curso:"#00C4B4",completada:"#10B981",cancelada:"#F87171"};
+
+  if(loading) return <div style={{padding:32,color:"#4B5563"}}>Cargando dashboard clínico...</div>;
+
+  const sesCompletadas = sesionesHoy.filter(s=>s.estado==="completada").length;
+  const sesEnCurso     = sesionesHoy.filter(s=>s.estado==="en_curso").length;
+  const sesPendientes  = sesionesHoy.filter(s=>s.estado==="programada").length;
+
+  return (
+    <div>
+      <div style={{marginBottom:24}}>
+        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"#E8EAF0"}}>
+          Panel Clínico
+        </h1>
+        <p style={{color:"#4B5563",fontSize:14,marginTop:4}}>
+          {new Date().toLocaleDateString("es-PE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
+          {f.esMedicoEsp && <span style={{color:"#00C4B4",marginLeft:8}}>· Todas las sedes</span>}
+        </p>
+      </div>
+
+      {/* KPIs clínicos */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+        {[
+          {label:"Alertas pendientes", val:alertas.length,    color: alertas.length>0?"#F87171":"#10B981"},
+          {label:"Sesiones hoy",       val:sesionesHoy.length, color:"#00C4B4"},
+          {label:"Completadas hoy",    val:sesCompletadas,    color:"#10B981"},
+          {label:"En curso",           val:sesEnCurso,        color:"#7C6AF7"},
+        ].map((k,i)=>(
+          <Card key={i}>
+            <div style={{fontSize:11,color:"#6B7280",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:8}}>{k.label}</div>
+            <div style={{fontSize:32,fontWeight:700,fontFamily:"Syne,sans-serif",color:k.color}}>{k.val}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+
+        {/* Alertas pendientes */}
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#F87171",letterSpacing:"0.06em",textTransform:"uppercase"}}>🔔 Alertas pendientes</div>
+            <span style={{fontSize:12,color:"#4B5563"}}>{alertas.length} sin resolver</span>
+          </div>
+          {alertas.length===0
+            ? <div style={{padding:"24px",textAlign:"center",color:"#4B5563",fontSize:13}}>✓ Sin alertas pendientes</div>
+            : alertas.map(a=>(
+              <div key={a.id} style={{padding:"12px 18px",borderBottom:"1px solid #1A2035",display:"flex",gap:10,alignItems:"flex-start"}}>
+                <span style={{fontSize:11,fontWeight:700,color:PRIORIDAD_COLOR[a.prioridad],background:`${PRIORIDAD_COLOR[a.prioridad]}15`,padding:"2px 8px",borderRadius:99,flexShrink:0,marginTop:1}}>{a.prioridad}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#E8EAF0",marginBottom:2}}>{a.pacientes?.nombres} {a.pacientes?.apellidos}</div>
+                  <div style={{fontSize:12,color:"#6B7280",marginBottom:2}}>{a.sedes?.nombre}</div>
+                  <div style={{fontSize:12,color:"#9CA3AF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.mensaje}</div>
+                </div>
+              </div>
+            ))
+          }
+        </Card>
+
+        {/* Sesiones del día */}
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#00C4B4",letterSpacing:"0.06em",textTransform:"uppercase"}}>⚡ Sesiones de hoy</div>
+            <span style={{fontSize:12,color:"#4B5563"}}>{sesCompletadas}/{sesionesHoy.length} completadas</span>
+          </div>
+          {sesionesHoy.length===0
+            ? <div style={{padding:"24px",textAlign:"center",color:"#4B5563",fontSize:13}}>Sin sesiones programadas para hoy</div>
+            : sesionesHoy.map(s=>(
+              <div key={s.id} style={{padding:"10px 18px",borderBottom:"1px solid #1A2035",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#00C4B4",minWidth:44}}>{s.hora_inicio?.slice(0,5)}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#E8EAF0"}}>{s.paciente}</div>
+                  <div style={{fontSize:11,color:"#6B7280"}}>{s.sede_nombre} · Ses. #{s.numero_sesion}</div>
+                </div>
+                <Badge color={ESTADO_COLOR[s.estado]||"#6B7280"}>{s.estado}</Badge>
+              </div>
+            ))
+          }
+        </Card>
+      </div>
+
+      {/* Pacientes sin evaluación médica firmada */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>📋 Pacientes activos por sede</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:0}}>
+          {resumen.map((s,i)=>(
+            <div key={s.sede_id} style={{padding:"16px 20px",borderRight:i%2===0?"1px solid #1A2035":"none",borderBottom:"1px solid #1A2035"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:getColor(s.sede),display:"inline-block"}}/>
+                <span style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#E8EAF0"}}>{s.sede}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                {[
+                  {l:"Pac. activos", v:s.pacientes_activos, c:getColor(s.sede)},
+                  {l:"Ses. hoy",     v:s.sesiones_hoy,      c:"#7C6AF7"},
+                  {l:"Ses. mes",     v:s.sesiones_mes,      c:"#10B981"},
+                ].map((it,j)=>(
+                  <div key={j} style={{background:"#0D1320",borderRadius:8,padding:"8px",textAlign:"center"}}>
+                    <div style={{fontSize:16,fontWeight:700,color:it.c}}>{it.v||0}</div>
+                    <div style={{fontSize:10,color:"#6B7280",marginTop:2}}>{it.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── DASHBOARD FINANCIERO — solo admin ────────────────────────
+function DashboardFinanciero() {
   const { data: resumen, loading } = useSupabaseQuery(
     () => supabase.from("vista_resumen_sedes").select("*"),
     [],
@@ -2891,7 +3065,7 @@ export default function App() {
 
   const renderVista = () => {
     switch(vista){
-      case "dashboard": return f.puedeVerDashboard  ? <DashboardAdmin/>              : null;
+      case "dashboard": return f.puedeVerDashboard  ? <DashboardAdmin perfil={perfil}/>        : null;
       case "pacientes": return                         <Pacientes perfil={perfil}/>;
       case "ventas":    return f.puedeVerVentas      ? <Ventas perfil={perfil}/>      : null;
       case "historias": return                         <HistoriasClinicas perfil={perfil}/>;
