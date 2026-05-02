@@ -520,20 +520,28 @@ function DashboardFinanciero() {
 // ── PACIENTES ─────────────────────────────────────────────────
 function Pacientes({perfil}) {
   const f = getRolFlags(perfil);
-  const [pacs, setPacs]   = useState([]);
+  const [pacs, setPacs]     = useState([]);
   const [loading, setLoading] = useState(true);
-  const [busq, setBusq]   = useState("");
-  const [modal, setModal] = useState(false);
-  const [sedes, setSedes] = useState([]);
-  const [form, setForm]   = useState({nombres:"",apellidos:"",dni:"",telefono:"",email:"",genero:"",fecha_nacimiento:"",sede_principal_id:"",total_sesiones_prescritas:"",diagnostico_hc:""});
+  const [busq, setBusq]     = useState("");
+  const [modal, setModal]   = useState(false);
+  const [sedes, setSedes]   = useState([]);
+  const [form, setForm]     = useState({nombres:"",apellidos:"",dni:"",telefono:"",email:"",genero:"",fecha_nacimiento:"",sede_principal_id:"",total_sesiones_prescritas:"",diagnostico_hc:""});
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState({});
+  const [err, setErr]       = useState({});
+
+  // Perfil de paciente seleccionado
+  const [pacSelec, setPacSelec]   = useState(null);
+  const [pacDetalle, setPacDetalle] = useState(null); // datos completos del paciente
+  const [compras, setCompras]     = useState([]);
+  const [ultimasSesiones, setUltimasSesiones] = useState([]);
+  const [loadingPerfil, setLoadingPerfil] = useState(false);
 
   const load = async () => {
     setLoading(true);
     const { data } = await safeQuery(() => {
-      let q = supabase.from("pacientes").select("*, sedes!sede_principal_id(nombre,color)").order("created_at",{ascending:false});
-      // admin_general y médico especialista ven todo; el resto solo su sede
+      let q = supabase.from("pacientes")
+        .select("*, sedes!sede_principal_id(nombre,color)")
+        .order("created_at",{ascending:false});
       if(!f.puedeVerTodosPacientes && perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
       return q;
     }, "Pacientes:load");
@@ -546,14 +554,48 @@ function Pacientes({perfil}) {
     (async () => {
       await load();
       const { data: sedesData } = await safeQuery(
-        () => supabase.from("sedes").select("id,nombre"),
-        "Pacientes:sedes"
+        () => supabase.from("sedes").select("id,nombre"), "Pacientes:sedes"
       );
       if (mounted) setSedes(sedesData || []);
     })();
     return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  },[]); // eslint-disable-line
+
+  const abrirPerfil = async (pac) => {
+    setPacSelec(pac);
+    setLoadingPerfil(true);
+    const [r1, r2, r3] = await Promise.all([
+      // Datos completos del paciente
+      safeQuery(()=>
+        supabase.from("pacientes")
+          .select("*, sedes!sede_principal_id(nombre)")
+          .eq("id", pac.id).single(),
+        "Perfil:paciente"
+      ),
+      // Compras/paquetes activos e históricos
+      safeQuery(()=>
+        supabase.from("compras_paciente")
+          .select("*, paquetes(nombre,cantidad_sesiones,codigo)")
+          .eq("paciente_id", pac.id)
+          .order("created_at",{ascending:false}),
+        "Perfil:compras"
+      ),
+      // Últimas sesiones
+      safeQuery(()=>
+        supabase.from("sesiones")
+          .select("*, sedes(nombre), camaras(numero)")
+          .eq("paciente_id", pac.id)
+          .order("fecha",{ascending:false})
+          .order("hora_inicio",{ascending:false})
+          .limit(10),
+        "Perfil:sesiones"
+      ),
+    ]);
+    setPacDetalle(r1.data);
+    setCompras(r2.data||[]);
+    setUltimasSesiones(r3.data||[]);
+    setLoadingPerfil(false);
+  };
 
   const filtrados = pacs.filter(p=>{
     const q = busq.toLowerCase();
@@ -564,11 +606,11 @@ function Pacientes({perfil}) {
 
   const guardar = async () => {
     const e = {};
-    if(!form.nombres) e.nombres="Requerido";
-    if(!form.apellidos) e.apellidos="Requerido";
-    if(!form.dni) e.dni="Requerido";
-    if(!form.sede_principal_id) e.sede_principal_id="Requerido";
-    if(!form.diagnostico_hc) e.diagnostico_hc="Requerido";
+    if(!form.nombres)          e.nombres          = "Requerido";
+    if(!form.apellidos)        e.apellidos        = "Requerido";
+    if(!form.dni)              e.dni              = "Requerido";
+    if(!form.sede_principal_id) e.sede_principal_id = "Requerido";
+    if(!form.diagnostico_hc)   e.diagnostico_hc   = "Requerido";
     setErr(e);
     if(Object.keys(e).length) return;
     setSaving(true);
@@ -595,7 +637,147 @@ function Pacientes({perfil}) {
   };
 
   const estadoColor = {activo:"#10B981",inactivo:"#6B7280",completado:"#7C6AF7",pendiente:"#F59E0B",suspendido:"#F87171"};
+  const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
+  // ── Vista perfil de paciente ──
+  if(pacSelec) return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>{ setPacSelec(null); setPacDetalle(null); setCompras([]); setUltimasSesiones([]); }}
+            style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+            ← Volver
+          </button>
+          <div>
+            <h1 style={{fontFamily:"Syne,sans-serif",fontSize:20,fontWeight:700,color:"#E8EAF0"}}>
+              {pacSelec.nombres} {pacSelec.apellidos}
+            </h1>
+            <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
+              DNI {pacSelec.dni}
+              {pacSelec.email && ` · ${pacSelec.email}`}
+              {pacSelec.telefono && ` · ${pacSelec.telefono}`}
+            </div>
+          </div>
+        </div>
+        <Badge color={estadoColor[pacSelec.estado]||"#6B7280"}>{pacSelec.estado}</Badge>
+      </div>
+
+      {loadingPerfil ? <div style={{color:"#4B5563"}}>Cargando perfil...</div> : (
+        <>
+          {/* Datos generales + progreso */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            <Card>
+              <div style={{fontSize:11,color:"#00C4B4",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Datos del paciente</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[
+                  ["Sede",        pacSelec.sedes?.nombre],
+                  ["Género",      pacDetalle?.genero],
+                  ["Nacimiento",  pacDetalle?.fecha_nacimiento],
+                  ["Diagnóstico", pacDetalle?.diagnostico_hc || "Ver HC"],
+                ].filter(([,v])=>v).map(([k,v])=>(
+                  <div key={k} style={{background:"#0D1320",borderRadius:8,padding:"8px 12px"}}>
+                    <div style={{fontSize:10,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3}}>{k}</div>
+                    <div style={{fontSize:13,color:"#E8EAF0"}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Progreso de sesiones */}
+            <Card>
+              <div style={{fontSize:11,color:"#00C4B4",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Progreso del tratamiento</div>
+              <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
+                <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
+                  <svg width="72" height="72" viewBox="0 0 72 72">
+                    <circle cx="36" cy="36" r="30" fill="none" stroke="#1E2535" strokeWidth="8"/>
+                    <circle cx="36" cy="36" r="30" fill="none" stroke="#00C4B4" strokeWidth="8"
+                      strokeDasharray={`${2*Math.PI*30}`}
+                      strokeDashoffset={`${2*Math.PI*30*(1-(pacSelec.sesiones_realizadas||0)/(pacSelec.total_sesiones_prescritas||1))}`}
+                      strokeLinecap="round" transform="rotate(-90 36 36)"/>
+                  </svg>
+                  <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                    <div style={{fontSize:16,fontWeight:700,color:"#00C4B4"}}>{pacSelec.sesiones_realizadas||0}</div>
+                    <div style={{fontSize:10,color:"#4B5563"}}>/{pacSelec.total_sesiones_prescritas||0}</div>
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:13,color:"#E8EAF0",fontWeight:600,marginBottom:4}}>
+                    {pacSelec.sesiones_realizadas||0} de {pacSelec.total_sesiones_prescritas||0} sesiones
+                  </div>
+                  <div style={{fontSize:12,color:"#6B7280"}}>
+                    {Math.max(0,(pacSelec.total_sesiones_prescritas||0)-(pacSelec.sesiones_realizadas||0))} sesiones restantes
+                  </div>
+                  {pacSelec.sesiones_realizadas >= pacSelec.total_sesiones_prescritas && pacSelec.total_sesiones_prescritas > 0 && (
+                    <div style={{fontSize:12,color:"#10B981",marginTop:4}}>✓ Tratamiento completado</div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Paquetes activos e histórico */}
+          <Card style={{marginBottom:14,padding:0,overflow:"hidden"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              Paquetes comprados
+            </div>
+            {compras.length===0
+              ? <div style={{padding:"20px",textAlign:"center",color:"#4B5563",fontSize:13}}>Sin compras registradas</div>
+              : compras.map((c,i)=>{
+                  const usadas    = c.sesiones_usadas||0;
+                  const totales   = c.sesiones_totales||1;
+                  const pct       = Math.round((usadas/totales)*100);
+                  const estadoC   = c.estado==="activo"?"#10B981":c.estado==="agotado"?"#6B7280":"#F87171";
+                  return (
+                    <div key={c.id} style={{padding:"12px 18px",borderBottom:i<compras.length-1?"1px solid #1A2035":"none",display:"flex",alignItems:"center",gap:14}}>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          <span style={{fontSize:13,fontWeight:600,color:"#E8EAF0"}}>{c.paquetes?.nombre||"Paquete"}</span>
+                          <Badge color={estadoC}>{c.estado}</Badge>
+                        </div>
+                        <div style={{fontSize:12,color:"#6B7280",marginBottom:6}}>
+                          {c.fecha_compra} · {fmtSol(c.monto_pagado)} · {c.metodo_pago||""}
+                          {c.fecha_vencimiento && ` · Vence: ${c.fecha_vencimiento}`}
+                        </div>
+                        {/* Barra de progreso */}
+                        <div style={{height:4,background:"#1E2535",borderRadius:2,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#10B981":"#00C4B4",borderRadius:2,transition:"width .3s"}}/>
+                        </div>
+                        <div style={{fontSize:11,color:"#6B7280",marginTop:3}}>{usadas}/{totales} sesiones usadas ({pct}%)</div>
+                      </div>
+                    </div>
+                  );
+                })
+            }
+          </Card>
+
+          {/* Últimas sesiones */}
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              Últimas sesiones
+            </div>
+            {ultimasSesiones.length===0
+              ? <div style={{padding:"20px",textAlign:"center",color:"#4B5563",fontSize:13}}>Sin sesiones registradas</div>
+              : ultimasSesiones.map((s,i)=>{
+                  const ECOLOR = {programada:"#F59E0B",en_curso:"#00C4B4",completada:"#10B981",cancelada:"#F87171",no_asistio:"#6B7280"};
+                  return (
+                    <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"1px solid #1A2035":"none",display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"#00C4B4",minWidth:44}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,color:"#E8EAF0"}}>Sesión #{s.numero_sesion} · {s.fecha}</div>
+                        <div style={{fontSize:11,color:"#6B7280"}}>{s.sedes?.nombre} · Cámara #{s.camaras?.numero||"—"} · {s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
+                      </div>
+                      <Badge color={ECOLOR[s.estado]||"#6B7280"}>{s.estado}</Badge>
+                    </div>
+                  );
+                })
+            }
+          </Card>
+        </>
+      )}
+    </div>
+  );
+
+  // ── Lista de pacientes ──
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
@@ -603,7 +785,6 @@ function Pacientes({perfil}) {
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0"}}>Pacientes</h1>
           <p style={{color:"#4B5563",fontSize:14,marginTop:3}}>{filtrados.length} pacientes encontrados</p>
         </div>
-        {/* FASE B: solo roles con permiso ven el botón */}
         {f.puedeCrearPaciente && <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>}
       </div>
       <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por nombre o DNI..."
@@ -616,7 +797,8 @@ function Pacientes({perfil}) {
               <span>Paciente</span><span>DNI</span><span>Sede</span><span>Sesiones</span><span>Estado</span>
             </div>
             {filtrados.map(p=>(
-              <div key={p.id} style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",cursor:"pointer"}}
+              <div key={p.id} onClick={()=>abrirPerfil(p)}
+                style={{background:"#111827",border:"1px solid #1E2535",borderRadius:12,padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",cursor:"pointer"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
                 onMouseLeave={e=>e.currentTarget.style.borderColor="#1E2535"}>
                 <div>
