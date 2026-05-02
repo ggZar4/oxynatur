@@ -589,7 +589,7 @@ function HistoriasClinicas({perfil}) {
     setLoadingEvals(true);
     const { data } = await safeQuery(()=>
       supabase.from("evaluaciones_medicas")
-        .select("*, sedes(nombre), perfiles!medico_id(nombre)")
+        .select("*, sedes(nombre), perfiles!medico_id(nombre), compras_paciente(id,fecha_compra,paquetes(nombre,cantidad_sesiones))")
         .eq("paciente_id", hc.paciente_id)
         .order("fecha",{ascending:false})
         .order("numero_sesion",{ascending:false}),
@@ -794,71 +794,136 @@ function HistoriasClinicas({perfil}) {
         ? <div style={{color:"#4B5563"}}>Cargando evaluaciones...</div>
         : evals.length === 0
           ? <Card style={{textAlign:"center",padding:"30px",color:"#6B7280"}}>Sin evaluaciones registradas aún</Card>
-          : evals.map(ev=>(
-            <div key={ev.id} style={{
-              background:"#111827",
-              border:`1px solid ${ev.es_borrador?"#F59E0B40":"#1E2535"}`,
-              borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"#00C4B4"}`,
-              borderRadius:12,padding:"14px 18px",marginBottom:8,
-            }}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-                    <span style={{fontFamily:"Syne,sans-serif",fontSize:15,fontWeight:700,color:"#E8EAF0"}}>Sesión #{ev.numero_sesion}</span>
-                    <span style={{fontSize:12,color:"#6B7280"}}>{ev.fecha} · {ev.hora?.slice(0,5)}</span>
-                    <span style={{fontSize:12,color:"#6B7280"}}>{ev.sedes?.nombre}</span>
-                    {ev.es_borrador && <Badge color="#F59E0B">Borrador</Badge>}
-                    {!ev.es_borrador && ev.firma_medico && <Badge color="#10B981">✓ Firmado</Badge>}
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:ev.evolucion?10:0}}>
-                    {[
-                      ["PA",       ev.presion_arterial],
-                      ["FC",       ev.frecuencia_cardiaca],
-                      ["SatO₂",   ev.saturacion_o2],
-                      ["Dolor",   ev.nivel_dolor!=null?`${ev.nivel_dolor}/10`:null],
-                      ["Estado",  ev.estado_general],
-                    ].filter(([,v])=>v).map(([k,v])=>(
-                      <div key={k} style={{background:"#0D1320",borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
-                        <div style={{fontSize:10,color:"#4B5563",textTransform:"uppercase"}}>{k}</div>
-                        <div style={{fontSize:13,fontWeight:600,color:"#E8EAF0",marginTop:2}}>{v}</div>
+          : (() => {
+              // Agrupar evaluaciones por compra_id (episodio)
+              // Cada compra = un episodio de tratamiento independiente
+              const episodios = {};
+              evals.forEach(ev => {
+                const key = ev.compra_id || "sin_paquete";
+                if(!episodios[key]) episodios[key] = { evals: [], compra_id: ev.compra_id };
+                episodios[key].evals.push(ev);
+              });
+
+              // Ordenar episodios por fecha de la primera evaluación (más reciente primero)
+              const episodiosOrdenados = Object.values(episodios).sort((a,b) => {
+                const fa = a.evals[0]?.fecha || "";
+                const fb = b.evals[0]?.fecha || "";
+                return fb.localeCompare(fa);
+              });
+
+              return episodiosOrdenados.map((ep, epIdx) => {
+                const evCount     = ep.evals.length;
+                const firmadas    = ep.evals.filter(e=>!e.es_borrador && e.firma_medico).length;
+                const borradores  = ep.evals.filter(e=>e.es_borrador).length;
+                const fechaInicio = ep.evals[ep.evals.length-1]?.fecha;
+                const fechaFin    = ep.evals[0]?.fecha;
+                const epNum       = episodiosOrdenados.length - epIdx; // numeración descendente
+                const completo    = ep.evals.length > 0 && borradores === 0;
+
+                return (
+                  <div key={ep.compra_id||"sin_paquete"} style={{marginBottom:24}}>
+                    {/* Header episodio */}
+                    <div style={{
+                      display:"flex",alignItems:"center",justifyContent:"space-between",
+                      padding:"10px 16px",
+                      background:"linear-gradient(135deg,#1A2035,#111827)",
+                      border:"1px solid #2A3550",
+                      borderRadius:12,marginBottom:8,
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",gap:12}}>
+                        <div style={{
+                          width:32,height:32,borderRadius:8,
+                          background: epIdx===0?"linear-gradient(135deg,#00C4B4,#7C6AF7)":"#2A3550",
+                          display:"flex",alignItems:"center",justifyContent:"center",
+                          fontSize:13,fontWeight:700,color:"white",flexShrink:0,
+                        }}>{epNum}</div>
+                        <div>
+                          <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#E8EAF0"}}>
+                            Episodio {epNum}
+                            {ep.evals[0]?.compras_paciente?.paquetes?.nombre && (
+                              <span style={{fontSize:12,color:"#9CA3AF",fontWeight:400,marginLeft:8}}>
+                                — {ep.evals[0].compras_paciente.paquetes.nombre}
+                              </span>
+                            )}
+                            {epIdx===0 && <span style={{fontSize:11,color:"#00C4B4",marginLeft:8,fontWeight:400}}>● Activo</span>}
+                          </div>
+                          <div style={{fontSize:11,color:"#6B7280",marginTop:1}}>
+                            {fechaInicio}{fechaFin && fechaFin!==fechaInicio ? ` → ${fechaFin}` : ""} · {evCount} sesiones
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        {borradores > 0 && <Badge color="#F59E0B">{borradores} pendiente{borradores>1?"s":""}</Badge>}
+                        {completo && <Badge color="#10B981">✓ Completo</Badge>}
+                        <span style={{fontSize:11,color:"#4B5563"}}>{firmadas}/{evCount} firmadas</span>
+                      </div>
+                    </div>
+
+                    {/* Evaluaciones del episodio */}
+                    {ep.evals.map(ev=>(
+                      <div key={ev.id} style={{
+                        background:"#111827",
+                        border:`1px solid ${ev.es_borrador?"#F59E0B40":"#1E2535"}`,
+                        borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"#00C4B4"}`,
+                        borderRadius:12,padding:"14px 18px",marginBottom:6,marginLeft:8,
+                      }}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                              <span style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#E8EAF0"}}>Sesión #{ev.numero_sesion}</span>
+                              <span style={{fontSize:12,color:"#6B7280"}}>{ev.fecha} · {ev.hora?.slice(0,5)}</span>
+                              {ev.es_borrador && <Badge color="#F59E0B">Borrador</Badge>}
+                              {!ev.es_borrador && ev.firma_medico && <Badge color="#10B981">✓ Firmado</Badge>}
+                            </div>
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:ev.evolucion?8:0}}>
+                              {[
+                                ["PA",    ev.presion_arterial],
+                                ["FC",    ev.frecuencia_cardiaca],
+                                ["SatO₂", ev.saturacion_o2],
+                                ["Dolor", ev.nivel_dolor!=null?`${ev.nivel_dolor}/10`:null],
+                                ["Estado",ev.estado_general],
+                              ].filter(([,v])=>v).map(([k,v])=>(
+                                <div key={k} style={{background:"#0D1320",borderRadius:8,padding:"5px 8px",textAlign:"center"}}>
+                                  <div style={{fontSize:10,color:"#4B5563",textTransform:"uppercase"}}>{k}</div>
+                                  <div style={{fontSize:12,fontWeight:600,color:"#E8EAF0",marginTop:1}}>{v}</div>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{fontSize:11,color:"#6B7280",marginBottom:ev.evolucion?6:0}}>
+                              {ev.presion_indicada} ATA · {ev.duracion_minutos} min
+                              {ev.incidencias && <span style={{color:"#F59E0B"}}> · ⚠ {ev.incidencias}</span>}
+                            </div>
+                            {ev.evolucion && (
+                              <div style={{background:"#7C6AF715",border:"1px solid #7C6AF730",borderRadius:8,padding:"7px 11px",marginBottom:4}}>
+                                <div style={{fontSize:10,color:"#7C6AF7",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>Evolución médica</div>
+                                <div style={{fontSize:12,color:"#E8EAF0",lineHeight:1.5}}>{ev.evolucion}</div>
+                              </div>
+                            )}
+                            {ev.firma_medico && (
+                              <div style={{fontSize:11,color:"#10B981",marginTop:3}}>
+                                ✓ Supervisado por: {ev.firma_medico}
+                              </div>
+                            )}
+                          </div>
+                          {(f.esMedico||f.esAdmin) && ev.es_borrador && (
+                            <button onClick={()=>setModalEval(ev)}
+                              style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,flexShrink:0}}>
+                              ✍ Firmar
+                            </button>
+                          )}
+                          {!ev.es_borrador && (
+                            <button onClick={()=>setModalEval(ev)}
+                              style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,flexShrink:0}}>
+                              Ver
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
-                  {/* Parámetros cámara */}
-                  <div style={{fontSize:12,color:"#6B7280",marginBottom:ev.evolucion?8:0}}>
-                    {ev.presion_indicada} ATA · {ev.duracion_minutos} min
-                    {ev.incidencias && <span style={{color:"#F59E0B"}}> · ⚠ {ev.incidencias}</span>}
-                  </div>
-                  {/* Evolución médica */}
-                  {ev.evolucion && (
-                    <div style={{background:"#7C6AF715",border:"1px solid #7C6AF730",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
-                      <div style={{fontSize:10,color:"#7C6AF7",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Evolución médica</div>
-                      <div style={{fontSize:13,color:"#E8EAF0",lineHeight:1.5}}>{ev.evolucion}</div>
-                    </div>
-                  )}
-                  {/* Firma */}
-                  {ev.firma_medico && (
-                    <div style={{fontSize:11,color:"#10B981",marginTop:4}}>
-                      ✓ Supervisado por: {ev.firma_medico} · {ev.perfiles?.nombre||""}
-                    </div>
-                  )}
-                </div>
-                {/* Botón firmar — solo médico y admin, solo si es borrador */}
-                {(f.esMedico||f.esAdmin) && ev.es_borrador && (
-                  <button onClick={()=>setModalEval(ev)}
-                    style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,flexShrink:0}}>
-                    ✍ Firmar
-                  </button>
-                )}
-                {!ev.es_borrador && (
-                  <button onClick={()=>setModalEval(ev)}
-                    style={{background:"#1A2035",border:"1px solid #2A3550",color:"#9CA3AF",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,flexShrink:0}}>
-                    Ver
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
+                );
+              });
+            })()
       }
 
       {/* Modal nueva evaluación */}
