@@ -2388,7 +2388,7 @@ function Ventas({perfil}) {
   };
 
   const hoyMes      = new Date().toISOString().slice(0,7);
-  const ventasMes   = ventas.filter(v => (v.fecha_compra||"").startsWith(hoyMes));
+  const ventasMes   = ventas.filter(v => (v.fecha_compra||"").startsWith(hoyMes) && v.estado !== "cancelado");
   const totalMes    = ventasMes.reduce((a,v)=>a+Number(v.monto_pagado||0), 0);
   const descuentosMes = ventasMes.reduce((a,v)=>a+Math.max(Number(v.precio_sugerido||0)-Number(v.monto_pagado||0),0), 0);
   const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
