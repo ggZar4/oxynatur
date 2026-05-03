@@ -2247,7 +2247,7 @@ function Ventas({perfil}) {
       let q = supabase.from("compras_paciente")
         .select(`
           id, fecha_compra, monto_pagado, precio_sugerido, descuento_pct,
-          promo_aplicada, metodo_pago, notas, numero_comprobante, comprobante_url,
+          estado, promo_aplicada, metodo_pago, notas, numero_comprobante, comprobante_url,
           pacientes(nombres,apellidos,dni),
           paquetes(codigo,nombre),
           sedes(nombre,color)
