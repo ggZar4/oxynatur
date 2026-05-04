@@ -669,7 +669,7 @@ function Pacientes({perfil}) {
     if(!error && pac) {
       await supabase.from("historias_clinicas").insert({
         paciente_id:pac.id, sede_apertura_id:form.sede_principal_id,
-        diagnostico_principal:form.diagnostico_hc, medico_id:perfil.id,
+        diagnostico_principal:form.diagnostico_hc,
       });
       await supabase.from("paciente_sedes").insert({paciente_id:pac.id, sede_id:form.sede_principal_id});
     }
