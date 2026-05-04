@@ -165,7 +165,7 @@ const Input = ({label,value,onChange,type="text",placeholder="",required=false,e
   <div style={{marginBottom:14}}>
     {label && <label style={{fontSize:12,color:error?"#F87171":"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{width:"100%",background:"#1A2035",border:`1px solid ${error?"#F87171":"#2A3550"}`,borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+      style={{width:"100%",background:"#1A2035",border:`1px solid ${error?"#F87171":"#2A3550"}`,borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none"}}/>
     {error && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{error}</div>}
   </div>
 );
