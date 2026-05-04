@@ -18,6 +18,12 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   );
 }
 
+// Admin client con service_role — solo para crear/eliminar usuarios
+const SUPABASE_SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
+const supabaseAdmin = SUPABASE_SERVICE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
+  : null;
+
 // FIX BUG 6: lock huérfano de auth-token.
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -1807,17 +1813,27 @@ function Usuarios({perfil:adminPerfil}) {
 
   const crear = async () => {
     if(!form.email||!form.password||!form.nombre){setMsg("Completa todos los campos requeridos");return;}
+    if(!supabaseAdmin){setMsg("Error: service key no configurada");return;}
     setSaving(true); setMsg("");
-    const {error} = await supabase.auth.signUp({
-      email:form.email, password:form.password,
-      options:{data:{
-        nombre:form.nombre,
-        rol:form.rol,
-        sede_id: form.rol==="medico" && form.es_especialista ? null : (form.sede_id||null),
-        es_especialista: form.rol==="medico" ? form.es_especialista : false,
-      }}
+    const sedeId = form.rol==="medico" && form.es_especialista ? null : (form.sede_id||null);
+    // 1. Crear auth.user con Admin API (sin confirmación de email)
+    const {data, error} = await supabaseAdmin.auth.admin.createUser({
+      email: form.email,
+      password: form.password,
+      email_confirm: true,
     });
     if(error){setMsg("Error: "+error.message);setSaving(false);return;}
+    const uid = data.user.id;
+    // 2. Actualizar el perfil que el trigger creó automáticamente
+    const {error: e2} = await supabaseAdmin.from("perfiles").update({
+      nombre: form.nombre,
+      rol: form.rol,
+      es_especialista: form.rol==="medico" ? form.es_especialista : false,
+      sede_id: sedeId,
+      email: form.email,
+      activo: true,
+    }).eq("id", uid);
+    if(e2){setMsg("Usuario creado pero error en perfil: "+e2.message);setSaving(false);return;}
     setSaving(false); setModal(false);
     setForm({email:"",password:"",nombre:"",rol:"enfermero",sede_id:"",es_especialista:false});
     setMsg(""); load();
