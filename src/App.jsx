@@ -1118,24 +1118,26 @@ function HistoriasClinicas({perfil}) {
         fiebre_activa:       formEval.fiebre_activa,
         presion_indicada:    parseFloat(formEval.presion_indicada)||2.0,
         duracion_minutos:    parseInt(formEval.duracion_minutos)||90,
-        incidencias:         formEval.incidencias||null,
-        observaciones:       formEval.observaciones||null,
-        evolucion:           formEval.evolucion||null,
+        incidencias:         formEval.incidencias||'',
+        observaciones:       formEval.observaciones||'',
+        evolucion:           formEval.evolucion||'',
         firma_medico:        esMedFirmando
           ? formEval.firma_medico
-          : null,
+          : '',
         es_borrador:         !esMedFirmando,
         compra_id:           formEval.compra_id || null,
       }),
       "HC:guardarEval"
     );
     setSavingEval(false);
-    if(!error){
-      setModalNuevaEval(false);
-      setFormEval(evalInicial);
-      setErrEval({});
-      await abrirPaciente(pacSelec);
+    if(error){
+      setErrEval({general: "Error al guardar: " + (error.message || JSON.stringify(error))});
+      return;
     }
+    setModalNuevaEval(false);
+    setFormEval(evalInicial);
+    setErrEval({});
+    await abrirPaciente(pacSelec);
   };
 
   // Médico firma una evaluación borrador
@@ -1404,6 +1406,8 @@ function HistoriasClinicas({perfil}) {
               <button onClick={()=>setModalNuevaEval(false)} style={{background:"#1A2035",border:"none",color:"#9CA3AF",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+
+              {errEval.general && <div style={{background:"#2D1B1B",border:"1px solid #F87171",borderRadius:10,padding:"10px 14px",color:"#F87171",fontSize:13,marginBottom:16}}>{errEval.general}</div>}
 
               {/* N° sesión */}
               <Input label="N° de sesión" type="number" value={formEval.numero_sesion}
