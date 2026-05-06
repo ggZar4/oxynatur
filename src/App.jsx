@@ -2260,7 +2260,7 @@ function Ventas({perfil}) {
   );
   const { data: sedesData } = useSupabaseQuery(
     () => {
-      let q = supabase.from("sedes").select("id,nombre").eq("estado", "activa");
+      let q = supabase.from("sedes").select("id,nombre");
       if(sedeFija) q = q.eq("id", sedeFija);
       return q;
     },
@@ -2438,7 +2438,7 @@ function Ventas({perfil}) {
       </div>
 
       {/* Filtro por sede — solo admin */}
-      {!sedeFija && sedesData && sedesData.length > 1 && (
+      {!sedeFija && sedesData && sedesData.length >= 1 && (
         <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           {[{id:"todas",nombre:"Todas las sedes"}, ...sedesData].map(s=>(
             <button key={s.id} onClick={()=>{ setFiltroSede(s.id); loadVentas(s.id); }}
