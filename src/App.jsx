@@ -2269,9 +2269,11 @@ function Ventas({perfil}) {
 
   const [ventas, setVentas] = useState([]);
   const [loadingVentas, setLoadingVentas] = useState(true);
+  const [filtroSede, setFiltroSede] = useState("todas");
 
-  const loadVentas = async () => {
+  const loadVentas = async (sedeId) => {
     setLoadingVentas(true);
+    const sedeActiva = sedeId !== undefined ? sedeId : filtroSede;
     const { data } = await safeQuery(() => {
       let q = supabase.from("compras_paciente")
         .select(`
@@ -2284,6 +2286,7 @@ function Ventas({perfil}) {
         .order("fecha_compra", {ascending:false})
         .limit(50);
       if(sedeFija) q = q.eq("sede_id", sedeFija);
+      else if(sedeActiva !== "todas") q = q.eq("sede_id", sedeActiva);
       return q;
     }, "Ventas:loadVentas");
     setVentas(data || []);
@@ -2424,7 +2427,7 @@ function Ventas({perfil}) {
 
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Ventas</h1>
           <p style={{color:"#4B5563",fontSize:13}}>
@@ -2433,6 +2436,21 @@ function Ventas({perfil}) {
         </div>
         <Btn onClick={openModal}>+ Nueva venta</Btn>
       </div>
+
+      {/* Filtro por sede — solo admin */}
+      {!sedeFija && sedesData && sedesData.length > 1 && (
+        <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+          {[{id:"todas",nombre:"Todas las sedes"}, ...sedesData].map(s=>(
+            <button key={s.id} onClick={()=>{ setFiltroSede(s.id); loadVentas(s.id); }}
+              style={{padding:"6px 14px",borderRadius:20,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",
+                borderColor: filtroSede===s.id ? "#00C4B4" : "#2A3550",
+                background:  filtroSede===s.id ? "#00C4B415" : "none",
+                color:       filtroSede===s.id ? "#00C4B4" : "#6B7280"}}>
+              {s.nombre}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
