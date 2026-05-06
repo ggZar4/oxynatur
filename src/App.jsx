@@ -2425,6 +2425,92 @@ function Ventas({perfil}) {
   const descuentosMes = ventasMes.reduce((a,v)=>a+Math.max(Number(v.precio_sugerido||0)-Number(v.monto_pagado||0),0), 0);
   const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
+  // ── Modal exportar Excel ──
+  const hoy         = new Date().toISOString().slice(0,10);
+  const primerDiaMes = `${hoyMes}-01`;
+  const [modalExport, setModalExport] = useState(false);
+  const [exportDesde, setExportDesde] = useState(primerDiaMes);
+  const [exportHasta, setExportHasta] = useState(hoy);
+  const [exportando,  setExportando]  = useState(false);
+
+  const exportarExcel = async () => {
+    setExportando(true);
+    const { data: rows } = await safeQuery(() => {
+      let q = supabase.from("compras_paciente")
+        .select(`
+          fecha_compra, numero_comprobante,
+          pacientes(nombres,apellidos,dni),
+          paquetes(codigo,nombre),
+          monto_pagado, precio_sugerido,
+          metodo_pago, sedes(nombre), estado
+        `)
+        .gte("fecha_compra", exportDesde)
+        .lte("fecha_compra", exportHasta)
+        .order("fecha_compra", {ascending:true});
+      if(sedeFija)                    q = q.eq("sede_id", sedeFija);
+      else if(filtroSede !== "todas") q = q.eq("sede_id", filtroSede);
+      return q;
+    }, "Ventas:exportar");
+
+    if(!rows || rows.length === 0) {
+      alert("No hay ventas en ese rango de fechas.");
+      setExportando(false);
+      return;
+    }
+
+    const nombreSede = sedeFija
+      ? (sedesData?.[0]?.nombre || "sede")
+      : filtroSede === "todas"
+        ? "Todas las sedes"
+        : sedesData?.find(s=>s.id===filtroSede)?.nombre || "sede";
+
+    await new Promise((res, rej) => {
+      if(window.XLSX) return res();
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    const XLSX = window.XLSX;
+
+    const filas = rows.map(v => ({
+      "Fecha":           v.fecha_compra || "",
+      "Comprobante":     v.numero_comprobante || "",
+      "Paciente":        v.pacientes ? `${v.pacientes.apellidos} ${v.pacientes.nombres}` : "",
+      "DNI":             v.pacientes?.dni || "",
+      "Paquete":         v.paquetes ? `${v.paquetes.codigo} - ${v.paquetes.nombre}` : "",
+      "Monto Pagado":    Number(v.monto_pagado || 0),
+      "Precio Sugerido": Number(v.precio_sugerido || 0),
+      "Descuento":       Math.max(Number(v.precio_sugerido||0) - Number(v.monto_pagado||0), 0),
+      "Método Pago":     v.metodo_pago || "",
+      "Sede":            v.sedes?.nombre || "",
+      "Estado":          v.estado || "",
+    }));
+
+    const totalPagado    = filas.reduce((a,r)=>a+r["Monto Pagado"],0);
+    const totalSugerido  = filas.reduce((a,r)=>a+r["Precio Sugerido"],0);
+    const totalDescuento = filas.reduce((a,r)=>a+r["Descuento"],0);
+    filas.push({
+      "Fecha": "TOTAL", "Comprobante": "",
+      "Paciente": `${filas.length} ventas`, "DNI": "", "Paquete": "",
+      "Monto Pagado": totalPagado, "Precio Sugerido": totalSugerido,
+      "Descuento": totalDescuento, "Método Pago": "",
+      "Sede": nombreSede, "Estado": "",
+    });
+
+    const ws = XLSX.utils.json_to_sheet(filas);
+    ws["!cols"] = [
+      {wch:12},{wch:16},{wch:28},{wch:12},{wch:30},
+      {wch:14},{wch:16},{wch:12},{wch:14},{wch:26},{wch:12}
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ventas");
+    const filename = `OxyNatur_Ventas_${nombreSede.replace(/\s/g,"_")}_${exportDesde}_${exportHasta}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    setExportando(false);
+    setModalExport(false);
+  };
+
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -2434,7 +2520,10 @@ function Ventas({perfil}) {
             {sedeFija ? `Ventas de tu sede` : "Registro de paquetes y sesiones vendidas"}
           </p>
         </div>
-        <Btn onClick={openModal}>+ Nueva venta</Btn>
+        <div style={{display:"flex",gap:10}}>
+          <Btn variant="ghost" onClick={()=>setModalExport(true)}>📊 Exportar Excel</Btn>
+          <Btn onClick={openModal}>+ Nueva venta</Btn>
+        </div>
       </div>
 
       {/* Filtro por sede — solo admin */}
@@ -2636,6 +2725,47 @@ function Ventas({perfil}) {
               <Btn variant="ghost" onClick={()=>setModal(false)} disabled={saving}>Cancelar</Btn>
               <Btn onClick={guardar} disabled={saving||calculando}>
                 {uploadProgress==="subiendo" ? "Subiendo foto..." : saving ? "Guardando..." : "Registrar venta"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal exportar Excel */}
+      {modalExport && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"#0D1320",border:"1px solid #1E2535",borderRadius:14,maxWidth:420,width:"100%",padding:28}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"#E8EAF0"}}>Exportar ventas</div>
+              <button onClick={()=>setModalExport(false)} style={{background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontSize:22}}>×</button>
+            </div>
+
+            {/* Sede que se va a exportar */}
+            <div style={{marginBottom:18,padding:"10px 14px",background:"#1A2035",borderRadius:10,fontSize:13,color:"#9CA3AF"}}>
+              Sede: <strong style={{color:"#00C4B4"}}>
+                {sedeFija
+                  ? (sedesData?.[0]?.nombre || "Tu sede")
+                  : filtroSede === "todas"
+                    ? "Todas las sedes"
+                    : sedesData?.find(s=>s.id===filtroSede)?.nombre || "Todas las sedes"}
+              </strong>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Desde</label>
+              <input type="date" value={exportDesde} onChange={e=>setExportDesde(e.target.value)}
+                style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+            </div>
+            <div style={{marginBottom:22}}>
+              <label style={{fontSize:12,color:"#9CA3AF",fontWeight:600,display:"block",marginBottom:5}}>Hasta</label>
+              <input type="date" value={exportHasta} onChange={e=>setExportHasta(e.target.value)}
+                style={{width:"100%",background:"#1A2035",border:"1px solid #2A3550",borderRadius:10,color:"#E8EAF0",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+            </div>
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setModalExport(false)} disabled={exportando}>Cancelar</Btn>
+              <Btn onClick={exportarExcel} disabled={exportando}>
+                {exportando ? "Generando..." : "⬇ Descargar Excel"}
               </Btn>
             </div>
           </div>
