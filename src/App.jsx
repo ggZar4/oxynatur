@@ -2327,6 +2327,7 @@ function Ventas({perfil}) {
         () => supabase.rpc("calcular_precio", {
           p_paquete_id: form.paquete_id,
           p_fecha: new Date().toISOString().slice(0,10),
+          p_sede_id: form.sede_id || null,
         }), "Ventas:calcular_precio"
       );
       if(!mounted) return;
@@ -2401,7 +2402,7 @@ function Ventas({perfil}) {
       promo_aplicada:     calculo?.promo_aplicada || null,
       descuento_pct:      calculo?.descuento_pct ? Number(calculo.descuento_pct) : 0,
       metodo_pago:        form.metodo_pago,
-      sesiones_totales:   paquete?.cantidad_sesiones || 1,
+      sesiones_totales:   calculo?.sesiones_incluidas || paquete?.cantidad_sesiones || 1,
       sesiones_usadas:    0,
       fecha_vencimiento:  fechaVencimiento,
       estado:             "activo",
