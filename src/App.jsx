@@ -2255,7 +2255,9 @@ function Ventas({perfil}) {
     [], "Ventas:pacientes"
   );
   const { data: paquetesData } = useSupabaseQuery(
-    () => supabase.from("paquetes").select("*").eq("activo", true).order("cantidad_sesiones"),
+    () => supabase.from("paquetes")
+      .select("*, paquetes_precios(sede_id, precio, sesiones_incluidas)")
+      .eq("activo", true).order("cantidad_sesiones"),
     [], "Ventas:paquetes"
   );
   const { data: sedesData } = useSupabaseQuery(
@@ -2650,7 +2652,11 @@ function Ventas({perfil}) {
             }
 
             <Select label="Paquete" value={form.paquete_id} onChange={v=>setForm({...form,paquete_id:v})}
-              options={(paquetesData||[]).map(p=>({value:p.id,label:`${p.codigo} — ${p.nombre} — ${fmtSol(p.precio_total)}`}))} required/>
+              options={(paquetesData||[]).map(p=>{
+                const precioSede = p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
+                const precio = precioSede ? precioSede.precio : p.precio_total;
+                return {value:p.id, label:`${p.codigo} — ${p.nombre} — ${fmtSol(precio)}`};
+              })} required/>
             {err.paquete_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
 
             {calculando && <div style={{padding:14,background:"#0A0F1F",borderRadius:10,fontSize:13,color:"#6B7280",marginBottom:14}}>Calculando precio...</div>}
