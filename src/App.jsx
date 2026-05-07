@@ -1817,7 +1817,7 @@ function Usuarios({perfil:adminPerfil}) {
     if(!form.email||!form.password||!form.nombre){setMsg("Completa todos los campos requeridos");return;}
     if(!supabaseAdmin){setMsg("Error: service key no configurada");return;}
     setSaving(true); setMsg("");
-    const sedeId = form.rol==="medico" && form.es_especialista ? null : (form.sede_id||null);
+    const sedeId = (form.rol==="admin_general" || (form.rol==="medico" && form.es_especialista)) ? null : (form.sede_id||null);
     // 1. Crear auth.user con Admin API (sin confirmación de email)
     const {data, error} = await supabaseAdmin.auth.admin.createUser({
       email: form.email,
@@ -1859,7 +1859,7 @@ function Usuarios({perfil:adminPerfil}) {
         nombre:         formEdit.nombre,
         rol:            formEdit.rol,
         es_especialista: formEdit.rol==="medico" ? formEdit.es_especialista : false,
-        sede_id:        (formEdit.rol==="medico" && formEdit.es_especialista) ? null : (formEdit.sede_id||null),
+        sede_id:        (formEdit.rol==="admin_general" || (formEdit.rol==="medico" && formEdit.es_especialista)) ? null : (formEdit.sede_id||null),
         activo:         formEdit.activo,
       }).eq("id", modalEdit.id),
       "Usuarios:editar"
@@ -1934,7 +1934,7 @@ function Usuarios({perfil:adminPerfil}) {
             <Input label="Email" value={form.email} onChange={v=>setF("email",v)} type="email" required/>
             <Input label="Contraseña temporal" value={form.password} onChange={v=>setF("password",v)} type="password" required/>
             <Select label="Rol" value={form.rol} onChange={v=>setF("rol",v)} required
-              options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
+              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
             {/* Si es médico, mostrar opción especialista */}
             {form.rol === "medico" && (
               <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"1px solid #2A3550"}}>
@@ -1946,8 +1946,8 @@ function Usuarios({perfil:adminPerfil}) {
                 </label>
               </div>
             )}
-            {/* Sede solo si NO es especialista */}
-            {!(form.rol === "medico" && form.es_especialista) && (
+            {/* Sede solo si NO es especialista y NO es admin */}
+            {form.rol !== "admin_general" && !(form.rol === "medico" && form.es_especialista) && (
               <Select label="Sede asignada" value={form.sede_id} onChange={v=>setF("sede_id",v)} required
                 options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
             )}
@@ -1968,7 +1968,7 @@ function Usuarios({perfil:adminPerfil}) {
             </div>
             <Input label="Nombre completo" value={formEdit.nombre} onChange={v=>setFormEdit(f=>({...f,nombre:v}))} required/>
             <Select label="Rol" value={formEdit.rol} onChange={v=>setFormEdit(f=>({...f,rol:v}))}
-              options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
+              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
             {formEdit.rol==="medico" && (
               <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"1px solid #2A3550"}}>
                 <input type="checkbox" checked={formEdit.es_especialista}
@@ -1977,7 +1977,7 @@ function Usuarios({perfil:adminPerfil}) {
                 <label style={{fontSize:14,color:"#0F172A",cursor:"pointer"}}>Médico Especialista (cross-sede)</label>
               </div>
             )}
-            {!(formEdit.rol==="medico" && formEdit.es_especialista) && (
+            {!(formEdit.rol==="medico" && formEdit.es_especialista) && formEdit.rol !== "admin_general" && (
               <Select label="Sede asignada" value={formEdit.sede_id} onChange={v=>setFormEdit(f=>({...f,sede_id:v}))}
                 options={(sedes||[]).map(s=>({value:s.id,label:s.nombre}))}/>
             )}
