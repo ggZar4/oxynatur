@@ -268,7 +268,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0}) {
       </div>
       {navItems.map(item=>(
         <button key={item.id} onClick={()=>setVista(item.id)}
-          style={{background:vista===item.id?"#F0FDFB":"none",borderTop:"none",borderRight:"none",borderBottom:"none",borderLeft:vista===item.id?"2px solid #00A896":"2px solid transparent",cursor:"pointer",padding:"9px 14px",borderRadius:8,color:vista===item.id?"#00A896":"#64748B",fontFamily:"inherit",fontSize:13,fontWeight:vista===item.id?600:500,display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",transition:"all .15s"}}>
+          style={{background:vista===item.id?"#F0FDFB":"none",borderLeft:vista===item.id?"2px solid #00A896":"2px solid transparent",border:"none",cursor:"pointer",padding:"9px 14px",borderRadius:8,color:vista===item.id?"#00A896":"#64748B",fontFamily:"inherit",fontSize:13,fontWeight:vista===item.id?600:500,display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",transition:"all .15s"}}>
           <span style={{display:"flex",alignItems:"center",opacity:0.7}}>{item.icon}</span>
           <span style={{flex:1}}>{item.label}</span>
           {item.badge && (
@@ -397,7 +397,7 @@ function DashboardMedico({perfil}) {
           {alertas.length===0
             ? <div style={{padding:"24px",textAlign:"center",color:"#94A3B8",fontSize:13}}>✓ Sin alertas pendientes</div>
             : alertas.map(a=>(
-              <div key={a.id} style={{padding:"12px 18px",borderBottom:"0.5px solid #E2E8F0",display:"flex",gap:10,alignItems:"flex-start"}}>
+              <div key={a.id} style={{padding:"12px 18px",borderBottom:"1px solid #1A2035",display:"flex",gap:10,alignItems:"flex-start"}}>
                 <span style={{fontSize:11,fontWeight:700,color:PRIORIDAD_COLOR[a.prioridad],background:`${PRIORIDAD_COLOR[a.prioridad]}15`,padding:"2px 8px",borderRadius:99,flexShrink:0,marginTop:1}}>{a.prioridad}</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600,color:"#0F172A",marginBottom:2}}>{a.pacientes?.nombres} {a.pacientes?.apellidos}</div>
@@ -418,7 +418,7 @@ function DashboardMedico({perfil}) {
           {sesionesHoy.length===0
             ? <div style={{padding:"24px",textAlign:"center",color:"#94A3B8",fontSize:13}}>Sin sesiones programadas para hoy</div>
             : sesionesHoy.map(s=>(
-              <div key={s.id} style={{padding:"10px 18px",borderBottom:"0.5px solid #E2E8F0",display:"flex",alignItems:"center",gap:12}}>
+              <div key={s.id} style={{padding:"10px 18px",borderBottom:"1px solid #1A2035",display:"flex",alignItems:"center",gap:12}}>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#00A896",minWidth:44}}>{s.hora_inicio?.slice(0,5)}</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:600,color:"#0F172A"}}>{s.paciente}</div>
@@ -438,7 +438,7 @@ function DashboardMedico({perfil}) {
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:0}}>
           {resumen.map((s,i)=>(
-            <div key={s.sede_id} style={{padding:"16px 20px",borderRight:i%2===0?"0.5px solid #E2E8F0":"none",borderBottom:"0.5px solid #E2E8F0"}}>
+            <div key={s.sede_id} style={{padding:"16px 20px",borderRight:i%2===0?"1px solid #1A2035":"none",borderBottom:"1px solid #1A2035"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                 <span style={{width:8,height:8,borderRadius:"50%",background:getColor(s.sede),display:"inline-block"}}/>
                 <span style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#0F172A"}}>{s.sede}</span>
@@ -793,7 +793,7 @@ function Pacientes({perfil}) {
                   const pct       = Math.round((usadas/totales)*100);
                   const estadoC   = c.estado==="activo"?"#10B981":c.estado==="agotado"?"#94A3B8":"#F87171";
                   return (
-                    <div key={c.id} style={{padding:"12px 18px",borderBottom:i<compras.length-1?"0.5px solid #E2E8F0":"none",display:"flex",alignItems:"center",gap:14}}>
+                    <div key={c.id} style={{padding:"12px 18px",borderBottom:i<compras.length-1?"1px solid #1A2035":"none",display:"flex",alignItems:"center",gap:14}}>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                           <span style={{fontSize:13,fontWeight:600,color:"#0F172A"}}>{c.paquetes?.nombre||"Paquete"}</span>
@@ -825,7 +825,7 @@ function Pacientes({perfil}) {
               : ultimasSesiones.map((s,i)=>{
                   const ECOLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"#94A3B8"};
                   return (
-                    <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"0.5px solid #E2E8F0":"none",display:"flex",alignItems:"center",gap:12}}>
+                    <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"1px solid #1A2035":"none",display:"flex",alignItems:"center",gap:12}}>
                       <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"#00A896",minWidth:44}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,color:"#0F172A"}}>Sesión #{s.numero_sesion} · {s.fecha}</div>
@@ -842,8 +842,8 @@ function Pacientes({perfil}) {
       {/* Modal editar paciente */}
       {modalEditar && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid #E2E8F0",display:"flex",justifyContent:"space-between"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A"}}>Editar Paciente</div>
               <button onClick={()=>setModalEditar(false)} style={{background:"#F8FAFC",border:"none",color:"#64748B",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
@@ -915,7 +915,7 @@ function Pacientes({perfil}) {
       }
       {modal && f.puedeCrearPaciente && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A"}}>Nuevo Paciente</div>
               <button onClick={()=>setModal(false)} style={{background:"#F8FAFC",border:"none",color:"#64748B",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
@@ -1115,7 +1115,7 @@ function HistoriasClinicas({perfil}) {
         embarazo:            formEval.embarazo,
         fiebre_activa:       formEval.fiebre_activa,
         presion_indicada:    parseFloat(formEval.presion_indicada)||2.0,
-        duracion_minutos:    [60,90,120].includes(parseInt(formEval.duracion_minutos)) ? parseInt(formEval.duracion_minutos) : 90,
+        duracion_minutos:    parseInt(formEval.duracion_minutos)||90,
         incidencias:         formEval.incidencias||'',
         observaciones:       formEval.observaciones||'',
         evolucion:           formEval.evolucion||'',
@@ -1217,7 +1217,7 @@ function HistoriasClinicas({perfil}) {
                 <div key={key} style={{gridColumn:["diagnostico_principal","contraindicaciones"].includes(key)?"1/-1":undefined}}>
                   <label style={{fontSize:11,color:"#64748B",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</label>
                   <textarea value={formHC[key]||""} onChange={e=>setFormHC(f=>({...f,[key]:e.target.value}))}
-                    rows={2} style={{width:"100%",background:"#FFFFFF",border:"0.5px solid #E2E8F0",borderRadius:8,color:"#0F172A",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                    rows={2} style={{width:"100%",background:"#FFFFFF",border:"1px solid #2A3550",borderRadius:8,color:"#0F172A",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                 </div>
               ))}
             </div>
@@ -1293,7 +1293,7 @@ function HistoriasClinicas({perfil}) {
                       display:"flex",alignItems:"center",justifyContent:"space-between",
                       padding:"10px 16px",
                       background:"linear-gradient(135deg,#1A2035,#111827)",
-                      border:"0.5px solid #E2E8F0",
+                      border:"1px solid #2A3550",
                       borderRadius:12,marginBottom:8,
                     }}>
                       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -1395,7 +1395,7 @@ function HistoriasClinicas({perfil}) {
       {/* Modal nueva evaluación */}
       {modalNuevaEval && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#FFFFFF",border:"0.5px solid #E2E8F0",borderRadius:16,width:"100%",maxWidth:620,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
               <div>
                 <div style={{fontSize:10,color:"#00A896",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Nueva Evaluación</div>
@@ -1422,8 +1422,8 @@ function HistoriasClinicas({perfil}) {
               )}
 
               {/* SECCIÓN ENFERMERO — Signos vitales */}
-              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"0.5px solid #E2E8F0"}}>
-                Signos Vitales
+              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                📋 Signos Vitales
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
                 <Input label="Presión arterial" value={formEval.presion_arterial}
@@ -1453,27 +1453,26 @@ function HistoriasClinicas({perfil}) {
                 options={["Excelente","Bueno","Regular","Malo"].map(v=>({value:v,label:v}))}/>
 
               {/* Contraindicaciones del día */}
-              <div style={{fontSize:11,color:"#F59E0B",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid #E2E8F0"}}>
-                Contraindicaciones del día
+              <div style={{fontSize:11,color:"#F59E0B",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                ⚠ Contraindicaciones del día
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
                 {["otitis","claustrofobia","embarazo","fiebre_activa"].map(campo=>(
                   <Select key={campo} label={campo.replace("_"," ").replace(/\w/g,l=>l.toUpperCase())} value={formEval[campo]}
                     onChange={v=>setFormEval(f=>({...f,[campo]:v}))}
-                    options={campo==="claustrofobia" ? [{value:"No",label:"No"},{value:"Sí - controlada",label:"Sí - controlada"},{value:"Sí - contraindicado",label:"Sí - contraindicado"}] : [{value:"No",label:"No"},{value:"Sí",label:"Sí"},{value:"Posible",label:"Posible"}]}/>
+                    options={[{value:"No",label:"No"},{value:"Sí",label:"Sí"},{value:"Posible",label:"Posible"}]}/>
                 ))}
               </div>
 
               {/* Parámetros cámara */}
-              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid #E2E8F0"}}>
-                Parámetros de sesión
+              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                🫁 Parámetros de sesión
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
                 <Input label="Presión indicada (ATA)" type="number" value={formEval.presion_indicada}
                   onChange={v=>setFormEval(f=>({...f,presion_indicada:v}))}/>
-                <Select label="Duración (min)" value={String(formEval.duracion_minutos)}
-                  onChange={v=>setFormEval(f=>({...f,duracion_minutos:v}))}
-                  options={[{value:"60",label:"60 min"},{value:"90",label:"90 min"},{value:"120",label:"120 min"}]}/>
+                <Input label="Duración (min)" type="number" value={formEval.duracion_minutos}
+                  onChange={v=>setFormEval(f=>({...f,duracion_minutos:v}))}/>
               </div>
               <div style={{marginBottom:14}}>
                 <label style={{fontSize:12,color:"#64748B",fontWeight:600,display:"block",marginBottom:5}}>Incidencias</label>
@@ -1491,8 +1490,8 @@ function HistoriasClinicas({perfil}) {
               {/* SECCIÓN MÉDICO — solo si es médico o admin */}
               {(f.esMedico || f.esAdmin) && (
                 <>
-                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid #E2E8F0"}}>
-                    Sección médica
+                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                    🩺 Sección médica
                   </div>
                   <div style={{marginBottom:14}}>
                     <label style={{fontSize:12,color:"#64748B",fontWeight:600,display:"block",marginBottom:5}}>Evolución clínica</label>
@@ -1525,7 +1524,7 @@ function HistoriasClinicas({perfil}) {
       {/* Modal firmar evaluación borrador */}
       {modalEval && (f.esMedico||f.esAdmin) && modalEval.es_borrador && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#FFFFFF",border:"0.5px solid #E2E8F0",borderRadius:16,width:"100%",maxWidth:500,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",padding:28}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A",marginBottom:4}}>Firmar evaluación — Sesión #{modalEval.numero_sesion}</div>
             <div style={{fontSize:12,color:"#94A3B8",marginBottom:20}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos} · {modalEval.fecha}</div>
             <div style={{marginBottom:14}}>
@@ -1558,7 +1557,7 @@ function HistoriasClinicas({perfil}) {
       {/* Modal ver evaluación firmada */}
       {modalEval && !modalEval.es_borrador && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
               <div>
                 <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Evaluación Firmada · Sesión #{modalEval.numero_sesion}</div>
@@ -1587,7 +1586,7 @@ function HistoriasClinicas({perfil}) {
                 ]},
               ].map(sec=>(
                 <div key={sec.titulo} style={{marginBottom:16}}>
-                  <div style={{fontSize:10,color:sec.color,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #E2E8F0"}}>{sec.titulo}</div>
+                  <div style={{fontSize:10,color:sec.color,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #1A2035"}}>{sec.titulo}</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     {sec.campos.filter(([,v])=>v).map(([k,v])=>(
                       <div key={k} style={{background:"#FFFFFF",borderRadius:8,padding:"8px 12px",gridColumn:["Evolución","Incidencias","Observaciones"].includes(k)?"1/-1":undefined}}>
@@ -1758,7 +1757,7 @@ function Finanzas() {
           : <Card>
               <div style={{fontSize:13,fontWeight:700,color:"#94A3B8",marginBottom:16,letterSpacing:"0.06em",textTransform:"uppercase"}}>Detalle por sede y mes</div>
               {ingresos.map((r,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",padding:"10px 0",borderTop:"0.5px solid #E2E8F0",alignItems:"center"}}>
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",padding:"10px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
                   <div style={{display:"flex",alignItems:"center",gap:7}}>
                     <span style={{width:7,height:7,borderRadius:"50%",background:getColor(r.sede),display:"inline-block"}}/>
                     <span style={{fontSize:13,color:"#0F172A"}}>{r.sede}</span>
@@ -1904,7 +1903,7 @@ function Usuarios({perfil:adminPerfil}) {
               <span>Usuario</span><span>Email</span><span>Rol</span><span>Sede</span><span>Acciones</span>
             </div>
             {usuarios.map(u=>(
-              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr auto",padding:"12px 0",borderTop:"0.5px solid #E2E8F0",alignItems:"center",opacity:u.activo===false?0.5:1}}>
+              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr auto",padding:"12px 0",borderTop:"1px solid #1A2035",alignItems:"center",opacity:u.activo===false?0.5:1}}>
                 <div style={{fontWeight:600,fontSize:14,color:"#0F172A"}}>{u.nombre}</div>
                 <div style={{fontSize:13,color:"#64748B"}}>{u.email}</div>
                 <div><Badge color={rolColor[u.rol]||"#94A3B8"}>{rolLabel(u)}</Badge></div>
@@ -1925,7 +1924,7 @@ function Usuarios({perfil:adminPerfil}) {
       }
       {modal && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A"}}>Nuevo Usuario</div>
               <button onClick={()=>setModal(false)} style={{background:"#F8FAFC",border:"none",color:"#64748B",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
@@ -1938,7 +1937,7 @@ function Usuarios({perfil:adminPerfil}) {
               options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
             {/* Si es médico, mostrar opción especialista */}
             {form.rol === "medico" && (
-              <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"0.5px solid #E2E8F0"}}>
+              <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"1px solid #2A3550"}}>
                 <input type="checkbox" id="esEsp" checked={form.es_especialista}
                   onChange={e=>setF("es_especialista",e.target.checked)}
                   style={{width:16,height:16,cursor:"pointer"}}/>
@@ -1962,7 +1961,7 @@ function Usuarios({perfil:adminPerfil}) {
       {/* Modal editar usuario */}
       {modalEdit && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A"}}>Editar Usuario</div>
               <button onClick={()=>setModalEdit(null)} style={{background:"#F8FAFC",border:"none",color:"#64748B",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
@@ -1971,7 +1970,7 @@ function Usuarios({perfil:adminPerfil}) {
             <Select label="Rol" value={formEdit.rol} onChange={v=>setFormEdit(f=>({...f,rol:v}))}
               options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
             {formEdit.rol==="medico" && (
-              <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"0.5px solid #E2E8F0"}}>
+              <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"1px solid #2A3550"}}>
                 <input type="checkbox" checked={formEdit.es_especialista}
                   onChange={e=>setFormEdit(f=>({...f,es_especialista:e.target.checked}))}
                   style={{width:16,height:16,cursor:"pointer"}}/>
@@ -1982,7 +1981,7 @@ function Usuarios({perfil:adminPerfil}) {
               <Select label="Sede asignada" value={formEdit.sede_id} onChange={v=>setFormEdit(f=>({...f,sede_id:v}))}
                 options={(sedes||[]).map(s=>({value:s.id,label:s.nombre}))}/>
             )}
-            <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"0.5px solid #E2E8F0"}}>
+            <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#F8FAFC",borderRadius:10,border:"1px solid #2A3550"}}>
               <input type="checkbox" checked={formEdit.activo!==false}
                 onChange={e=>setFormEdit(f=>({...f,activo:e.target.checked}))}
                 style={{width:16,height:16,cursor:"pointer"}}/>
@@ -2088,7 +2087,7 @@ function AgendaMedico({perfil}) {
         {/* Controles de navegación */}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {/* Toggle vista */}
-          <div style={{display:"flex",background:"#F8FAFC",borderRadius:8,border:"0.5px solid #E2E8F0",overflow:"hidden"}}>
+          <div style={{display:"flex",background:"#F8FAFC",borderRadius:8,border:"1px solid #2A3550",overflow:"hidden"}}>
             {["dia","semana"].map(v=>(
               <button key={v} onClick={()=>setVistaMode(v)}
                 style={{padding:"6px 14px",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,
@@ -2309,6 +2308,7 @@ function Ventas({perfil}) {
     paciente_id:"", sede_id: sedeFija || "", paquete_id:"",
     monto_pagado:"", metodo_pago:"efectivo", notas:"",
     numero_comprobante:"", fotoFile: null, fotoPreview: null,
+    fecha_compra: new Date().toISOString().slice(0,10),
   };
   const [modal, setModal]       = useState(false);
   const [form, setForm]         = useState(formInicial);
@@ -2397,7 +2397,7 @@ function Ventas({perfil}) {
       paciente_id:        form.paciente_id,
       paquete_id:         form.paquete_id,
       sede_id:            form.sede_id,
-      fecha_compra:       new Date().toISOString().slice(0,10),
+      fecha_compra:       form.fecha_compra || new Date().toISOString().slice(0,10),
       monto_pagado:       Number(form.monto_pagado),
       precio_sugerido:    calculo?.precio_final ? Number(calculo.precio_final) : null,
       promo_aplicada:     calculo?.promo_aplicada || null,
@@ -2689,6 +2689,17 @@ function Ventas({perfil}) {
             <Select label="Método de pago" value={form.metodo_pago} onChange={v=>setForm({...form,metodo_pago:v})}
               options={[{value:"efectivo",label:"Efectivo"},{value:"transferencia",label:"Transferencia"},{value:"tarjeta",label:"Tarjeta"},{value:"yape",label:"Yape / Plin"},{value:"otro",label:"Otro"}]}/>
 
+            {/* Fecha de venta */}
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"#64748B",fontWeight:600,display:"block",marginBottom:5}}>
+                Fecha de venta <span style={{fontSize:11,color:"#94A3B8",fontWeight:400}}>(por defecto hoy)</span>
+              </label>
+              <input type="date" value={form.fecha_compra}
+                onChange={e=>setForm({...form,fecha_compra:e.target.value})}
+                max={new Date().toISOString().slice(0,10)}
+                style={{width:"100%",background:"#FFFFFF",border:"0.5px solid #E2E8F0",borderRadius:10,color:"#0F172A",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+
             {/* Número de comprobante — OBLIGATORIO */}
             <Input label="N° de comprobante (boleta/factura)" value={form.numero_comprobante}
               onChange={v=>setForm({...form,numero_comprobante:v})}
@@ -2709,7 +2720,7 @@ function Ventas({perfil}) {
               </label>
               {form.fotoPreview && (
                 <div style={{marginTop:8,position:"relative",display:"inline-block"}}>
-                  <img src={form.fotoPreview} alt="preview" style={{width:120,height:80,objectFit:"cover",borderRadius:8,border:"0.5px solid #E2E8F0"}}/>
+                  <img src={form.fotoPreview} alt="preview" style={{width:120,height:80,objectFit:"cover",borderRadius:8,border:"1px solid #2A3550"}}/>
                   <button onClick={()=>setForm(f=>({...f,fotoFile:null,fotoPreview:null}))}
                     style={{position:"absolute",top:-6,right:-6,background:"#F87171",border:"none",borderRadius:"50%",width:18,height:18,color:"white",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
                 </div>
@@ -3096,7 +3107,7 @@ function Sesiones({perfil}) {
       {/* Modal programar nueva sesión */}
       {modalNueva && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A"}}>Programar Sesión</div>
               <button onClick={()=>setModalNueva(false)} style={{background:"#F8FAFC",border:"none",color:"#64748B",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
@@ -3148,7 +3159,7 @@ function Sesiones({perfil}) {
       {/* Modal reprogramar sesión */}
       {modalReprog && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:420,padding:28}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:420,padding:28}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A",marginBottom:4}}>Reprogramar Sesión</div>
             <div style={{fontSize:12,color:"#94A3B8",marginBottom:20}}>{modalReprog.paciente} · Sesión #{modalReprog.numero_sesion}</div>
             <Input label="Nueva fecha" type="date" value={formReprog.fecha} onChange={v=>setFormReprog(f=>({...f,fecha:v}))} required/>
@@ -3169,7 +3180,7 @@ function Sesiones({perfil}) {
       {/* Modal completar / ver sesión */}
       {verSesion && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
                 <div style={{fontSize:10,color:"#00A896",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
@@ -3248,7 +3259,7 @@ function Sesiones({perfil}) {
                   </div>
 
                   {/* Flag alerta */}
-                  <div style={{padding:"12px 14px",background:"#F8FAFC",borderRadius:10,border:"0.5px solid #E2E8F0",display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                  <div style={{padding:"12px 14px",background:"#F8FAFC",borderRadius:10,border:"1px solid #2A3550",display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
                     <input type="checkbox" id="reqAtencion" checked={formCompletar.requiere_atencion}
                       onChange={e=>setFormCompletar(f=>({...f,requiere_atencion:e.target.checked}))}
                       style={{width:16,height:16,cursor:"pointer",accentColor:"#F87171"}}/>
@@ -3593,7 +3604,7 @@ function Alertas({perfil}) {
       {/* Modal ver/responder alerta */}
       {verAlerta && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:580,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:580,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             {/* Header modal */}
             <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
@@ -3698,7 +3709,7 @@ function Alertas({perfil}) {
       {/* Modal nueva alerta manual */}
       {modalNueva && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"#F4F6FA",border:"0.5px solid #E2E8F0",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
+          <div style={{background:"#F4F6FA",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"#0F172A"}}>Nueva Alerta Clínica</div>
               <button onClick={()=>setModalNueva(false)} style={{background:"#F8FAFC",border:"none",color:"#64748B",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
