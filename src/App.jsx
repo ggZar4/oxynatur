@@ -2574,8 +2574,8 @@ function Ventas({perfil}) {
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"#FFFFFF"}}>
-                  {["Fecha","Comprobante","Paciente","Paquete","Pagado","Método","Doc",""].map(h=>(
-                    <th key={h} style={{textAlign:"left",padding:"11px 14px",fontSize:11,fontWeight:700,color:"#94A3B8",letterSpacing:"0.05em",textTransform:"none",letterSpacing:"0"}}>{h}</th>
+                  {[...["Fecha","Comprobante","Paciente","Paquete","Pagado","Método"], ...(!sedeFija && filtroSede==="todas" ? ["Sede"] : []), ...["Doc",""]].map(h=>(
+                    <th key={h} style={{textAlign:"left",padding:"11px 14px",fontSize:11,fontWeight:700,color:"#94A3B8",textTransform:"none",letterSpacing:"0"}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -2600,6 +2600,16 @@ function Ventas({perfil}) {
                       </td>
                       <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color:conDesc?"#F59E0B":"#00A896"}}>{fmtSol(pag)}</td>
                       <td style={{padding:"11px 14px",fontSize:12,color:"#94A3B8"}}>{v.metodo_pago}</td>
+                      {!sedeFija && filtroSede==="todas" && (
+                        <td style={{padding:"11px 14px",fontSize:12}}>
+                          {v.sedes?.nombre
+                            ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                                <span style={{width:6,height:6,borderRadius:"50%",background:v.sedes?.color||"#00A896",display:"inline-block"}}></span>
+                                <span style={{color:"#64748B"}}>{v.sedes.nombre}</span>
+                              </span>
+                            : <span style={{color:"#CBD5E1"}}>—</span>}
+                        </td>
+                      )}
                       <td style={{padding:"11px 14px"}}>
                         {v.comprobante_url
                           ? <a href={v.comprobante_url} target="_blank" rel="noreferrer"
