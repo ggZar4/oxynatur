@@ -3809,7 +3809,7 @@ function Prospectos({perfil}) {
 
   const formInicial = {
     nombre:"", telefono:"", email:"", canal:"whatsapp",
-    sede_id:"", motivo:"", notas:"", estado:"nuevo"
+    sede_id:"", motivo:"", notas:"", estado:"nuevo", fecha_cita:""
   };
   const [form, setForm] = useState(formInicial);
 
@@ -3846,6 +3846,7 @@ function Prospectos({perfil}) {
         notas: form.notas.trim() || null,
         estado: form.estado,
         fecha_ultimo_contacto: new Date().toISOString(),
+        fecha_cita: form.fecha_cita ? new Date(form.fecha_cita).toISOString() : null,
       }), "Prospectos:insert"
     );
     setSaving(false);
@@ -3960,7 +3961,11 @@ function Prospectos({perfil}) {
                       </select>
                     </td>
                     <td style={{padding:"11px 14px",fontSize:11,color:"var(--text3)"}}>
-                      {p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
+                      {p.estado === "evaluacion_agendada" && p.fecha_cita
+                        ? <span style={{color:"#F59E0B",fontWeight:600}}>
+                            📅 {new Date(p.fecha_cita).toLocaleDateString("es-PE")} {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}
+                          </span>
+                        : p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
                     </td>
                     <td style={{padding:"11px 14px"}}>
                       <button onClick={()=>setModalVer(p)}
@@ -4005,7 +4010,7 @@ function Prospectos({perfil}) {
                   outline:"none",resize:"vertical",minHeight:70,boxSizing:"border-box"}}/>
             </div>
 
-            <div style={{marginBottom:18}}>
+            <div style={{marginBottom:14}}>
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Notas internas</label>
               <textarea value={form.notas} onChange={e=>setForm(f=>({...f,notas:e.target.value}))}
                 placeholder="Observaciones del primer contacto, disponibilidad, etc."
@@ -4013,6 +4018,19 @@ function Prospectos({perfil}) {
                   color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",
                   outline:"none",resize:"vertical",minHeight:60,boxSizing:"border-box"}}/>
             </div>
+
+            {/* Fecha y hora de cita — solo si estado es evaluacion_agendada */}
+            {(form.estado === "evaluacion_agendada" || form.fecha_cita) && (
+              <div style={{marginBottom:18,padding:"12px 14px",background:"#F59E0B10",border:"0.5px solid #F59E0B40",borderRadius:10}}>
+                <label style={{fontSize:12,color:"#F59E0B",fontWeight:600,display:"block",marginBottom:8}}>
+                  📅 Fecha y hora de evaluación
+                </label>
+                <input type="datetime-local" value={form.fecha_cita}
+                  onChange={e=>setForm(f=>({...f,fecha_cita:e.target.value}))}
+                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,
+                    color:"var(--text)",padding:"9px 12px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            )}
 
             {err.general && <div style={{color:"#F87171",fontSize:13,marginBottom:12}}>{err.general}</div>}
 
@@ -4041,6 +4059,7 @@ function Prospectos({perfil}) {
                 ["Sede", modalVer.sedes?.nombre||"Sin preferencia"],
                 ["Estado", ESTADO_LABEL[modalVer.estado]],
                 ["Registrado", new Date(modalVer.created_at).toLocaleDateString("es-PE")],
+                ...(modalVer.fecha_cita ? [["Cita agendada", new Date(modalVer.fecha_cita).toLocaleDateString("es-PE") + " " + new Date(modalVer.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})]] : []),
               ].map(([k,v])=>(
                 <div key={k} style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px"}}>
                   <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:3}}>{k}</div>
