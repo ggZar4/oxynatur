@@ -1122,7 +1122,7 @@ function HistoriasClinicas({perfil}) {
         embarazo:            formEval.embarazo,
         fiebre_activa:       formEval.fiebre_activa,
         presion_indicada:    parseFloat(formEval.presion_indicada)||2.0,
-        duracion_minutos:    parseInt(formEval.duracion_minutos)||90,
+        duracion_minutos:    [60,90,120].includes(parseInt(formEval.duracion_minutos)) ? parseInt(formEval.duracion_minutos) : 90,
         incidencias:         formEval.incidencias||'',
         observaciones:       formEval.observaciones||'',
         evolucion:           formEval.evolucion||'',
@@ -1464,11 +1464,14 @@ function HistoriasClinicas({perfil}) {
                 ⚠ Contraindicaciones del día
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
-                {["otitis","claustrofobia","embarazo","fiebre_activa"].map(campo=>(
-                  <Select key={campo} label={campo.replace("_"," ").replace(/\w/g,l=>l.toUpperCase())} value={formEval[campo]}
+                {["otitis","embarazo","fiebre_activa"].map(campo=>(
+                  <Select key={campo} label={campo.replace("_"," ").replace(/\b\w/g,l=>l.toUpperCase())} value={formEval[campo]}
                     onChange={v=>setFormEval(f=>({...f,[campo]:v}))}
-                    options={[{value:"No",label:"No"},{value:"Sí",label:"Sí"},{value:"Posible",label:"Posible"}]}/>
+                    options={[{value:"No",label:"No"},{value:"Sí",label:"Sí"}]}/>
                 ))}
+                <Select label="Claustrofobia" value={formEval.claustrofobia}
+                  onChange={v=>setFormEval(f=>({...f,claustrofobia:v}))}
+                  options={[{value:"No",label:"No"},{value:"Sí - controlada",label:"Sí - controlada"},{value:"Sí - contraindicado",label:"Sí - contraindicado"}]}/>
               </div>
 
               {/* Parámetros cámara */}
@@ -1478,8 +1481,9 @@ function HistoriasClinicas({perfil}) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
                 <Input label="Presión indicada (ATA)" type="number" value={formEval.presion_indicada}
                   onChange={v=>setFormEval(f=>({...f,presion_indicada:v}))}/>
-                <Input label="Duración (min)" type="number" value={formEval.duracion_minutos}
-                  onChange={v=>setFormEval(f=>({...f,duracion_minutos:v}))}/>
+                <Select label="Duración (min)" value={String(formEval.duracion_minutos)}
+                  onChange={v=>setFormEval(f=>({...f,duracion_minutos:v}))}
+                  options={[{value:"60",label:"60 min"},{value:"90",label:"90 min"},{value:"120",label:"120 min"}]}/>
               </div>
               <div style={{marginBottom:14}}>
                 <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Incidencias</label>
