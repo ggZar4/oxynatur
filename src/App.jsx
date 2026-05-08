@@ -93,27 +93,25 @@ function getRolFlags(perfil) {
   const esAdmin      = rol === "admin_general";
   const esMedico     = rol === "medico";
   const esEnfermero  = rol === "enfermero";
-  const esMedicoEsp  = esMedico && esEspecialista;   // consultor remoto cross-sede
-  const esMedicoSede = esMedico && !esEspecialista;  // médico físico en una sede
+  const esATC        = rol === "atc";
+  const esMedicoEsp  = esMedico && esEspecialista;
+  const esMedicoSede = esMedico && !esEspecialista;
 
   return {
     // ── Identidad ──
-    esAdmin,
-    esMedico,
-    esEnfermero,
-    esMedicoEsp,
-    esMedicoSede,
+    esAdmin, esMedico, esEnfermero, esATC, esMedicoEsp, esMedicoSede,
 
     // ── Acceso a módulos ──
-    puedeVerDashboard:  esAdmin || esMedico,
-    puedeVerVentas:     esAdmin || esEnfermero,  // enfermero registra ventas en mostrador
-    puedeVerFinanzas:   esAdmin,
-    puedeVerSedes:      esAdmin,
-    puedeVerUsuarios:   esAdmin,
-    puedeVerAlertas:    esAdmin || esMedico,
+    puedeVerDashboard:    esAdmin || esMedico,
+    puedeVerVentas:       esAdmin || esEnfermero,
+    puedeVerFinanzas:     esAdmin,
+    puedeVerSedes:        esAdmin,
+    puedeVerUsuarios:     esAdmin,
+    puedeVerAlertas:      esAdmin || esMedico,
+    puedeVerProspectos:   esAdmin || esATC,
 
     // ── Restricciones dentro de Ventas ──
-    ventasSoloSuSede:   esEnfermero,  // enfermero solo ve/registra ventas de su sede
+    ventasSoloSuSede:     esEnfermero,
 
     // ── Acceso a pacientes ──
     puedeCrearPaciente:      esAdmin || esMedico || esEnfermero,
@@ -130,10 +128,12 @@ function getRolFlags(perfil) {
             : esMedicoEsp  ? "Médico Especialista"
             : esMedicoSede ? "Médico"
             : esEnfermero  ? "Enfermero"
+            : esATC        ? "ATC"
             : "Usuario",
 
     vistaDefault: esAdmin  ? "dashboard"
                 : esMedico ? "alertas"
+                : esATC    ? "prospectos"
                 : "agenda",
   };
 }
@@ -257,6 +257,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
     { id:"finanzas",  icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v2m0 8v2m-3-5c0 1.1 1.34 2 3 2s3-.9 3-2-1.34-2-3-2-3-.9-3-2 1.34-2 3-2 3 .9 3 2"/></svg>), label:"Finanzas",          visible: f.puedeVerFinanzas },
     { id:"sedes",     icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>), label:"Sedes",             visible: f.puedeVerSedes },
     { id:"usuarios",  icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.87"/></svg>), label:"Usuarios",          visible: f.puedeVerUsuarios },
+    { id:"prospectos", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/><line x1="19" y1="8" x2="23" y2="8"/><line x1="21" y1="6" x2="21" y2="10"/></svg>), label:"Prospectos", visible: f.puedeVerProspectos },
     { id:"agenda",    icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>), label:"Agenda",            visible: true },
   ].filter(item => item.visible);
 
@@ -1895,6 +1896,7 @@ function Usuarios({perfil:adminPerfil}) {
     if(u.rol === "medico" && u.es_especialista) return "Médico Especialista";
     if(u.rol === "medico") return "Médico";
     if(u.rol === "admin_general") return "Admin General";
+    if(u.rol === "atc") return "ATC";
     if(u.rol === "enfermero") return "Enfermero";
     return u.rol;
   };
@@ -1945,7 +1947,7 @@ function Usuarios({perfil:adminPerfil}) {
             <Input label="Email" value={form.email} onChange={v=>setF("email",v)} type="email" required/>
             <Input label="Contraseña temporal" value={form.password} onChange={v=>setF("password",v)} type="password" required/>
             <Select label="Rol" value={form.rol} onChange={v=>setF("rol",v)} required
-              options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
+              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"},{value:"atc",label:"ATC"}]}/>
             {/* Si es médico, mostrar opción especialista */}
             {form.rol === "medico" && (
               <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface2)",borderRadius:10,border:"1px solid #2A3550"}}>
@@ -1979,7 +1981,7 @@ function Usuarios({perfil:adminPerfil}) {
             </div>
             <Input label="Nombre completo" value={formEdit.nombre} onChange={v=>setFormEdit(f=>({...f,nombre:v}))} required/>
             <Select label="Rol" value={formEdit.rol} onChange={v=>setFormEdit(f=>({...f,rol:v}))}
-              options={[{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"}]}/>
+              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"},{value:"atc",label:"ATC"}]}/>
             {formEdit.rol==="medico" && (
               <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface2)",borderRadius:10,border:"1px solid #2A3550"}}>
                 <input type="checkbox" checked={formEdit.es_especialista}
@@ -3777,6 +3779,314 @@ function Alertas({perfil}) {
 }
 
 // ── APP PRINCIPAL ─────────────────────────────────────────────
+
+// ── PROSPECTOS ────────────────────────────────────────────────
+function Prospectos({perfil}) {
+  const f = getRolFlags(perfil);
+  const CANALES = ["whatsapp","instagram","facebook","referido","google","tiktok","otro"];
+  const ESTADOS = ["nuevo","contactado","evaluacion_agendada","convertido","perdido"];
+  const ESTADO_LABEL = {
+    nuevo:"Nuevo", contactado:"Contactado",
+    evaluacion_agendada:"Eval. Agendada", convertido:"Convertido", perdido:"Perdido"
+  };
+  const ESTADO_COLOR = {
+    nuevo:"#7C6AF7", contactado:"#00A896",
+    evaluacion_agendada:"#F59E0B", convertido:"#10B981", perdido:"#F87171"
+  };
+  const CANAL_LABEL = {
+    whatsapp:"WhatsApp", instagram:"Instagram", facebook:"Facebook",
+    referido:"Referido", google:"Google", tiktok:"TikTok", otro:"Otro"
+  };
+
+  const [prospectos, setProspectos] = useState([]);
+  const [sedes, setSedes]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [modal, setModal]           = useState(false);
+  const [modalVer, setModalVer]     = useState(null);
+  const [saving, setSaving]         = useState(false);
+  const [err, setErr]               = useState({});
+
+  const formInicial = {
+    nombre:"", telefono:"", email:"", canal:"whatsapp",
+    sede_id:"", motivo:"", notas:"", estado:"nuevo"
+  };
+  const [form, setForm] = useState(formInicial);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: p }, { data: s }] = await Promise.all([
+      safeQuery(() => supabase.from("prospectos")
+        .select("*, sedes(nombre)")
+        .order("created_at", {ascending:false}), "Prospectos:load"),
+      safeQuery(() => supabase.from("sedes").select("id,nombre"), "Prospectos:sedes"),
+    ]);
+    setProspectos(p || []);
+    setSedes(s || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const guardar = async () => {
+    const e = {};
+    if(!form.nombre.trim())    e.nombre    = "Requerido";
+    if(!form.telefono.trim())  e.telefono  = "Requerido";
+    if(!form.canal)            e.canal     = "Requerido";
+    if(Object.keys(e).length){ setErr(e); return; }
+    setSaving(true);
+    const { error } = await safeQuery(() =>
+      supabase.from("prospectos").insert({
+        nombre: form.nombre.trim(),
+        telefono: form.telefono.trim(),
+        email: form.email.trim() || null,
+        canal: form.canal,
+        sede_id: form.sede_id || null,
+        motivo: form.motivo.trim() || null,
+        notas: form.notas.trim() || null,
+        estado: form.estado,
+        fecha_ultimo_contacto: new Date().toISOString(),
+      }), "Prospectos:insert"
+    );
+    setSaving(false);
+    if(error){ setErr({general:"Error al guardar"}); return; }
+    setModal(false);
+    setForm(formInicial);
+    setErr({});
+    load();
+  };
+
+  const cambiarEstado = async (id, nuevoEstado) => {
+    await safeQuery(() =>
+      supabase.from("prospectos").update({
+        estado: nuevoEstado,
+        fecha_ultimo_contacto: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", id), "Prospectos:update"
+    );
+    load();
+    if(modalVer?.id === id) setModalVer(p => ({...p, estado: nuevoEstado}));
+  };
+
+  const prospectosFiltrados = filtroEstado === "todos"
+    ? prospectos
+    : prospectos.filter(p => p.estado === filtroEstado);
+
+  // KPIs
+  const kpis = [
+    { label:"Total",        val: prospectos.length,                                          color:"#7C6AF7" },
+    { label:"Nuevos",       val: prospectos.filter(p=>p.estado==="nuevo").length,             color:"#00A896" },
+    { label:"En seguimiento", val: prospectos.filter(p=>["contactado","evaluacion_agendada"].includes(p.estado)).length, color:"#F59E0B" },
+    { label:"Convertidos",  val: prospectos.filter(p=>p.estado==="convertido").length,        color:"#10B981" },
+  ];
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",marginBottom:4}}>Prospectos</h1>
+          <p style={{color:"var(--text3)",fontSize:13}}>Gestión de leads y seguimiento comercial</p>
+        </div>
+        <Btn onClick={()=>{ setForm(formInicial); setErr({}); setModal(true); }}>+ Nuevo prospecto</Btn>
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+        {kpis.map((k,i)=>(
+          <Card key={i} style={{minHeight:80,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+            <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>{k.label}</div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:700,color:k.color,marginTop:6}}>
+              {k.val === 0 ? <span style={{color:"var(--border2)"}}>—</span> : k.val}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filtros de estado */}
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+        {[{id:"todos",label:"Todos"},...ESTADOS.map(e=>({id:e,label:ESTADO_LABEL[e]}))].map(e=>(
+          <button key={e.id} onClick={()=>setFiltroEstado(e.id)}
+            style={{padding:"5px 14px",borderRadius:20,border:"0.5px solid",fontSize:12,fontWeight:600,cursor:"pointer",
+              borderColor: filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"#00A896") : "var(--border)",
+              background:  filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"#00A896")+"15" : "none",
+              color:       filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"#00A896") : "var(--text3)"}}>
+            {e.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      {loading ? <div style={{textAlign:"center",padding:40,color:"var(--text3)"}}><Spinner/></div> : (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          {prospectosFiltrados.length === 0 ? (
+            <div style={{padding:"50px 20px",textAlign:"center",color:"var(--text3)",fontSize:14}}>
+              No hay prospectos {filtroEstado !== "todos" ? `con estado "${ESTADO_LABEL[filtroEstado]}"` : "registrados aún"}
+            </div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"var(--surface2)"}}>
+                  {["Nombre","Teléfono","Canal","Sede","Motivo","Estado","Último contacto",""].map(h=>(
+                    <th key={h} style={{padding:"10px 14px",fontSize:11,fontWeight:600,color:"var(--text3)",textAlign:"left"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prospectosFiltrados.map(p=>(
+                  <tr key={p.id} style={{borderTop:"0.5px solid var(--border)"}}>
+                    <td style={{padding:"11px 14px"}}>
+                      <div style={{fontWeight:600,color:"var(--text)",fontSize:13}}>{p.nombre}</div>
+                      {p.email && <div style={{fontSize:11,color:"var(--text3)"}}>{p.email}</div>}
+                    </td>
+                    <td style={{padding:"11px 14px",fontSize:13,color:"var(--text2)"}}>{p.telefono}</td>
+                    <td style={{padding:"11px 14px"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:"var(--text2)",background:"var(--surface2)",padding:"2px 8px",borderRadius:20,border:"0.5px solid var(--border)"}}>
+                        {CANAL_LABEL[p.canal]||p.canal}
+                      </span>
+                    </td>
+                    <td style={{padding:"11px 14px",fontSize:12,color:"var(--text3)"}}>{p.sedes?.nombre||"—"}</td>
+                    <td style={{padding:"11px 14px",fontSize:12,color:"var(--text2)",maxWidth:180}}>
+                      <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.motivo||"—"}</div>
+                    </td>
+                    <td style={{padding:"11px 14px"}}>
+                      <select value={p.estado} onChange={e=>cambiarEstado(p.id, e.target.value)}
+                        style={{background:ESTADO_COLOR[p.estado]+"15",border:`0.5px solid ${ESTADO_COLOR[p.estado]}`,
+                          color:ESTADO_COLOR[p.estado],borderRadius:20,padding:"3px 10px",fontSize:11,
+                          fontWeight:600,cursor:"pointer",fontFamily:"inherit",outline:"none"}}>
+                        {ESTADOS.map(e=>(
+                          <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={{padding:"11px 14px",fontSize:11,color:"var(--text3)"}}>
+                      {p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
+                    </td>
+                    <td style={{padding:"11px 14px"}}>
+                      <button onClick={()=>setModalVer(p)}
+                        style={{background:"none",border:"none",color:"#00A896",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
+
+      {/* Modal Nuevo Prospecto */}
+      {modal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:480,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Prospecto</div>
+              <button onClick={()=>setModal(false)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
+            </div>
+
+            <Input label="Nombre completo" value={form.nombre} onChange={v=>setForm(f=>({...f,nombre:v}))} required error={err.nombre}/>
+            <Input label="Teléfono" value={form.telefono} onChange={v=>setForm(f=>({...f,telefono:v}))} required error={err.telefono}/>
+            <Input label="Email (opcional)" value={form.email} onChange={v=>setForm(f=>({...f,email:v}))}/>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <Select label="Canal de origen" value={form.canal} onChange={v=>setForm(f=>({...f,canal:v}))} required
+                options={CANALES.map(c=>({value:c,label:CANAL_LABEL[c]}))}/>
+              <Select label="Sede de interés" value={form.sede_id} onChange={v=>setForm(f=>({...f,sede_id:v}))}
+                options={[{value:"",label:"Sin preferencia"},...sedes.map(s=>({value:s.id,label:s.nombre}))]}/>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Motivo de consulta</label>
+              <textarea value={form.motivo} onChange={e=>setForm(f=>({...f,motivo:e.target.value}))}
+                placeholder="Diagnóstico, condición, motivo por el que busca HBOT..."
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",
+                  outline:"none",resize:"vertical",minHeight:70,boxSizing:"border-box"}}/>
+            </div>
+
+            <div style={{marginBottom:18}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Notas internas</label>
+              <textarea value={form.notas} onChange={e=>setForm(f=>({...f,notas:e.target.value}))}
+                placeholder="Observaciones del primer contacto, disponibilidad, etc."
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",
+                  outline:"none",resize:"vertical",minHeight:60,boxSizing:"border-box"}}/>
+            </div>
+
+            {err.general && <div style={{color:"#F87171",fontSize:13,marginBottom:12}}>{err.general}</div>}
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setModal(false)}>Cancelar</Btn>
+              <Btn onClick={guardar} disabled={saving}>{saving?"Guardando...":"Registrar prospecto"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ver Prospecto */}
+      {modalVer && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:480,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>{modalVer.nombre}</div>
+              <button onClick={()=>setModalVer(null)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              {[
+                ["Teléfono", modalVer.telefono],
+                ["Email", modalVer.email||"—"],
+                ["Canal", CANAL_LABEL[modalVer.canal]||modalVer.canal],
+                ["Sede", modalVer.sedes?.nombre||"Sin preferencia"],
+                ["Estado", ESTADO_LABEL[modalVer.estado]],
+                ["Registrado", new Date(modalVer.created_at).toLocaleDateString("es-PE")],
+              ].map(([k,v])=>(
+                <div key={k} style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:3}}>{k}</div>
+                  <div style={{fontSize:13,color:"var(--text)",fontWeight:500}}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {modalVer.motivo && (
+              <div style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+                <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:3}}>Motivo de consulta</div>
+                <div style={{fontSize:13,color:"var(--text)"}}>{modalVer.motivo}</div>
+              </div>
+            )}
+            {modalVer.notas && (
+              <div style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px",marginBottom:16}}>
+                <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:3}}>Notas internas</div>
+                <div style={{fontSize:13,color:"var(--text)"}}>{modalVer.notas}</div>
+              </div>
+            )}
+
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color:"var(--text2)",fontWeight:600,marginBottom:8}}>Cambiar estado</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {ESTADOS.map(e=>(
+                  <button key={e} onClick={()=>cambiarEstado(modalVer.id, e)}
+                    style={{padding:"5px 12px",borderRadius:20,border:`0.5px solid ${ESTADO_COLOR[e]}`,
+                      background: modalVer.estado===e ? ESTADO_COLOR[e] : ESTADO_COLOR[e]+"15",
+                      color: modalVer.estado===e ? "#fff" : ESTADO_COLOR[e],
+                      fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    {ESTADO_LABEL[e]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [user,          setUser]          = useState(null);
   const [alertasNuevas, setAlertasNuevas] = useState(0);
@@ -3892,6 +4202,7 @@ export default function App() {
       case "usuarios":  return f.puedeVerUsuarios    ? <Usuarios perfil={perfil}/>    : null;
       case "sesiones":  return                         <Sesiones perfil={perfil}/>;
       case "alertas":   return f.puedeVerAlertas     ? <Alertas perfil={perfil}/>     : null;
+      case "prospectos": return f.puedeVerProspectos  ? <Prospectos perfil={perfil}/>  : null;
       case "agenda":    return                         <AgendaMedico perfil={perfil}/>;
       default:          return f.puedeVerDashboard   ? <DashboardAdmin/>              : <Pacientes perfil={perfil}/>;
     }
