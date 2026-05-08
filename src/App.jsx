@@ -3806,6 +3806,31 @@ function Prospectos({perfil}) {
   const [modalVer, setModalVer]     = useState(null);
   const [saving, setSaving]         = useState(false);
   const [err, setErr]               = useState({});
+  const [editFecha, setEditFecha]   = useState("");
+  const [savingFecha, setSavingFecha] = useState(false);
+
+  // Formatear fecha UTC → datetime-local (Lima UTC-5)
+  const toLocalInput = (iso) => {
+    if(!iso) return "";
+    const d = new Date(iso);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0,16);
+  };
+
+  const guardarFecha = async () => {
+    setSavingFecha(true);
+    const { error } = await safeQuery(() =>
+      supabase.from("prospectos").update({
+        fecha_cita: editFecha ? new Date(editFecha).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", modalVer.id), "Prospectos:updateFecha"
+    );
+    setSavingFecha(false);
+    if(!error){
+      setModalVer(p=>({...p, fecha_cita: editFecha ? new Date(editFecha).toISOString() : null}));
+      load();
+    }
+  };
 
   const formInicial = {
     nombre:"", telefono:"", email:"", canal:"whatsapp",
@@ -3963,12 +3988,12 @@ function Prospectos({perfil}) {
                     <td style={{padding:"11px 14px",fontSize:11,color:"var(--text3)"}}>
                       {p.estado === "evaluacion_agendada" && p.fecha_cita
                         ? <span style={{color:"#F59E0B",fontWeight:600}}>
-                            📅 {new Date(p.fecha_cita).toLocaleDateString("es-PE")} {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}
+                            📅 {new Date(p.fecha_cita).toLocaleDateString("es-PE",{timeZone:"America/Lima"})} {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})}
                           </span>
                         : p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
                     </td>
                     <td style={{padding:"11px 14px"}}>
-                      <button onClick={()=>setModalVer(p)}
+                      <button onClick={()=>{ setModalVer(p); setEditFecha(p.fecha_cita ? toLocalInput(p.fecha_cita) : ""); }}
                         style={{background:"none",border:"none",color:"#00A896",cursor:"pointer",fontSize:12,fontWeight:600}}>
                         Ver
                       </button>
@@ -4062,7 +4087,7 @@ function Prospectos({perfil}) {
                 ["Sede", modalVer.sedes?.nombre||"Sin preferencia"],
                 ["Estado", ESTADO_LABEL[modalVer.estado]],
                 ["Registrado", new Date(modalVer.created_at).toLocaleDateString("es-PE")],
-                ...(modalVer.fecha_cita ? [["Cita agendada", new Date(modalVer.fecha_cita).toLocaleDateString("es-PE") + " " + new Date(modalVer.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})]] : []),
+
               ].map(([k,v])=>(
                 <div key={k} style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px"}}>
                   <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:3}}>{k}</div>
@@ -4083,6 +4108,23 @@ function Prospectos({perfil}) {
                 <div style={{fontSize:13,color:"var(--text)"}}>{modalVer.notas}</div>
               </div>
             )}
+
+            {/* Campo editable fecha/hora cita */}
+            <div style={{marginBottom:16,padding:"12px 14px",background:"#F59E0B10",border:"0.5px solid #F59E0B40",borderRadius:10}}>
+              <div style={{fontSize:12,color:"#F59E0B",fontWeight:600,marginBottom:8}}>📅 Fecha y hora de evaluación</div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input type="datetime-local" value={editFecha}
+                  onChange={e=>setEditFecha(e.target.value)}
+                  style={{flex:1,background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,
+                    color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                <Btn onClick={guardarFecha} disabled={savingFecha} style={{padding:"8px 14px",fontSize:12}}>
+                  {savingFecha ? "..." : "Guardar"}
+                </Btn>
+              </div>
+              {editFecha && <div style={{fontSize:11,color:"#F59E0B",marginTop:6}}>
+                {new Date(editFecha).toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})} a las {new Date(editFecha).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}
+              </div>}
+            </div>
 
             <div style={{marginBottom:16}}>
               <div style={{fontSize:12,color:"var(--text2)",fontWeight:600,marginBottom:8}}>Cambiar estado</div>
