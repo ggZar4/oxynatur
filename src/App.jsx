@@ -4001,6 +4001,9 @@ function Prospectos({perfil}) {
                 options={[{value:"",label:"Sin preferencia"},...sedes.map(s=>({value:s.id,label:s.nombre}))]}/>
             </div>
 
+            <Select label="Estado inicial" value={form.estado} onChange={v=>setForm(f=>({...f,estado:v}))}
+              options={ESTADOS.map(e=>({value:e,label:ESTADO_LABEL[e]}))}/>
+
             <div style={{marginBottom:14}}>
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Motivo de consulta</label>
               <textarea value={form.motivo} onChange={e=>setForm(f=>({...f,motivo:e.target.value}))}
