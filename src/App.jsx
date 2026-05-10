@@ -1013,8 +1013,95 @@ function HistoriasClinicas({perfil}) {
   const [formHC, setFormHC]       = useState({});
   const [savingHC, setSavingHC]   = useState(false);
 
+  // Firma inline
+  const [firmaModal, setFirmaModal] = useState(null); // eval que se está firmando
+  const [firmaTexto, setFirmaTexto] = useState("");
+  const [savingFirma, setSavingFirma] = useState(false);
+
   const dolorColor = (n) => parseInt(n)>=7?"#F87171":parseInt(n)>=4?"#F59E0B":"#10B981";
   const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"#10B981":e==="Regular"?"#F59E0B":"#F87171";
+
+  // ── Export PDF de HC ──
+  const exportarPDF = async () => {
+    // Cargar jsPDF dinámicamente
+    await new Promise((res,rej)=>{
+      if(window.jspdf) return res();
+      const s = document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+    const { jsPDF } = window.jspdf;
+    // Normalizar caracteres especiales para jsPDF (no soporta UTF-8 nativo)
+    const norm = (str) => (str||"")
+      .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
+      .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
+      .replace(/ñ/g,"n").replace(/Ñ/g,"N").replace(/ü/g,"u").replace(/Ü/g,"U")
+      .replace(/[^ -]/g,"?");
+    const doc = new jsPDF();
+    const pac = pacSelec.pacientes;
+    const hc  = hcMaestra;
+    let y = 20;
+    const nl = (h=8) => { y+=h; if(y>270){doc.addPage();y=20;} };
+    const txt = (text,x,size=11,bold=false,color=[30,30,30]) => {
+      doc.setFontSize(size);
+      doc.setFont("helvetica", bold?"bold":"normal");
+      doc.setTextColor(...color);
+      doc.text(String(text||""),x,y);
+    };
+    const line = (x1,x2) => { doc.setDrawColor(200,200,200); doc.line(x1,y,x2,y); nl(6); };
+
+    // Header
+    doc.setFillColor(0,168,150);
+    doc.rect(0,0,210,18,"F");
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(16);
+    doc.setTextColor(255,255,255);
+    doc.text("OxyNatur - Historia Clinica",14,12);
+    y=28;
+
+    // Datos paciente
+    txt(`${norm(pac?.nombres)} ${norm(pac?.apellidos)}`,14,14,true,[0,100,90]); nl(7);
+    txt(`DNI: ${pac?.dni||"-"}  |  Sede: ${norm(pacSelec.sedes?.nombre||"-")}  |  Sesiones: ${pac?.sesiones_realizadas||0}/${pac?.total_sesiones_prescritas||0}`,14,10); nl(6);
+    txt(`Apto HBOT: ${hc?.apto_hiperbarica!==false?"SI":"NO"}  |  Fecha emision: ${new Date().toLocaleDateString("es-PE")}`,14,10); nl(4);
+    line(14,196);
+
+    // HC Maestra
+    txt("HISTORIA CLINICA MAESTRA",14,12,true,[0,100,90]); nl(7);
+    const campos = [
+      ["Diagnostico principal",hc?.diagnostico_principal],
+      ["Antecedentes personales",hc?.antecedentes_personales],
+      ["Antecedentes familiares",hc?.antecedentes_familiares],
+      ["Alergias",hc?.alergias],
+      ["Medicamentos habituales",hc?.medicamentos_habituales],
+      ["Contraindicaciones",hc?.contraindicaciones],
+    ];
+    campos.forEach(([label,val])=>{
+      if(!val) return;
+      txt(norm(label)+":",14,10,true); nl(5);
+      const lines = doc.splitTextToSize(norm(val),175);
+      lines.forEach(l=>{ txt(l,18,10); nl(5); });
+      nl(2);
+    });
+    line(14,196);
+
+    // Evaluaciones
+    txt("EVALUACIONES POR SESION",14,12,true,[0,100,90]); nl(7);
+    evals.slice(0,20).forEach((ev,i)=>{
+      if(y>240){doc.addPage();y=20;}
+      doc.setFillColor(248,250,252);
+      doc.rect(14,y-4,182,22,"F");
+      txt(`Sesion #${ev.numero_sesion} - ${ev.fecha} - ${norm(ev.sedes?.nombre||"")}`,16,10,true); nl(5);
+      txt(`PA: ${ev.presion_arterial||"-"}  FC: ${ev.frecuencia_cardiaca||"-"}  Sat: ${ev.saturacion_o2||"-"}%  Peso: ${ev.peso||"-"}kg`,16,9); nl(5);
+      txt(`Estado: ${norm(ev.estado_general||"-")}  Dolor: ${ev.nivel_dolor}/10  Duracion: ${ev.duracion_minutos}min  Presion: ${ev.presion_indicada}ATA`,16,9); nl(5);
+      if(ev.firma_medico){ txt(`Firmado por: ${norm(ev.firma_medico)}`,16,9,true); nl(5); }
+      if(ev.es_borrador){ txt("BORRADOR - sin firma medica",16,9,false,[220,100,0]); nl(5); }
+      nl(4);
+    });
+
+    const filename = `HC_${pac?.apellidos}_${pac?.nombres}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+  };
 
   // Cargar lista de pacientes con HC
   const load = async () => {
@@ -1167,19 +1254,27 @@ function HistoriasClinicas({perfil}) {
     await abrirPaciente(pacSelec);
   };
 
-  // Médico firma una evaluación borrador
-  const firmarEval = async (ev) => {
-    const firma = prompt("Escriba su nombre completo como firma de supervisión:");
-    if(!firma?.trim()) return;
+  // Médico firma una evaluación borrador — inline sin prompt()
+  const abrirFirma = (ev) => {
+    setFirmaTexto(perfil?.nombre || "");
+    setFirmaModal(ev);
+  };
+
+  const confirmarFirma = async () => {
+    if(!firmaTexto.trim()) return;
+    setSavingFirma(true);
     await safeQuery(()=>
       supabase.from("evaluaciones_medicas").update({
-        evolucion:   ev.evolucion || "",
-        firma_medico: firma.trim(),
+        evolucion:    firmaModal.evolucion || "",
+        firma_medico: firmaTexto.trim(),
         es_borrador:  false,
         medico_id:    perfil.id,
-      }).eq("id", ev.id),
+      }).eq("id", firmaModal.id),
       "HC:firmar"
     );
+    setSavingFirma(false);
+    setFirmaModal(null);
+    setFirmaTexto("");
     await abrirPaciente(pacSelec);
   };
 
@@ -1206,11 +1301,16 @@ function HistoriasClinicas({perfil}) {
             </div>
           </div>
         </div>
-        {(f.esEnfermero || f.esMedico || f.esAdmin) && (
-          <Btn onClick={()=>{ setFormEval(evalInicial); setErrEval({}); setModalNuevaEval(true); }}>
-            + Nueva evaluación
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="ghost" onClick={exportarPDF} style={{fontSize:12}}>
+            ⬇ Exportar PDF
           </Btn>
-        )}
+          {(f.esEnfermero || f.esMedico || f.esAdmin) && (
+            <Btn onClick={()=>{ setFormEval(evalInicial); setErrEval({}); setModalNuevaEval(true); }}>
+              + Nueva evaluación
+            </Btn>
+          )}
+        </div>
       </div>
 
       {/* HC MAESTRA */}
@@ -1246,7 +1346,7 @@ function HistoriasClinicas({perfil}) {
                 <div key={key} style={{gridColumn:["diagnostico_principal","contraindicaciones"].includes(key)?"1/-1":undefined}}>
                   <label style={{fontSize:11,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</label>
                   <textarea value={formHC[key]||""} onChange={e=>setFormHC(f=>({...f,[key]:e.target.value}))}
-                    rows={2} style={{width:"100%",background:"var(--surface)",border:"1px solid #2A3550",borderRadius:8,color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                    rows={2} style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                 </div>
               ))}
             </div>
@@ -1401,7 +1501,7 @@ function HistoriasClinicas({perfil}) {
                             )}
                           </div>
                           {(f.esMedico||f.esAdmin) && ev.es_borrador && (
-                            <button onClick={()=>setModalEval(ev)}
+                            <button onClick={()=>abrirFirma(ev)}
                               style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,flexShrink:0}}>
                               ✍ Firmar
                             </button>
@@ -1692,6 +1792,36 @@ function HistoriasClinicas({perfil}) {
             </div>
           ))
       }
+
+      {/* Modal firma inline */}
+      {firmaModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>
+              Firmar evaluación — Sesión #{firmaModal.numero_sesion}
+            </div>
+            <div style={{fontSize:12,color:"var(--text3)",marginBottom:16}}>
+              {firmaModal.fecha} · {firmaModal.sedes?.nombre}
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
+                Nombre completo (firma de supervisión)
+              </label>
+              <input value={firmaTexto} onChange={e=>setFirmaTexto(e.target.value)}
+                placeholder="Dr. Nombre Apellido"
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
+              <Btn onClick={confirmarFirma} disabled={savingFirma||!firmaTexto.trim()}
+                style={{background:"#7C6AF7"}}>
+                {savingFirma?"Firmando...":"✍ Confirmar firma"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
