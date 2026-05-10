@@ -1889,49 +1889,202 @@ function Sedes() {
 
 // ── FINANZAS ──────────────────────────────────────────────────
 function Finanzas() {
-  const { data: ingresosData, loading } = useSupabaseQuery(
-    () => supabase.from("vista_ingresos_mensual").select("*"),
-    [],
-    "Finanzas:vista_ingresos_mensual"
-  );
-  const ingresos = ingresosData || [];
-  const totalIngresos = ingresos.reduce((a,r)=>a+Number(r.ingresos||0),0);
-  const totalEgresos  = ingresos.reduce((a,r)=>a+Number(r.egresos||0),0);
+  const hoy = fechaHoyLima();
+  const mesActual = hoy.slice(0,7);
+  const [mesSelec, setMesSelec] = useState(mesActual);
+  const [ventas, setVentas]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [sedes, setSedes]       = useState([]);
+
+  const load = async () => {
+    setLoading(true);
+    const mesInicio = mesSelec + "-01";
+    const mesFin    = new Date(mesSelec + "-01T12:00:00");
+    mesFin.setMonth(mesFin.getMonth()+1);
+    const mesFInStr = mesFin.toISOString().slice(0,10);
+
+    const [{ data: v }, { data: s }] = await Promise.all([
+      safeQuery(()=> supabase.from("compras_paciente")
+        .select("id,fecha_compra,monto_pagado,precio_sugerido,metodo_pago,estado,sede_id,sedes(nombre,color),paquetes(codigo,nombre),pacientes(nombres,apellidos)")
+        .neq("estado","cancelado")
+        .gte("fecha_compra", mesInicio)
+        .lt("fecha_compra", mesFInStr)
+        .order("fecha_compra",{ascending:false}), "Finanzas:ventas"),
+      safeQuery(()=> supabase.from("sedes").select("id,nombre"), "Finanzas:sedes"),
+    ]);
+    setVentas(v||[]);
+    setSedes(s||[]);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[mesSelec]); // eslint-disable-line
+
+  // KPIs globales del mes
+  const totalIngresos  = ventas.reduce((a,v)=>a+Number(v.monto_pagado||0),0);
+  const totalSugerido  = ventas.reduce((a,v)=>a+Number(v.precio_sugerido||0),0);
+  const totalDescuento = Math.max(totalSugerido - totalIngresos, 0);
+  const ticketPromedio = ventas.length ? totalIngresos/ventas.length : 0;
+  const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  // KPIs por sede
+  const porSede = sedes.map(s=>{
+    const vs = ventas.filter(v=>v.sede_id===s.id);
+    return {
+      sede: s.nombre,
+      ingresos: vs.reduce((a,v)=>a+Number(v.monto_pagado||0),0),
+      ventas: vs.length,
+      color: getColor(s.nombre),
+    };
+  }).filter(s=>s.ventas>0);
+
+  // Desglose por método de pago
+  const porMetodo = ["efectivo","transferencia","tarjeta","yape","plin"].map(m=>{
+    const vs = ventas.filter(v=>v.metodo_pago===m);
+    const total = vs.reduce((a,v)=>a+Number(v.monto_pagado||0),0);
+    return {metodo:m, total, count:vs.length};
+  }).filter(m=>m.count>0);
+
+  // Meses disponibles para el selector (últimos 12)
+  const meses = Array.from({length:12},(_,i)=>{
+    const d = new Date(hoy+"T12:00:00");
+    d.setMonth(d.getMonth()-i);
+    return d.toISOString().slice(0,7);
+  });
 
   return (
     <div>
-      <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",marginBottom:8}}>Finanzas</h1>
-      <p style={{color:"var(--text3)",fontSize:14,marginBottom:24}}>Resumen financiero por sede y mes</p>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)"}}>Finanzas</h1>
+          <p style={{color:"var(--text3)",fontSize:13,marginTop:3}}>Resumen financiero por sede y método de pago</p>
+        </div>
+        {/* Selector de mes */}
+        <select value={mesSelec} onChange={e=>setMesSelec(e.target.value)}
+          style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,
+            color:"var(--text)",padding:"8px 14px",fontSize:14,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>
+          {meses.map(m=>(
+            <option key={m} value={m}>
+              {new Date(m+"-01T12:00:00").toLocaleDateString("es-PE",{month:"long",year:"numeric"})}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? <div style={{color:"var(--text3)",padding:20}}>Cargando...</div> : <>
+
+      {/* KPIs globales */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
         {[
-          {label:"Ingresos totales", val:`S/ ${totalIngresos.toLocaleString()}`, color:"#10B981"},
-          {label:"Egresos totales",  val:`S/ ${totalEgresos.toLocaleString()}`,  color:"#F87171"},
-          {label:"Utilidad neta",    val:`S/ ${(totalIngresos-totalEgresos).toLocaleString()}`, color:"#00A896"},
+          {label:"Ingresos del mes",  val:fmtSol(totalIngresos),  color:"#10B981", sub:`${ventas.length} ventas`},
+          {label:"Descuentos",        val:fmtSol(totalDescuento), color:"#F59E0B", sub:"vs precio sugerido"},
+          {label:"Ticket promedio",   val:fmtSol(ticketPromedio), color:"#7C6AF7", sub:"por venta"},
+          {label:"Precio sugerido",   val:fmtSol(totalSugerido),  color:"#00A896", sub:"total sin descuento"},
         ].map((k,i)=>(
-          <Card key={i}>
-            <div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>{k.label}</div>
-            <div style={{fontSize:26,fontWeight:700,fontFamily:"Syne,sans-serif",color:k.color}}>{k.val === 0 ? <span style={{color:"var(--border2)"}}>—</span> : k.val}</div>
+          <Card key={i} style={{borderTop:`3px solid ${k.color}`,paddingTop:16,minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+            <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>{k.label}</div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:k.color,marginTop:6}}>
+              {totalIngresos===0 ? <span style={{color:"var(--border2)"}}>—</span> : k.val}
+            </div>
+            <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{k.sub}</div>
           </Card>
         ))}
       </div>
-      {loading ? <div style={{color:"var(--text3)"}}>Cargando...</div>
-        : ingresos.length===0
-          ? <Card style={{textAlign:"center",padding:"40px"}}><div style={{color:"var(--text3)"}}>Sin movimientos registrados aún</div></Card>
-          : <Card>
-              <div style={{fontSize:13,fontWeight:700,color:"var(--text3)",marginBottom:16,letterSpacing:"0.06em",textTransform:"uppercase"}}>Detalle por sede y mes</div>
-              {ingresos.map((r,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",padding:"10px 0",borderTop:"1px solid #1A2035",alignItems:"center"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7}}>
-                    <span style={{width:7,height:7,borderRadius:"50%",background:getColor(r.sede),display:"inline-block"}}/>
-                    <span style={{fontSize:13,color:"var(--text)"}}>{r.sede}</span>
+
+      {ventas.length === 0
+        ? <Card style={{textAlign:"center",padding:"40px",color:"var(--text3)"}}>Sin ventas registradas en este período</Card>
+        : <>
+
+        {/* KPIs por sede */}
+        {porSede.length > 0 && (
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${porSede.length},1fr)`,gap:12,marginBottom:20}}>
+            {porSede.map((s,i)=>(
+              <Card key={i} style={{borderLeft:`3px solid ${s.color}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div>
+                    <div style={{fontSize:12,color:"var(--text2)",fontWeight:600,marginBottom:6}}>{s.sede}</div>
+                    <div style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:s.color}}>{fmtSol(s.ingresos)}</div>
+                    <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{s.ventas} ventas · {Math.round(s.ingresos/totalIngresos*100)}% del total</div>
                   </div>
-                  <div style={{fontSize:13,color:"var(--text2)"}}>{new Date(r.mes).toLocaleDateString("es-PE",{month:"long",year:"numeric"})}</div>
-                  <div style={{fontSize:13,color:"var(--text2)"}}>{r.metodo_pago||"—"}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:"#10B981"}}>S/ {Number(r.ingresos||0).toLocaleString()}</div>
+                  <div style={{fontSize:28,opacity:0.15}}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                      <path d="M12 6v2m0 8v2m-3-5c0 1.1 1.34 2 3 2s3-.9 3-2-1.34-2-3-2-3-.9-3-2 1.34-2 3-2 3 .9 3 2"/>
+                    </svg>
+                  </div>
                 </div>
-              ))}
-            </Card>
-      }
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Desglose método de pago + tabla */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:16,marginBottom:0}}>
+
+          {/* Métodos de pago */}
+          <Card>
+            <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:14}}>Por método de pago</div>
+            {porMetodo.map((m,i)=>(
+              <div key={i} style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:13,color:"var(--text)",textTransform:"capitalize",fontWeight:500}}>{m.metodo}</span>
+                  <span style={{fontSize:13,color:"var(--text2)"}}>{fmtSol(m.total)}</span>
+                </div>
+                <div style={{background:"var(--surface2)",borderRadius:4,height:6,overflow:"hidden"}}>
+                  <div style={{background:"#00A896",height:6,borderRadius:4,width:`${Math.round(m.total/totalIngresos*100)}%`,transition:"width 0.5s"}}/>
+                </div>
+                <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{m.count} ventas · {Math.round(m.total/totalIngresos*100)}%</div>
+              </div>
+            ))}
+          </Card>
+
+          {/* Tabla de ventas del mes */}
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 16px",borderBottom:"0.5px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+              Detalle de ventas — {ventas.length} registros
+            </div>
+            <div style={{maxHeight:320,overflowY:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:"var(--surface2)"}}>
+                    {["Fecha","Paciente","Paquete","Método","Sede","Monto"].map(h=>(
+                      <th key={h} style={{padding:"8px 12px",fontSize:11,fontWeight:600,color:"var(--text3)",textAlign:"left"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ventas.map(v=>(
+                    <tr key={v.id} style={{borderTop:"0.5px solid var(--border)"}}>
+                      <td style={{padding:"9px 12px",fontSize:12,color:"var(--text3)"}}>{v.fecha_compra}</td>
+                      <td style={{padding:"9px 12px",fontSize:12,color:"var(--text)",fontWeight:500}}>
+                        {v.pacientes ? `${v.pacientes.apellidos} ${v.pacientes.nombres}`.slice(0,22) : "—"}
+                      </td>
+                      <td style={{padding:"9px 12px",fontSize:12,color:"var(--text2)"}}>{v.paquetes?.codigo||"—"}</td>
+                      <td style={{padding:"9px 12px",fontSize:11,color:"var(--text2)",textTransform:"capitalize"}}>{v.metodo_pago||"—"}</td>
+                      <td style={{padding:"9px 12px",fontSize:11}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span style={{width:6,height:6,borderRadius:"50%",background:getColor(v.sedes?.nombre||""),display:"inline-block"}}/>
+                          <span style={{color:"var(--text3)"}}>{(v.sedes?.nombre||"").split(" ")[0]}</span>
+                        </span>
+                      </td>
+                      <td style={{padding:"9px 12px",fontSize:13,fontWeight:700,
+                        color: Number(v.monto_pagado) < Number(v.precio_sugerido) ? "#F59E0B" : "#10B981"}}>
+                        {fmtSol(v.monto_pagado)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Totales */}
+            <div style={{padding:"10px 16px",borderTop:"0.5px solid var(--border)",background:"var(--surface2)",display:"flex",justifyContent:"flex-end",gap:24}}>
+              <span style={{fontSize:12,color:"var(--text3)"}}>Total cobrado:</span>
+              <span style={{fontSize:14,fontWeight:700,color:"#10B981",fontFamily:"Syne,sans-serif"}}>{fmtSol(totalIngresos)}</span>
+            </div>
+          </Card>
+        </div>
+      </>}
+      </>}
     </div>
   );
 }
