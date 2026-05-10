@@ -336,6 +336,7 @@ function DashboardMedico({perfil}) {
   const confirmarFirmaDash = async () => {
     if(!firmaTexto.trim()) return;
     setSavingFirma(true);
+    const idxActual = firmasPend.findIndex(e=>e.id===firmaModal.id);
     await safeQuery(()=>
       supabase.from("evaluaciones_medicas").update({
         evolucion:    firmaModal.evolucionEdit || "",
@@ -345,14 +346,26 @@ function DashboardMedico({perfil}) {
       }).eq("id", firmaModal.id), "DashMed:firmar"
     );
     setSavingFirma(false);
-    setFirmaModal(null);
+    // Ir al siguiente automáticamente
+    const nuevaLista = firmasPend.filter(e=>e.id!==firmaModal.id);
+    setFirmasPend(nuevaLista);
+    if(nuevaLista.length > 0 && idxActual < nuevaLista.length){
+      abrirFirmaDash(nuevaLista[idxActual]);
+    } else if(nuevaLista.length > 0){
+      abrirFirmaDash(nuevaLista[nuevaLista.length-1]);
+    } else {
+      setFirmaModal(null);
+    }
     // Refrescar firmas pendientes
     const { data } = await safeQuery(()=>
       supabase.from("evaluaciones_medicas")
-        .select("id,numero_sesion,fecha,hora,evolucion,pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))")
+        .select(`id,numero_sesion,fecha,hora,evolucion,incidencias,observaciones,
+          presion_arterial,frecuencia_cardiaca,saturacion_o2,temperatura,peso,nivel_dolor,estado_general,
+          presion_indicada,duracion_minutos,otitis,claustrofobia,embarazo,fiebre_activa,
+          pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))`)
         .eq("es_borrador", true)
-        .order("fecha",{ascending:false})
-        .order("hora",{ascending:false})
+        .order("fecha",{ascending:true})
+        .order("hora",{ascending:true})
         .limit(50), "DashMed:firmasPend"
     );
     setFirmasPend(data||[]);
@@ -374,10 +387,13 @@ function DashboardMedico({perfil}) {
         safeQuery(()=> supabase.from("vista_resumen_sedes").select("*"), "DashMed:resumen"),
         // Cola de firmas pendientes
         safeQuery(()=> supabase.from("evaluaciones_medicas")
-          .select("id,numero_sesion,fecha,hora,evolucion,pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))")
+          .select(`id,numero_sesion,fecha,hora,evolucion,incidencias,observaciones,
+            presion_arterial,frecuencia_cardiaca,saturacion_o2,temperatura,peso,nivel_dolor,estado_general,
+            presion_indicada,duracion_minutos,otitis,claustrofobia,embarazo,fiebre_activa,
+            pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))`)
           .eq("es_borrador", true)
-          .order("fecha",{ascending:false})
-          .order("hora",{ascending:false})
+          .order("fecha",{ascending:true})
+          .order("hora",{ascending:true})
           .limit(50), "DashMed:firmasPend"),
       ]);
       if(!mounted) return;
@@ -564,37 +580,123 @@ function DashboardMedico({perfil}) {
           ))}
         </div>
       </Card>
-      {/* Modal firma desde Dashboard */}
+      {/* Modal firma desde Dashboard — con vista completa de la evaluación */}
       {firmaModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:20}}>
-          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:440,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
-            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:2}}>
-              Firmar evaluación — Sesión #{firmaModal.numero_sesion}
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:580,width:"100%",
+            boxShadow:"0 20px 60px rgba(0,0,0,0.18)",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+            {/* Header */}
+            <div style={{padding:"16px 20px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>
+                  Revisar y firmar — Sesión #{firmaModal.numero_sesion}
+                </div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
+                  {firmaModal.pacientes?.nombres} {firmaModal.pacientes?.apellidos} · DNI {firmaModal.pacientes?.dni}
+                </div>
+                <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>
+                  {firmaModal.fecha} {firmaModal.hora?.slice(0,5)} · {firmaModal.sedes?.nombre} · {firmaModal.compras_paciente?.paquetes?.nombre}
+                </div>
+              </div>
+              <button onClick={()=>setFirmaModal(null)}
+                style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:20,padding:"0 4px"}}>×</button>
             </div>
-            <div style={{fontSize:12,color:"var(--text3)",marginBottom:16}}>
-              {firmaModal.pacientes?.nombres} {firmaModal.pacientes?.apellidos} · {firmaModal.fecha} · {firmaModal.sedes?.nombre}
+
+            {/* Contenido scrolleable */}
+            <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+
+              {/* Signos vitales */}
+              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Signos Vitales</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+                {[
+                  ["Presión arterial", firmaModal.presion_arterial],
+                  ["Frec. cardíaca",   firmaModal.frecuencia_cardiaca ? firmaModal.frecuencia_cardiaca+" bpm" : null],
+                  ["Saturación O₂",    firmaModal.saturacion_o2 ? firmaModal.saturacion_o2+"%" : null],
+                  ["Temperatura",      firmaModal.temperatura ? firmaModal.temperatura+"°C" : null],
+                  ["Peso",             firmaModal.peso ? firmaModal.peso+" kg" : null],
+                  ["Dolor",            firmaModal.nivel_dolor !== undefined ? firmaModal.nivel_dolor+"/10" : null],
+                ].map(([l,v])=>(
+                  <div key={l} style={{background:"var(--surface2)",borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:10,color:"var(--text3)",fontWeight:600,marginBottom:2}}>{l}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>{v||"—"}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Parámetros sesión */}
+              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Parámetros de sesión</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+                {[
+                  ["Estado general",   firmaModal.estado_general],
+                  ["Presión ATA",      firmaModal.presion_indicada ? firmaModal.presion_indicada+" ATA" : null],
+                  ["Duración",         firmaModal.duracion_minutos ? firmaModal.duracion_minutos+" min" : null],
+                  ["Otitis",           firmaModal.otitis],
+                  ["Claustrofobia",    firmaModal.claustrofobia],
+                  ["Fiebre",           firmaModal.fiebre_activa],
+                ].map(([l,v])=>(
+                  <div key={l} style={{background:"var(--surface2)",borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:10,color:"var(--text3)",fontWeight:600,marginBottom:2}}>{l}</div>
+                    <div style={{fontSize:13,fontWeight:600,color:
+                      ["Sí","Sí - contraindicado"].includes(v) ? "#F87171" :
+                      v==="Sí - controlada" ? "#F59E0B" : "var(--text)"
+                    }}>{v||"—"}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Incidencias y observaciones */}
+              {(firmaModal.incidencias || firmaModal.observaciones) && (
+                <div style={{marginBottom:16}}>
+                  {firmaModal.incidencias && firmaModal.incidencias !== "NINGUNO" && (
+                    <div style={{background:"#F8717110",border:"0.5px solid #F8717140",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+                      <div style={{fontSize:10,color:"#F87171",fontWeight:700,marginBottom:4}}>⚠ INCIDENCIAS</div>
+                      <div style={{fontSize:13,color:"var(--text)"}}>{firmaModal.incidencias}</div>
+                    </div>
+                  )}
+                  {firmaModal.observaciones && firmaModal.observaciones !== "NINGUNO" && (
+                    <div style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,marginBottom:4}}>OBSERVACIONES</div>
+                      <div style={{fontSize:13,color:"var(--text)"}}>{firmaModal.observaciones}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Evolución médica y firma */}
+              <div style={{borderTop:"0.5px solid var(--border)",paddingTop:14,marginTop:4}}>
+                <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Nota de evolución médica</div>
+                <textarea value={firmaModal.evolucionEdit||""} onChange={e=>setFirmaModal(m=>({...m,evolucionEdit:e.target.value}))}
+                  placeholder="Evolución del paciente, respuesta al tratamiento, observaciones clínicas..."
+                  rows={3}
+                  style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                    color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",
+                    resize:"vertical",boxSizing:"border-box",marginBottom:12}}/>
+                <input value={firmaTexto} onChange={e=>setFirmaTexto(e.target.value)}
+                  placeholder="Firma médica — Dr. Nombre Apellido"
+                  style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                    color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+              </div>
             </div>
-            <div style={{marginBottom:14}}>
-              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>Nota de evolución médica</label>
-              <textarea value={firmaModal.evolucionEdit||""} onChange={e=>setFirmaModal(m=>({...m,evolucionEdit:e.target.value}))}
-                placeholder="Evolución del paciente, respuesta al tratamiento, observaciones clínicas..."
-                rows={3}
-                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
-                  color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",
-                  resize:"vertical",boxSizing:"border-box"}}/>
-            </div>
-            <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>Firma médica</label>
-              <input value={firmaTexto} onChange={e=>setFirmaTexto(e.target.value)}
-                placeholder="Dr. Nombre Apellido"
-                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
-                  color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-            </div>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
-              <Btn onClick={confirmarFirmaDash} disabled={savingFirma||!firmaTexto.trim()} style={{background:"#7C6AF7"}}>
-                {savingFirma ? "Firmando..." : "✍ Confirmar firma"}
-              </Btn>
+
+            {/* Footer */}
+            <div style={{padding:"12px 20px",borderTop:"0.5px solid var(--border)",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:11,color:"var(--text3)"}}>
+                {firmasPend.findIndex(e=>e.id===firmaModal.id)+1} de {firmasPend.length} pendientes
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
+                {/* Siguiente sin firmar */}
+                {firmasPend.findIndex(e=>e.id===firmaModal.id) < firmasPend.length-1 && (
+                  <Btn variant="ghost" onClick={()=>{
+                    const idx = firmasPend.findIndex(e=>e.id===firmaModal.id);
+                    abrirFirmaDash(firmasPend[idx+1]);
+                  }}>Saltar →</Btn>
+                )}
+                <Btn onClick={confirmarFirmaDash} disabled={savingFirma||!firmaTexto.trim()} style={{background:"#7C6AF7"}}>
+                  {savingFirma ? "Firmando..." : "✍ Firmar y siguiente"}
+                </Btn>
+              </div>
             </div>
           </div>
         </div>
