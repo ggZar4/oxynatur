@@ -315,53 +315,100 @@ function DashboardAdmin({perfil}) {
 // ── DASHBOARD CLÍNICO — Dr. Raúl y médicos ───────────────────
 function DashboardMedico({perfil}) {
   const f = getRolFlags(perfil);
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = fechaHoyLima();
 
-  const [alertas,    setAlertas]    = useState([]);
-  const [sinProtocolo, setSinProtocolo] = useState([]);
+  const [alertas,      setAlertas]      = useState([]);
   const [sesionesHoy,  setSesionesHoy]  = useState([]);
-  const [resumen,    setResumen]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
+  const [resumen,      setResumen]      = useState([]);
+  const [firmasPend,   setFirmasPend]   = useState([]);
+  const [loading,      setLoading]      = useState(true);
+
+  // Estado para firma inline desde Dashboard
+  const [firmaModal,   setFirmaModal]   = useState(null);
+  const [firmaTexto,   setFirmaTexto]   = useState("");
+  const [savingFirma,  setSavingFirma]  = useState(false);
+
+  const abrirFirmaDash = (ev) => {
+    setFirmaTexto(perfil?.nombre || "");
+    setFirmaModal({...ev, evolucionEdit: ev.evolucion || ""});
+  };
+
+  const confirmarFirmaDash = async () => {
+    if(!firmaTexto.trim()) return;
+    setSavingFirma(true);
+    await safeQuery(()=>
+      supabase.from("evaluaciones_medicas").update({
+        evolucion:    firmaModal.evolucionEdit || "",
+        firma_medico: firmaTexto.trim(),
+        es_borrador:  false,
+        medico_id:    perfil.id,
+      }).eq("id", firmaModal.id), "DashMed:firmar"
+    );
+    setSavingFirma(false);
+    setFirmaModal(null);
+    // Refrescar firmas pendientes
+    const { data } = await safeQuery(()=>
+      supabase.from("evaluaciones_medicas")
+        .select("id,numero_sesion,fecha,hora,evolucion,pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))")
+        .eq("es_borrador", true)
+        .order("fecha",{ascending:false})
+        .order("hora",{ascending:false})
+        .limit(50), "DashMed:firmasPend"
+    );
+    setFirmasPend(data||[]);
+  };
 
   useEffect(()=>{
     let mounted = true;
     (async()=>{
       const [r1,r2,r3,r4] = await Promise.all([
-        // Alertas pendientes
-        safeQuery(()=> {
-          let q = supabase.from("alertas_clinicas")
-            .select("id,tipo,prioridad,mensaje,created_at,pacientes(nombres,apellidos),sedes(nombre)")
-            .neq("estado","resuelta")
-            .order("created_at",{ascending:false})
-            .limit(5);
-          return q;
-        }, "DashMed:alertas"),
-        // Pacientes sin protocolo (HC sin evolución médica firmada)
-        safeQuery(()=>
-          supabase.from("historias_clinicas")
-            .select("id,paciente_id,diagnostico_principal,pacientes(nombres,apellidos),sedes!sede_apertura_id(nombre)")
-            .eq("estado","activo")
-            .limit(10),
-          "DashMed:sinProtocolo"
-        ),
-        // Sesiones del día
+        safeQuery(()=> supabase.from("alertas_clinicas")
+          .select("id,tipo,prioridad,mensaje,created_at,pacientes(nombres,apellidos),sedes(nombre)")
+          .neq("estado","resuelta").order("created_at",{ascending:false}).limit(5),
+          "DashMed:alertas"),
         safeQuery(()=> {
           let q = supabase.from("vista_agenda_hoy")
             .select("*").eq("fecha", hoy).order("hora_inicio");
           return q;
         }, "DashMed:sesiones"),
-        // Resumen por sede
-        safeQuery(()=>
-          supabase.from("vista_resumen_sedes").select("*"),
-          "DashMed:resumen"
-        ),
+        safeQuery(()=> supabase.from("vista_resumen_sedes").select("*"), "DashMed:resumen"),
+        // Cola de firmas pendientes
+        safeQuery(()=> supabase.from("evaluaciones_medicas")
+          .select("id,numero_sesion,fecha,hora,evolucion,pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))")
+          .eq("es_borrador", true)
+          .order("fecha",{ascending:false})
+          .order("hora",{ascending:false})
+          .limit(50), "DashMed:firmasPend"),
       ]);
       if(!mounted) return;
       setAlertas(r1.data||[]);
-      setSinProtocolo(r2.data||[]);
-      setSesionesHoy(r3.data||[]);
-      setResumen(r4.data||[]);
+      setSesionesHoy(r2.data||[]);
+      setResumen(r3.data||[]);
+      setFirmasPend(r4.data||[]);
       setLoading(false);
+
+      // Alerta automática si hay borradores de más de 12 horas sin firmar
+      const borradores = r4.data||[];
+      const viejos = borradores.filter(e=>{
+        const fechaEval = new Date(e.fecha+"T"+(e.hora||"00:00:00"));
+        const horasTranscurridas = (Date.now() - fechaEval.getTime()) / (1000*60*60);
+        return horasTranscurridas > 12;
+      });
+      if(viejos.length > 0 && mounted){
+        // Crear alerta automática si no existe ya
+        await safeQuery(()=> supabase.from("alertas_clinicas").insert(
+          viejos.slice(0,3).map(e=>({
+            paciente_id:  e.pacientes?.id || null,
+            sede_id:      e.sedes?.id || null,
+            generada_por: perfil.id,
+            origen:       "sistema",
+            tipo:         "protocolo_pendiente",
+            prioridad:    "alta",
+            mensaje:      `Evaluación de sesión #${e.numero_sesion} (${e.fecha}) requiere firma médica hace más de 12 horas.`,
+            estado:       "nueva",
+          }))
+        ).select(), "DashMed:alertaAuto");
+      }
     })();
     return ()=>{ mounted=false; };
   },[]); // eslint-disable-line
@@ -390,10 +437,10 @@ function DashboardMedico({perfil}) {
       {/* KPIs clínicos */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
+          {label:"Firmas pendientes",  val:firmasPend.length,  color: firmasPend.length>0?"#F59E0B":"#10B981"},
           {label:"Alertas pendientes", val:alertas.length,    color: alertas.length>0?"#F87171":"#10B981"},
           {label:"Sesiones hoy",       val:sesionesHoy.length, color:"#00A896"},
           {label:"Completadas hoy",    val:sesCompletadas,    color:"#10B981"},
-          {label:"En curso",           val:sesEnCurso,        color:"#7C6AF7"},
         ].map((k,i)=>(
           <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>{k.label}</div>
@@ -402,18 +449,60 @@ function DashboardMedico({perfil}) {
         ))}
       </div>
 
+      {/* Cola de firmas pendientes */}
+      {firmasPend.length > 0 && (
+        <Card style={{padding:0,overflow:"hidden",marginBottom:16,border:"0.5px solid #F59E0B40"}}>
+          <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F59E0B08"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              ✍ Cola de firmas — {firmasPend.length} evaluacion{firmasPend.length>1?"es":""} pendiente{firmasPend.length>1?"s":""}
+            </div>
+            <span style={{fontSize:11,color:"var(--text3)"}}>Click para firmar</span>
+          </div>
+          <div style={{maxHeight:280,overflowY:"auto"}}>
+            {firmasPend.map((ev,i)=>(
+              <div key={ev.id} style={{
+                padding:"12px 18px",
+                borderBottom: i<firmasPend.length-1 ? "0.5px solid var(--border)" : "none",
+                display:"flex",alignItems:"center",gap:12,
+              }}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>
+                    {ev.pacientes?.nombres} {ev.pacientes?.apellidos}
+                  </div>
+                  <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>
+                    Sesión #{ev.numero_sesion} · {ev.fecha} {ev.hora?.slice(0,5)} · {ev.sedes?.nombre}
+                    {ev.compras_paciente?.paquetes?.nombre && ` · ${ev.compras_paciente.paquetes.nombre}`}
+                  </div>
+                  {ev.evolucion && (
+                    <div style={{fontSize:11,color:"var(--text2)",marginTop:3,fontStyle:"italic"}}>"{ev.evolucion.slice(0,80)}{ev.evolucion.length>80?"...":""}"</div>
+                  )}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <span style={{fontSize:10,background:"#F59E0B20",color:"#F59E0B",padding:"2px 8px",borderRadius:99,fontWeight:700}}>BORRADOR</span>
+                  <button onClick={()=>abrirFirmaDash(ev)}
+                    style={{background:"#7C6AF7",color:"white",border:"none",padding:"6px 14px",borderRadius:8,
+                      cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    ✍ Firmar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
 
         {/* Alertas pendientes */}
         <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontSize:12,fontWeight:700,color:"#F87171",letterSpacing:"0.06em",textTransform:"uppercase"}}>🔔 Alertas pendientes</div>
             <span style={{fontSize:12,color:"var(--text3)"}}>{alertas.length} sin resolver</span>
           </div>
           {alertas.length===0
             ? <div style={{padding:"24px",textAlign:"center",color:"var(--text3)",fontSize:13}}>✓ Sin alertas pendientes</div>
             : alertas.map(a=>(
-              <div key={a.id} style={{padding:"12px 18px",borderBottom:"1px solid #1A2035",display:"flex",gap:10,alignItems:"flex-start"}}>
+              <div key={a.id} style={{padding:"12px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
                 <span style={{fontSize:11,fontWeight:700,color:PRIORIDAD_COLOR[a.prioridad],background:`${PRIORIDAD_COLOR[a.prioridad]}15`,padding:"2px 8px",borderRadius:99,flexShrink:0,marginTop:1}}>{a.prioridad}</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:2}}>{a.pacientes?.nombres} {a.pacientes?.apellidos}</div>
@@ -427,14 +516,14 @@ function DashboardMedico({perfil}) {
 
         {/* Sesiones del día */}
         <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontSize:12,fontWeight:700,color:"#00A896",letterSpacing:"0.06em",textTransform:"uppercase"}}>⚡ Sesiones de hoy</div>
             <span style={{fontSize:12,color:"var(--text3)"}}>{sesCompletadas}/{sesionesHoy.length} completadas</span>
           </div>
           {sesionesHoy.length===0
             ? <div style={{padding:"24px",textAlign:"center",color:"var(--text3)",fontSize:13}}>Sin sesiones programadas para hoy</div>
             : sesionesHoy.map(s=>(
-              <div key={s.id} style={{padding:"10px 18px",borderBottom:"1px solid #1A2035",display:"flex",alignItems:"center",gap:12}}>
+              <div key={s.id} style={{padding:"10px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",alignItems:"center",gap:12}}>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#00A896",minWidth:44}}>{s.hora_inicio?.slice(0,5)}</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{s.paciente}</div>
@@ -449,12 +538,12 @@ function DashboardMedico({perfil}) {
 
       {/* Pacientes sin evaluación médica firmada */}
       <Card style={{padding:0,overflow:"hidden"}}>
-        <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>📋 Pacientes activos por sede</div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:0}}>
           {resumen.map((s,i)=>(
-            <div key={s.sede_id} style={{padding:"16px 20px",borderRight:i%2===0?"1px solid #1A2035":"none",borderBottom:"1px solid #1A2035"}}>
+            <div key={s.sede_id} style={{padding:"16px 20px",borderRight:i%2===0?"0.5px solid var(--border)":"none",borderBottom:"0.5px solid var(--border)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                 <span style={{width:8,height:8,borderRadius:"50%",background:getColor(s.sede),display:"inline-block"}}/>
                 <span style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"var(--text)"}}>{s.sede}</span>
@@ -475,6 +564,41 @@ function DashboardMedico({perfil}) {
           ))}
         </div>
       </Card>
+      {/* Modal firma desde Dashboard */}
+      {firmaModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:440,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:2}}>
+              Firmar evaluación — Sesión #{firmaModal.numero_sesion}
+            </div>
+            <div style={{fontSize:12,color:"var(--text3)",marginBottom:16}}>
+              {firmaModal.pacientes?.nombres} {firmaModal.pacientes?.apellidos} · {firmaModal.fecha} · {firmaModal.sedes?.nombre}
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>Nota de evolución médica</label>
+              <textarea value={firmaModal.evolucionEdit||""} onChange={e=>setFirmaModal(m=>({...m,evolucionEdit:e.target.value}))}
+                placeholder="Evolución del paciente, respuesta al tratamiento, observaciones clínicas..."
+                rows={3}
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",
+                  resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>Firma médica</label>
+              <input value={firmaTexto} onChange={e=>setFirmaTexto(e.target.value)}
+                placeholder="Dr. Nombre Apellido"
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
+              <Btn onClick={confirmarFirmaDash} disabled={savingFirma||!firmaTexto.trim()} style={{background:"#7C6AF7"}}>
+                {savingFirma ? "Firmando..." : "✍ Confirmar firma"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -861,7 +985,7 @@ function Pacientes({perfil}) {
 
           {/* Paquetes activos e histórico */}
           <Card style={{marginBottom:14,padding:0,overflow:"hidden"}}>
-            <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>
               Paquetes comprados
             </div>
             {compras.length===0
@@ -872,7 +996,7 @@ function Pacientes({perfil}) {
                   const pct       = Math.round((usadas/totales)*100);
                   const estadoC   = c.estado==="activo"?"#10B981":c.estado==="agotado"?"var(--text3)":"#F87171";
                   return (
-                    <div key={c.id} style={{padding:"12px 18px",borderBottom:i<compras.length-1?"1px solid #1A2035":"none",display:"flex",alignItems:"center",gap:14}}>
+                    <div key={c.id} style={{padding:"12px 18px",borderBottom:i<compras.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:14}}>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                           <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{c.paquetes?.nombre||"Paquete"}</span>
@@ -896,7 +1020,7 @@ function Pacientes({perfil}) {
 
           {/* Últimas sesiones */}
           <Card style={{padding:0,overflow:"hidden"}}>
-            <div style={{padding:"14px 18px",borderBottom:"1px solid #1E2535",fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
               Últimas sesiones
             </div>
             {ultimasSesiones.length===0
@@ -904,7 +1028,7 @@ function Pacientes({perfil}) {
               : ultimasSesiones.map((s,i)=>{
                   const ECOLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
                   return (
-                    <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"1px solid #1A2035":"none",display:"flex",alignItems:"center",gap:12}}>
+                    <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:12}}>
                       <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"#00A896",minWidth:44}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,color:"var(--text)"}}>Sesión #{s.numero_sesion} · {s.fecha}</div>
@@ -995,7 +1119,7 @@ function Pacientes({perfil}) {
       {modal && f.puedeCrearPaciente && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Paciente</div>
               <button onClick={()=>setModal(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
@@ -1588,7 +1712,7 @@ function HistoriasClinicas({perfil}) {
       {modalNuevaEval && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div>
                 <div style={{fontSize:10,color:"#00A896",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Nueva Evaluación</div>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
@@ -1614,7 +1738,7 @@ function HistoriasClinicas({perfil}) {
               )}
 
               {/* SECCIÓN ENFERMERO — Signos vitales */}
-              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                 📋 Signos Vitales
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -1645,7 +1769,7 @@ function HistoriasClinicas({perfil}) {
                 options={["Excelente","Bueno","Regular","Malo"].map(v=>({value:v,label:v}))}/>
 
               {/* Contraindicaciones del día */}
-              <div style={{fontSize:11,color:"#F59E0B",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+              <div style={{fontSize:11,color:"#F59E0B",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                 ⚠ Contraindicaciones del día
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -1660,7 +1784,7 @@ function HistoriasClinicas({perfil}) {
               </div>
 
               {/* Parámetros cámara */}
-              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                 🫁 Parámetros de sesión
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -1686,7 +1810,7 @@ function HistoriasClinicas({perfil}) {
               {/* SECCIÓN MÉDICO — solo si es médico o admin */}
               {(f.esMedico || f.esAdmin) && (
                 <>
-                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"1px solid #1A2035"}}>
+                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                     🩺 Sección médica
                   </div>
                   <div style={{marginBottom:14}}>
@@ -1790,7 +1914,7 @@ function HistoriasClinicas({perfil}) {
       {modalEval && !modalEval.es_borrador && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div>
                 <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Evaluación Firmada · Sesión #{modalEval.numero_sesion}</div>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
@@ -1818,7 +1942,7 @@ function HistoriasClinicas({perfil}) {
                 ]},
               ].map(sec=>(
                 <div key={sec.titulo} style={{marginBottom:16}}>
-                  <div style={{fontSize:10,color:sec.color,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #1A2035"}}>{sec.titulo}</div>
+                  <div style={{fontSize:10,color:sec.color,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid var(--border)"}}>{sec.titulo}</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     {sec.campos.filter(([,v])=>v).map(([k,v])=>(
                       <div key={k} style={{background:"var(--surface)",borderRadius:8,padding:"8px 12px",gridColumn:["Evolución","Incidencias","Observaciones"].includes(k)?"1/-1":undefined}}>
@@ -2331,7 +2455,7 @@ function Usuarios({perfil:adminPerfil}) {
               <span>Usuario</span><span>Email</span><span>Rol</span><span>Sede</span><span>Acciones</span>
             </div>
             {usuarios.map(u=>(
-              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr auto",padding:"12px 0",borderTop:"1px solid #1A2035",alignItems:"center",opacity:u.activo===false?0.5:1}}>
+              <div key={u.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.2fr 1fr auto",padding:"12px 0",borderTop:"0.5px solid var(--border)",alignItems:"center",opacity:u.activo===false?0.5:1}}>
                 <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>{u.nombre}</div>
                 <div style={{fontSize:13,color:"var(--text2)"}}>{u.email}</div>
                 <div><Badge color={rolColor[u.rol]||"var(--text3)"}>{rolLabel(u)}</Badge></div>
@@ -3274,7 +3398,7 @@ function Ventas({perfil}) {
 
             {calculando && <div style={{padding:14,background:"var(--bg)",borderRadius:10,fontSize:13,color:"var(--text3)",marginBottom:14}}>Calculando precio...</div>}
             {calculo && !calculando && (
-              <div style={{padding:14,background:"var(--bg)",border:"1px solid #1E2535",borderRadius:10,marginBottom:14}}>
+              <div style={{padding:14,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:10,marginBottom:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--text2)",marginBottom:6}}>
                   <span>Precio base</span><span>{fmtSol(calculo.precio_base)}</span>
                 </div>
@@ -3740,7 +3864,7 @@ function Sesiones({perfil}) {
       {modalNueva && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Programar Sesión</div>
               <button onClick={()=>setModalNueva(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
@@ -3813,7 +3937,7 @@ function Sesiones({perfil}) {
       {verSesion && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
                 <div style={{fontSize:10,color:"#00A896",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
                   Sesión #{verSesion.numero_sesion} · {verSesion.camara_numero ? `Cámara #${verSesion.camara_numero}` : ""}
@@ -3957,7 +4081,7 @@ function MisObservaciones({perfil}) {
       </div>
       {obs.map(o=>(
         <div key={o.id} style={{
-          background:"var(--bg)",border:"1px solid #1E2535",
+          background:"var(--bg)",border:"0.5px solid var(--border)",
           borderLeft:`3px solid ${ESTADO_COLOR[o.estado]}`,
           borderRadius:12,padding:"12px 16px",marginBottom:8,
         }}>
@@ -4239,7 +4363,7 @@ function Alertas({perfil}) {
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:580,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             {/* Header modal */}
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                   <Badge color={PRIORIDAD_COLOR[verAlerta.prioridad]}>{verAlerta.prioridad}</Badge>
