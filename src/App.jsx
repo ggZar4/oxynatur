@@ -3405,13 +3405,17 @@ function Sesiones({perfil}) {
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",marginBottom:4}}>Sesiones</h1>
           <p style={{color:"var(--text3)",fontSize:14}}>Agenda de sesiones hiperbáricas</p>
         </div>
-        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()-1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:16,lineHeight:1}}>‹</button>
           <button onClick={()=>setFecha(hoy)}
-            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"#00A896",padding:"8px 14px",borderRadius:10,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"#00A896",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
             Hoy
           </button>
-          <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
-            style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"8px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+          <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()+1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:16,lineHeight:1}}>›</button>
+          <input type="date" value={fecha} onChange={e=>{ if(e.target.value) setFecha(e.target.value); }}
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"7px 12px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
           {(f.esAdmin || f.esMedico || f.esEnfermero) && (
             <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
           )}
