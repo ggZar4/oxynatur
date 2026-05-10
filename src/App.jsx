@@ -1036,6 +1036,19 @@ function HistoriasClinicas({perfil}) {
       await load();
       const { data: s } = await safeQuery(()=>supabase.from("sedes").select("id,nombre"), "HC:sedes");
       if(mounted) setSedes(s||[]);
+
+      // Verificar si venimos desde Agenda con un paciente específico
+      const pacienteId = localStorage.getItem("oxynatur-hc-paciente");
+      if(pacienteId && mounted){
+        localStorage.removeItem("oxynatur-hc-paciente");
+        const { data: hcs } = await safeQuery(()=>
+          supabase.from("historias_clinicas")
+            .select("*, pacientes(id,nombres,apellidos,dni,estado,sesiones_realizadas,total_sesiones_prescritas), sedes!sede_apertura_id(nombre)")
+            .eq("paciente_id", pacienteId)
+            .limit(1).single(), "HC:open_from_agenda"
+        );
+        if(hcs && mounted) abrirPaciente(hcs);
+      }
     })();
     return ()=>{ mounted=false; };
   },[]); // eslint-disable-line
@@ -2020,7 +2033,7 @@ function Usuarios({perfil:adminPerfil}) {
 }
 
 // ── AGENDA MÉDICO / ENFERMERO ─────────────────────────────────
-function AgendaMedico({perfil}) {
+function AgendaMedico({perfil, cambiarVista}) {
   const f = getRolFlags(perfil);
 
   const hoy = fechaHoyLima();
@@ -2104,11 +2117,15 @@ function AgendaMedico({perfil}) {
   const agendaFiltrada = sedeTab==="todas" ? agenda : agenda.filter(s=>s.sede_id===sedeTab);
   const prospectosFiltrados = sedeTab==="todas" ? prospectosCitas : prospectosCitas.filter(p=>p.sede_id===sedeTab);
 
-  // KPIs
-  const total      = agendaFiltrada.length;
+  // KPIs — incluye evaluaciones de prospectos
+  const evalHoy     = prospectosFiltrados.filter(p=>{
+    const fc = new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"});
+    return fc === fechaSelec;
+  }).length;
+  const total       = agendaFiltrada.length + evalHoy;
   const completadas = agendaFiltrada.filter(s=>s.estado==="completada").length;
-  const enCurso    = agendaFiltrada.filter(s=>s.estado==="en_curso").length;
-  const pendientes = agendaFiltrada.filter(s=>s.estado==="programada").length;
+  const enCurso     = agendaFiltrada.filter(s=>s.estado==="en_curso").length;
+  const pendientes  = agendaFiltrada.filter(s=>s.estado==="programada").length;
 
   return (
     <div>
@@ -2204,20 +2221,39 @@ function AgendaMedico({perfil}) {
                     {new Date(fecha+"T00:00:00").getDate()}
                   </div>
                 </div>
-                {sesiones.length===0
-                  ? <div style={{textAlign:"center",color:"var(--border)",fontSize:11,marginTop:8}}>—</div>
-                  : sesiones.map(s=>(
-                    <div key={s.id} style={{
-                      background:`${ESTADO_COLOR[s.estado]||"var(--border2)"}20`,
-                      border:`1px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}40`,
-                      borderRadius:6,padding:"4px 6px",marginBottom:4,
-                    }}>
-                      <div style={{fontSize:11,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.paciente?.split(" ")[0]}</div>
-                      <div style={{fontSize:10,color:"var(--text3)"}}>{s.hora_inicio?.slice(0,5)} · #{s.numero_sesion}</div>
-                      <div style={{width:6,height:6,borderRadius:"50%",background:ESTADO_COLOR[s.estado],display:"inline-block",marginTop:2}}/>
-                    </div>
-                  ))
-                }
+                {(() => {
+                  const evalsDia = prospectosFiltrados.filter(p=>
+                    new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fecha
+                  );
+                  const total = sesiones.length + evalsDia.length;
+                  return total===0
+                    ? <div style={{textAlign:"center",color:"var(--border)",fontSize:11,marginTop:8}}>—</div>
+                    : <>
+                      {evalsDia.map(p=>(
+                        <div key={p.id} style={{
+                          background:"#7C6AF720",border:"1px solid #7C6AF740",
+                          borderRadius:6,padding:"4px 6px",marginBottom:4,
+                        }}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#7C6AF7",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre.split(" ")[0]}</div>
+                          <div style={{fontSize:10,color:"var(--text3)"}}>
+                            {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})} · Eval.
+                          </div>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:"#7C6AF7",display:"inline-block",marginTop:2}}/>
+                        </div>
+                      ))}
+                      {sesiones.map(s=>(
+                        <div key={s.id} style={{
+                          background:`${ESTADO_COLOR[s.estado]||"var(--border2)"}20`,
+                          border:`1px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}40`,
+                          borderRadius:6,padding:"4px 6px",marginBottom:4,
+                        }}>
+                          <div style={{fontSize:11,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.paciente?.split(" ")[0]}</div>
+                          <div style={{fontSize:10,color:"var(--text3)"}}>{s.hora_inicio?.slice(0,5)} · #{s.numero_sesion}</div>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:ESTADO_COLOR[s.estado],display:"inline-block",marginTop:2}}/>
+                        </div>
+                      ))}
+                    </>;
+                })()}
               </div>
             );
           })}
@@ -2306,10 +2342,19 @@ function AgendaMedico({perfil}) {
                 <span style={{fontSize:12,color:"var(--text2)"}}>{s.sede_nombre}</span>
               </div>
             )}
-            {/* Estado */}
+            {/* Estado + Ver HC */}
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
               <Badge color={ESTADO_COLOR[s.estado]||"var(--text3)"}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
               {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
+              {s.paciente_id && cambiarVista && (
+                <button onClick={()=>{
+                  localStorage.setItem("oxynatur-hc-paciente", s.paciente_id);
+                  cambiarVista("historias");
+                }}
+                  style={{background:"none",border:"none",color:"#00A896",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 0",fontFamily:"inherit"}}>
+                  Ver HC →
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -4483,7 +4528,7 @@ export default function App() {
       case "sesiones":  return                         <Sesiones perfil={perfil}/>;
       case "alertas":   return f.puedeVerAlertas     ? <Alertas perfil={perfil}/>     : null;
       case "prospectos": return f.puedeVerProspectos  ? <Prospectos perfil={perfil}/>  : null;
-      case "agenda":    return                         <AgendaMedico perfil={perfil}/>;
+      case "agenda":    return                         <AgendaMedico perfil={perfil} cambiarVista={cambiarVista}/>;
       default:          return f.puedeVerDashboard   ? <DashboardAdmin/>              : <Pacientes perfil={perfil}/>;
     }
   };
