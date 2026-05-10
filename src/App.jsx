@@ -1,6 +1,14 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// ── Helper fecha Lima (UTC-5) ─────────────────────────────────
+const fechaHoyLima = () => {
+  return new Date().toLocaleDateString("en-CA", {timeZone:"America/Lima"});
+};
+const mesMesLima = () => {
+  return fechaHoyLima().slice(0,7);
+};
+
 // ── Supabase client ───────────────────────────────────────────
 // FIX BUG 2: env vars obligatorias, sin fallback. Si faltan, fallamos ruidoso.
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -2015,13 +2023,14 @@ function Usuarios({perfil:adminPerfil}) {
 function AgendaMedico({perfil}) {
   const f = getRolFlags(perfil);
 
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = fechaHoyLima();
   const [fechaSelec, setFechaSelec] = useState(hoy);
   const [vistaMode, setVistaMode]   = useState("dia");    // "dia" | "semana"
   const [agenda, setAgenda]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [sedesData, setSedesData]   = useState([]);
   const [sedeTab, setSedeTab]       = useState("todas");
+  const [prospectosCitas, setProspectosCitas] = useState([]);
 
   const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
   const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
@@ -2034,7 +2043,7 @@ function AgendaMedico({perfil}) {
     return Array.from({length:7},(_,i)=>{
       const dia = new Date(lunes);
       dia.setDate(lunes.getDate()+i);
-      return dia.toISOString().slice(0,10);
+      return dia.toLocaleDateString("en-CA",{timeZone:"America/Lima"});
     });
   };
   const semana = getSemana(fechaSelec);
@@ -2042,16 +2051,32 @@ function AgendaMedico({perfil}) {
   const load = async () => {
     setLoading(true);
     const fechas = vistaMode==="semana" ? semana : [fechaSelec];
-    const { data } = await safeQuery(() => {
-      let q = supabase.from("vista_agenda_hoy")
-        .select("*")
-        .in("fecha", fechas)
-        .order("fecha")
-        .order("hora_inicio");
-      if(!f.esAdmin && !f.esMedicoEsp && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
-      return q;
-    }, "Agenda:load");
+    // Ajuste UTC-5 Lima: inicio del día Lima = T05:00Z, fin = día siguiente T04:59Z
+    const fechaInicio = fechas[0] + "T05:00:00.000Z";
+    const dFin = new Date(fechas[fechas.length-1] + "T05:00:00.000Z");
+    dFin.setDate(dFin.getDate()+1);
+    dFin.setSeconds(dFin.getSeconds()-1);
+    const fechaFin = dFin.toISOString();
+
+    const [{ data }, { data: prsp }] = await Promise.all([
+      safeQuery(() => {
+        let q = supabase.from("vista_agenda_hoy")
+          .select("*")
+          .in("fecha", fechas)
+          .order("fecha")
+          .order("hora_inicio");
+        if(!f.esAdmin && !f.esMedicoEsp && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
+        return q;
+      }, "Agenda:load"),
+      safeQuery(() => supabase.from("prospectos")
+        .select("id,nombre,telefono,canal,sede_id,motivo,estado,fecha_cita,sedes(nombre)")
+        .eq("estado","evaluacion_agendada")
+        .not("fecha_cita","is",null)
+        .gte("fecha_cita", fechaInicio)
+        .lte("fecha_cita", fechaFin), "Agenda:prospectos"),
+    ]);
     setAgenda(data||[]);
+    setProspectosCitas(prsp||[]);
     setLoading(false);
   };
 
@@ -2067,9 +2092,9 @@ function AgendaMedico({perfil}) {
 
   // Navegar días/semanas
   const navegar = (dir) => {
-    const d = new Date(fechaSelec+"T00:00:00");
+    const d = new Date(fechaSelec+"T12:00:00");
     d.setDate(d.getDate() + (vistaMode==="semana" ? dir*7 : dir));
-    setFechaSelec(d.toISOString().slice(0,10));
+    setFechaSelec(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"}));
   };
 
   const fmtDia = (iso) => new Date(iso+"T00:00:00").toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"});
@@ -2077,6 +2102,7 @@ function AgendaMedico({perfil}) {
 
   // Filtrar por sede
   const agendaFiltrada = sedeTab==="todas" ? agenda : agenda.filter(s=>s.sede_id===sedeTab);
+  const prospectosFiltrados = sedeTab==="todas" ? prospectosCitas : prospectosCitas.filter(p=>p.sede_id===sedeTab);
 
   // KPIs
   const total      = agendaFiltrada.length;
@@ -2198,12 +2224,53 @@ function AgendaMedico({perfil}) {
         </div>
 
       /* Vista día */
-      ) : agendaFiltrada.length===0
+      ) : agendaFiltrada.length===0 && prospectosFiltrados.length===0
         ? <div style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"50px",textAlign:"center"}}>
             <div style={{fontSize:36,opacity:.3,marginBottom:12}}>📅</div>
             <div style={{color:"var(--text3)"}}>Sin sesiones para este día</div>
           </div>
-        : agendaFiltrada.map(s=>(
+        : <>
+          {/* Citas de evaluación de prospectos */}
+          {prospectosFiltrados.filter(p=>{
+            const fechaCita = new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"});
+            return fechaCita === fechaSelec;
+          }).map(p=>(
+            <div key={p.id} style={{
+              background:"#7C6AF710",
+              border:"0.5px solid #7C6AF740",
+              borderLeft:"3px solid #7C6AF7",
+              borderRadius:12,padding:"14px 18px",marginBottom:8,
+              display:"grid",gridTemplateColumns:"70px 2fr 1fr 1fr auto",
+              alignItems:"center",gap:12,
+            }}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:16,fontWeight:700,color:"#7C6AF7",fontFamily:"Syne,sans-serif"}}>
+                  {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})}
+                </div>
+                <div style={{fontSize:10,color:"var(--text3)"}}>Eval.</div>
+              </div>
+              <div>
+                <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>{p.nombre}</div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
+                  {p.telefono} · {p.motivo||"Sin motivo registrado"}
+                </div>
+              </div>
+              <div style={{fontSize:13,color:"var(--text2)"}}>
+                <div style={{fontSize:11,color:"var(--text3)"}}>Canal: {p.canal}</div>
+              </div>
+              {(f.esAdmin||f.esMedicoEsp) && (
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:"#7C6AF7",display:"inline-block"}}/>
+                  <span style={{fontSize:12,color:"var(--text2)"}}>{p.sedes?.nombre||"—"}</span>
+                </div>
+              )}
+              <div>
+                <Badge color="#7C6AF7">Evaluación</Badge>
+              </div>
+            </div>
+          ))}
+          {/* Sesiones */}
+          {agendaFiltrada.map(s=>(
           <div key={s.id} style={{
             background:"var(--surface)",
             border:`0.5px solid #E2E8F0`,
@@ -2245,7 +2312,8 @@ function AgendaMedico({perfil}) {
               {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
             </div>
           </div>
-        ))
+        ))}
+        </>
       }
     </div>
   );
