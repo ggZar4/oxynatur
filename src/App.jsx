@@ -321,6 +321,7 @@ function DashboardMedico({perfil}) {
   const [sesionesHoy,  setSesionesHoy]  = useState([]);
   const [resumen,      setResumen]      = useState([]);
   const [firmasPend,   setFirmasPend]   = useState([]);
+  const [filtroFirmas, setFiltroFirmas] = useState("hoy"); // "hoy" | "todas"
   const [loading,      setLoading]      = useState(true);
 
   // Estado para firma inline desde Dashboard
@@ -466,46 +467,105 @@ function DashboardMedico({perfil}) {
       </div>
 
       {/* Cola de firmas pendientes */}
-      {firmasPend.length > 0 && (
-        <Card style={{padding:0,overflow:"hidden",marginBottom:16,border:"0.5px solid #F59E0B40"}}>
-          <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F59E0B08"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              ✍ Cola de firmas — {firmasPend.length} evaluacion{firmasPend.length>1?"es":""} pendiente{firmasPend.length>1?"s":""}
-            </div>
-            <span style={{fontSize:11,color:"var(--text3)"}}>Click para firmar</span>
-          </div>
-          <div style={{maxHeight:280,overflowY:"auto"}}>
-            {firmasPend.map((ev,i)=>(
-              <div key={ev.id} style={{
-                padding:"12px 18px",
-                borderBottom: i<firmasPend.length-1 ? "0.5px solid var(--border)" : "none",
-                display:"flex",alignItems:"center",gap:12,
-              }}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>
-                    {ev.pacientes?.nombres} {ev.pacientes?.apellidos}
-                  </div>
-                  <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>
-                    Sesión #{ev.numero_sesion} · {ev.fecha} {ev.hora?.slice(0,5)} · {ev.sedes?.nombre}
-                    {ev.compras_paciente?.paquetes?.nombre && ` · ${ev.compras_paciente.paquetes.nombre}`}
-                  </div>
-                  {ev.evolucion && (
-                    <div style={{fontSize:11,color:"var(--text2)",marginTop:3,fontStyle:"italic"}}>"{ev.evolucion.slice(0,80)}{ev.evolucion.length>80?"...":""}"</div>
-                  )}
+      {firmasPend.length > 0 && (()=>{
+        // Filtrar por fecha
+        const firmasFiltradas = filtroFirmas === "hoy"
+          ? firmasPend.filter(e=>e.fecha===hoy)
+          : firmasPend;
+
+        // Contador por sede
+        const porSede = firmasPend.reduce((acc,e)=>{
+          const s = e.sedes?.nombre || "Sin sede";
+          acc[s] = (acc[s]||0)+1;
+          return acc;
+        },{});
+
+        return (
+          <Card style={{padding:0,overflow:"hidden",marginBottom:16,border:"0.5px solid #F59E0B40"}}>
+            {/* Header con filtros y contador por sede */}
+            <div style={{padding:"12px 18px",borderBottom:"0.5px solid var(--border)",background:"#F59E0B08"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                  ✍ Cola de firmas — {firmasFiltradas.length} de {firmasPend.length} pendiente{firmasPend.length>1?"s":""}
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                  <span style={{fontSize:10,background:"#F59E0B20",color:"#F59E0B",padding:"2px 8px",borderRadius:99,fontWeight:700}}>BORRADOR</span>
-                  <button onClick={()=>abrirFirmaDash(ev)}
-                    style={{background:"#7C6AF7",color:"white",border:"none",padding:"6px 14px",borderRadius:8,
+                {firmasFiltradas.length > 0 && (
+                  <button onClick={()=>abrirFirmaDash(firmasFiltradas[0])}
+                    style={{background:"#7C6AF7",color:"white",border:"none",padding:"5px 14px",borderRadius:8,
                       cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
-                    ✍ Firmar
+                    ✍ Firmar todo
                   </button>
+                )}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                {/* Filtro fecha */}
+                <div style={{display:"flex",gap:6}}>
+                  {[{id:"hoy",label:`Hoy (${firmasPend.filter(e=>e.fecha===hoy).length})`},{id:"todas",label:`Todas (${firmasPend.length})`}].map(f=>(
+                    <button key={f.id} onClick={()=>setFiltroFirmas(f.id)}
+                      style={{padding:"3px 10px",borderRadius:20,border:"0.5px solid",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600,
+                        borderColor:filtroFirmas===f.id?"#F59E0B":"var(--border)",
+                        background:filtroFirmas===f.id?"#F59E0B20":"none",
+                        color:filtroFirmas===f.id?"#F59E0B":"var(--text3)"}}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Contador por sede */}
+                <div style={{display:"flex",gap:10}}>
+                  {Object.entries(porSede).map(([sede,count])=>(
+                    <span key={sede} style={{fontSize:11,color:"var(--text3)"}}>
+                      <span style={{width:6,height:6,borderRadius:"50%",background:getColor(sede),display:"inline-block",marginRight:4}}/>
+                      {sede.split(" ")[0]}: <strong style={{color:"var(--text)"}}>{count}</strong>
+                    </span>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </Card>
-      )}
+            </div>
+            {/* Lista */}
+            <div style={{maxHeight:280,overflowY:"auto"}}>
+              {firmasFiltradas.length === 0
+                ? <div style={{padding:"20px",textAlign:"center",color:"var(--text3)",fontSize:13}}>
+                    No hay firmas pendientes para hoy
+                  </div>
+                : firmasFiltradas.map((ev,i)=>(
+                  <div key={ev.id} style={{
+                    padding:"11px 18px",
+                    borderBottom: i<firmasFiltradas.length-1 ? "0.5px solid var(--border)" : "none",
+                    display:"flex",alignItems:"center",gap:12,
+                  }}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>
+                        {ev.pacientes?.nombres} {ev.pacientes?.apellidos}
+                      </div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span>Sesión #{ev.numero_sesion}</span>
+                        <span>·</span>
+                        <span>{ev.fecha} {ev.hora?.slice(0,5)}</span>
+                        <span>·</span>
+                        <span style={{display:"flex",alignItems:"center",gap:3}}>
+                          <span style={{width:5,height:5,borderRadius:"50%",background:getColor(ev.sedes?.nombre||""),display:"inline-block"}}/>
+                          {ev.sedes?.nombre}
+                        </span>
+                        {ev.compras_paciente?.paquetes?.nombre && <>
+                          <span>·</span>
+                          <span>{ev.compras_paciente.paquetes.nombre}</span>
+                        </>}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <span style={{fontSize:10,background:"#F59E0B20",color:"#F59E0B",padding:"2px 8px",borderRadius:99,fontWeight:700}}>BORRADOR</span>
+                      <button onClick={()=>abrirFirmaDash(ev)}
+                        style={{background:"#7C6AF7",color:"white",border:"none",padding:"5px 12px",borderRadius:8,
+                          cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                        ✍ Firmar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </Card>
+        );
+      })()}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
 
