@@ -3808,6 +3808,10 @@ function Prospectos({perfil}) {
   const [err, setErr]               = useState({});
   const [editFecha, setEditFecha]   = useState("");
   const [savingFecha, setSavingFecha] = useState(false);
+  const [convirtiendo, setConvirtiendo] = useState(false);
+  const [showConvertForm, setShowConvertForm] = useState(false);
+  const [convertForm, setConvertForm] = useState({nombres:"", apellidos:"", dni:""});
+  const [convertErr, setConvertErr] = useState({});
 
   // Formatear fecha UTC → datetime-local (Lima UTC-5)
   const toLocalInput = (iso) => {
@@ -3880,6 +3884,62 @@ function Prospectos({perfil}) {
     setForm(formInicial);
     setErr({});
     load();
+  };
+
+  const abrirConvertForm = () => {
+    // Prellenar nombres/apellidos inteligentemente
+    const partes = modalVer.nombre.trim().split(" ");
+    let nombres = "", apellidos = "";
+    if(partes.length === 1) { nombres = partes[0]; apellidos = ""; }
+    else if(partes.length === 2) { nombres = partes[0]; apellidos = partes[1]; }
+    else if(partes.length === 3) { nombres = partes[0]; apellidos = partes.slice(1).join(" "); }
+    else { nombres = partes.slice(0,2).join(" "); apellidos = partes.slice(2).join(" "); }
+    setConvertForm({nombres, apellidos, dni:""});
+    setConvertErr({});
+    setShowConvertForm(true);
+  };
+
+  const convertirAPaciente = async () => {
+    const e = {};
+    if(!convertForm.nombres.trim())  e.nombres  = "Requerido";
+    if(!convertForm.apellidos.trim()) e.apellidos = "Requerido";
+    if(!convertForm.dni.trim())      e.dni      = "DNI obligatorio";
+    else if(!/^\d{8}$/.test(convertForm.dni.trim())) e.dni = "DNI debe tener 8 dígitos";
+    if(Object.keys(e).length){ setConvertErr(e); return; }
+
+    setConvirtiendo(true);
+    const { data: pac, error } = await safeQuery(() =>
+      supabase.from("pacientes").insert({
+        nombres:           convertForm.nombres.trim(),
+        apellidos:         convertForm.apellidos.trim(),
+        dni:               convertForm.dni.trim(),
+        telefono:          modalVer.telefono || "",
+        email:             modalVer.email || "",
+        sede_principal_id: modalVer.sede_id || null,
+        canal_origen:      modalVer.canal || "otro",
+        estado:            "activo",
+      }).select().single(), "Prospectos:convertir"
+    );
+
+    if(error || !pac) {
+      setConvertErr({general: "Error al crear el paciente. Verificá que el DNI no esté duplicado."});
+      setConvirtiendo(false);
+      return;
+    }
+
+    await safeQuery(() =>
+      supabase.from("prospectos").update({
+        estado: "convertido",
+        convertido_paciente_id: pac.id,
+        updated_at: new Date().toISOString(),
+      }).eq("id", modalVer.id), "Prospectos:vincular"
+    );
+
+    setConvirtiendo(false);
+    setShowConvertForm(false);
+    setModalVer(null);
+    load();
+    alert(`✅ ${convertForm.nombres} ${convertForm.apellidos} fue registrado como paciente. Ya podés agendar sus sesiones.`);
   };
 
   const cambiarEstado = async (id, nuevoEstado) => {
@@ -4141,9 +4201,72 @@ function Prospectos({perfil}) {
               </div>
             </div>
 
-            <div style={{display:"flex",justifyContent:"flex-end"}}>
-              <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
-            </div>
+            {/* Formulario inline de conversión */}
+            {modalVer.estado !== "convertido" && !modalVer.convertido_paciente_id && (
+              <div style={{marginTop:8}}>
+                {!showConvertForm ? (
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <Btn onClick={abrirConvertForm} style={{background:"#10B981",fontSize:13}}>
+                      ✓ Convertir a paciente
+                    </Btn>
+                    <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
+                  </div>
+                ) : (
+                  <div style={{background:"#10B98110",border:"0.5px solid #10B98140",borderRadius:10,padding:"14px 16px"}}>
+                    <div style={{fontSize:12,color:"#10B981",fontWeight:700,marginBottom:12,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                      Confirmar datos del paciente
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                      <div>
+                        <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Nombres *</label>
+                        <input value={convertForm.nombres} onChange={e=>setConvertForm(f=>({...f,nombres:e.target.value}))}
+                          style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.nombres?"#F87171":"var(--border)"}`,
+                            borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                        {convertErr.nombres && <div style={{fontSize:11,color:"#F87171",marginTop:2}}>{convertErr.nombres}</div>}
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Apellidos *</label>
+                        <input value={convertForm.apellidos} onChange={e=>setConvertForm(f=>({...f,apellidos:e.target.value}))}
+                          style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.apellidos?"#F87171":"var(--border)"}`,
+                            borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                        {convertErr.apellidos && <div style={{fontSize:11,color:"#F87171",marginTop:2}}>{convertErr.apellidos}</div>}
+                      </div>
+                    </div>
+                    <div style={{marginBottom:12}}>
+                      <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>DNI * (8 dígitos)</label>
+                      <input value={convertForm.dni} onChange={e=>setConvertForm(f=>({...f,dni:e.target.value.replace(/\D/g,"").slice(0,8)}))}
+                        placeholder="12345678" maxLength={8}
+                        style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.dni?"#F87171":"var(--border)"}`,
+                          borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                      {convertErr.dni && <div style={{fontSize:11,color:"#F87171",marginTop:2}}>{convertErr.dni}</div>}
+                    </div>
+                    {convertErr.general && <div style={{fontSize:12,color:"#F87171",marginBottom:10}}>{convertErr.general}</div>}
+                    <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                      <button onClick={()=>setShowConvertForm(false)}
+                        style={{background:"none",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 14px",
+                          borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                        Cancelar
+                      </button>
+                      <Btn onClick={convertirAPaciente} disabled={convirtiendo}
+                        style={{background:"#10B981",fontSize:13}}>
+                        {convirtiendo ? "Registrando..." : "Confirmar y crear paciente"}
+                      </Btn>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {modalVer.convertido_paciente_id && (
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
+                <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>✓ Ya es paciente</span>
+                <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
+              </div>
+            )}
+            {modalVer.estado === "convertido" && !modalVer.convertido_paciente_id && (
+              <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+                <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4156,7 +4279,13 @@ export default function App() {
   const [alertasNuevas, setAlertasNuevas] = useState(0);
   const [perfil,  setPerfil]  = useState(null);
   const [loading, setLoading] = useState(true);
-  const [vista,   setVista]   = useState("dashboard");
+  const [vista, setVista] = useState("dashboard");
+
+  // Persistir vista al cambiar
+  const cambiarVista = (v) => {
+    localStorage.setItem("oxynatur-vista", v);
+    setVista(v);
+  };
   const [darkMode, setDarkMode] = useState(()=>localStorage.getItem("oxynatur-theme")==="dark");
   useEffect(()=>{
     localStorage.setItem("oxynatur-theme", darkMode ? "dark" : "light");
@@ -4173,6 +4302,7 @@ export default function App() {
     let mounted = true;
     let loadedUserId = null;
     let inFlightUserId = null;
+    let vistaRestaurada = false;
 
     const loadPerfil = async (userId) => {
       try {
@@ -4201,8 +4331,26 @@ export default function App() {
       inFlightUserId = null; loadedUserId = uid;
       setUser(session.user);
       setPerfil(p);
-      // FASE B: vistaDefault viene de getRolFlags
-      setVista(prevVista => prevVista || getRolFlags(p).vistaDefault);
+      // FASE B: restaurar vista guardada solo la primera vez que carga
+      const flags = getRolFlags(p);
+      if(!vistaRestaurada) {
+        vistaRestaurada = true;
+        const saved = localStorage.getItem("oxynatur-vista");
+        const vistaMap = {
+          dashboard: flags.puedeVerDashboard,
+          alertas:   flags.puedeVerAlertas,
+          pacientes: true,
+          ventas:    flags.puedeVerVentas,
+          sesiones:  true,
+          historias: true,
+          finanzas:  flags.puedeVerFinanzas,
+          sedes:     flags.puedeVerSedes,
+          usuarios:  flags.puedeVerUsuarios,
+          prospectos:flags.puedeVerProspectos,
+          agenda:    true,
+        };
+        setVista(saved && vistaMap[saved] ? saved : flags.vistaDefault);
+      }
       setLoading(false);
     };
 
@@ -4277,7 +4425,7 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}select option{background:#1A2035}input::placeholder{color:#4B5563}textarea::placeholder{color:#94A3B8}textarea{box-sizing:border-box}`}</style>
       <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
-        <Sidebar vista={vista} setVista={setVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
+        <Sidebar vista={vista} setVista={cambiarVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
         <div style={{flex:1,overflow:"auto",padding:"28px 40px",background:"var(--bg)"}}>
           {renderVista()}
         </div>
