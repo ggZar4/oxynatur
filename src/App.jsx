@@ -1750,6 +1750,42 @@ function HistoriasClinicas({perfil}) {
         </div>
       )}
 
+      {/* Modal firma inline — dentro del perfil del paciente */}
+      {firmaModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>
+              Firmar evaluación — Sesión #{firmaModal.numero_sesion}
+            </div>
+            <div style={{fontSize:12,color:"var(--text3)",marginBottom:16}}>
+              {firmaModal.fecha} · {firmaModal.sedes?.nombre}
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>Nota de evolución médica</label>
+              <textarea value={firmaModal.evolucionEdit||""} onChange={e=>setFirmaModal(m=>({...m,evolucionEdit:e.target.value}))}
+                placeholder="Evolución del paciente, respuesta al tratamiento, observaciones clínicas..."
+                rows={3}
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",
+                  resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>Firma médica (nombre completo)</label>
+              <input value={firmaTexto} onChange={e=>setFirmaTexto(e.target.value)}
+                placeholder="Dr. Nombre Apellido"
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
+              <Btn onClick={confirmarFirma} disabled={savingFirma||!firmaTexto.trim()} style={{background:"#7C6AF7"}}>
+                {savingFirma?"Firmando...":"✍ Confirmar firma"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal ver evaluación firmada */}
       {modalEval && !modalEval.es_borrador && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
