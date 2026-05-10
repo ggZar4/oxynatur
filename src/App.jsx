@@ -480,6 +480,33 @@ function DashboardMedico({perfil}) {
 }
 
 // ── DASHBOARD FINANCIERO — solo admin ────────────────────────
+function BarChart({ data }) {
+  // data: [{mes:"2026-04", val:3980}, ...]
+  if(!data || data.length===0) return null;
+  const max = Math.max(...data.map(d=>d.val), 1);
+  const fmtMes = (m) => new Date(m+"-01T12:00:00").toLocaleDateString("es-PE",{month:"short"});
+  return (
+    <div style={{display:"flex",alignItems:"flex-end",gap:8,height:120,padding:"0 4px"}}>
+      {data.map((d,i)=>(
+        <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+          <div style={{fontSize:10,color:"var(--text3)",fontWeight:600}}>
+            S/{(d.val/1000).toFixed(1)}k
+          </div>
+          <div style={{
+            width:"100%",
+            height:`${Math.max((d.val/max)*80,4)}px`,
+            background: i===data.length-1 ? "#00A896" : "#00A89640",
+            borderRadius:"4px 4px 0 0",
+            transition:"height 0.5s",
+            minHeight:4,
+          }}/>
+          <div style={{fontSize:10,color:"var(--text3)",textTransform:"capitalize"}}>{fmtMes(d.mes)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DashboardFinanciero() {
   const { data: resumen, loading } = useSupabaseQuery(
     () => supabase.from("vista_resumen_sedes").select("*"),
@@ -487,6 +514,29 @@ function DashboardFinanciero() {
     "Dashboard:vista_resumen_sedes"
   );
   const filas = resumen || [];
+
+  // Cargar histórico de ingresos últimos 6 meses
+  const { data: historicoData } = useSupabaseQuery(
+    () => supabase.from("compras_paciente")
+      .select("fecha_compra,monto_pagado")
+      .neq("estado","cancelado")
+      .gte("fecha_compra", (() => {
+        const d = new Date(); d.setMonth(d.getMonth()-5); return d.toISOString().slice(0,7)+"-01";
+      })())
+      .order("fecha_compra"),
+    [],
+    "Dashboard:historico"
+  );
+
+  // Agrupar histórico por mes
+  const historico = (() => {
+    const meses = {};
+    (historicoData||[]).forEach(v => {
+      const m = v.fecha_compra?.slice(0,7);
+      if(m) meses[m] = (meses[m]||0) + Number(v.monto_pagado||0);
+    });
+    return Object.entries(meses).sort().map(([mes,val])=>({mes,val}));
+  })();
 
   const totales = {
     pacientes: filas.reduce((a,s)=>a+Number(s.pacientes_activos||0),0),
@@ -542,6 +592,19 @@ function DashboardFinanciero() {
           </Card>
         ))}
       </div>
+
+      {/* Gráfico tendencia mensual */}
+      {historico.length > 1 && (
+        <Card style={{marginTop:16}}>
+          <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:16}}>
+            Tendencia de ingresos — últimos {historico.length} meses
+          </div>
+          <BarChart data={historico}/>
+          <div style={{marginTop:8,fontSize:12,color:"var(--text3)",textAlign:"right"}}>
+            Total período: <strong style={{color:"#10B981"}}>S/ {historico.reduce((a,d)=>a+d.val,0).toLocaleString("es-PE")}</strong>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1257,7 +1320,7 @@ function HistoriasClinicas({perfil}) {
   // Médico firma una evaluación borrador — inline sin prompt()
   const abrirFirma = (ev) => {
     setFirmaTexto(perfil?.nombre || "");
-    setFirmaModal(ev);
+    setFirmaModal({...ev, evolucionEdit: ev.evolucion || ""});
   };
 
   const confirmarFirma = async () => {
@@ -1265,7 +1328,7 @@ function HistoriasClinicas({perfil}) {
     setSavingFirma(true);
     await safeQuery(()=>
       supabase.from("evaluaciones_medicas").update({
-        evolucion:    firmaModal.evolucion || "",
+        evolucion:    firmaModal.evolucionEdit || firmaModal.evolucion || "",
         firma_medico: firmaTexto.trim(),
         es_borrador:  false,
         medico_id:    perfil.id,
@@ -1421,8 +1484,8 @@ function HistoriasClinicas({perfil}) {
                     <div style={{
                       display:"flex",alignItems:"center",justifyContent:"space-between",
                       padding:"10px 16px",
-                      background:"linear-gradient(135deg,#1A2035,#111827)",
-                      border:"1px solid #2A3550",
+                      background: epIdx===0 ? "#00A89608" : "var(--surface2)",
+                      border:`0.5px solid ${epIdx===0?"#00A89630":"var(--border)"}`,
                       borderRadius:12,marginBottom:8,
                     }}>
                       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -1457,7 +1520,7 @@ function HistoriasClinicas({perfil}) {
                     {/* Evaluaciones del episodio */}
                     {ep.evals.map(ev=>(
                       <div key={ev.id} style={{
-                        background:"var(--bg)",
+                        background:"var(--surface)",
                         border:`1px solid ${ev.es_borrador?"#F59E0B40":"var(--border)"}`,
                         borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"#00A896"}`,
                         borderRadius:12,padding:"14px 18px",marginBottom:6,marginLeft:8,
@@ -1803,9 +1866,21 @@ function HistoriasClinicas({perfil}) {
             <div style={{fontSize:12,color:"var(--text3)",marginBottom:16}}>
               {firmaModal.fecha} · {firmaModal.sedes?.nombre}
             </div>
+            {/* Evolución médica */}
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
+                Nota de evolución médica
+              </label>
+              <textarea value={firmaModal.evolucionEdit||""} onChange={e=>setFirmaModal(m=>({...m,evolucionEdit:e.target.value}))}
+                placeholder="Evolución del paciente, respuesta al tratamiento, observaciones clínicas..."
+                rows={3}
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,
+                  color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",
+                  resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
-                Nombre completo (firma de supervisión)
+                Firma médica (nombre completo)
               </label>
               <input value={firmaTexto} onChange={e=>setFirmaTexto(e.target.value)}
                 placeholder="Dr. Nombre Apellido"
@@ -2315,6 +2390,86 @@ function Usuarios({perfil:adminPerfil}) {
   );
 }
 
+
+// ── MiniCal — Calendario visual compacto ─────────────────────
+function MiniCal({ fecha, onChange, marcados=[] }) {
+  // fecha: "YYYY-MM-DD", onChange: fn(fecha), marcados: ["YYYY-MM-DD",...]
+  const [mesVista, setMesVista] = useState(()=> fecha ? fecha.slice(0,7) : fechaHoyLima().slice(0,7));
+  const hoy = fechaHoyLima();
+
+  const diasMes = () => {
+    const [y,m] = mesVista.split("-").map(Number);
+    const primero = new Date(y, m-1, 1);
+    const ultimo  = new Date(y, m, 0).getDate();
+    const offsetLunes = (primero.getDay()+6)%7; // 0=lunes
+    const dias = [];
+    for(let i=0; i<offsetLunes; i++) dias.push(null);
+    for(let d=1; d<=ultimo; d++) dias.push(`${mesVista}-${String(d).padStart(2,"0")}`);
+    return dias;
+  };
+
+  const navMes = (dir) => {
+    const [y,m] = mesVista.split("-").map(Number);
+    const d = new Date(y, m-1+dir, 1);
+    setMesVista(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+
+  const nombreMes = new Date(mesVista+"-01T12:00:00").toLocaleDateString("es-PE",{month:"long",year:"numeric"});
+
+  return (
+    <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,
+      padding:14,boxShadow:"0 4px 20px rgba(0,0,0,0.08)",userSelect:"none",minWidth:220}}>
+      {/* Header mes */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <button onClick={()=>navMes(-1)}
+          style={{background:"none",border:"none",color:"var(--text2)",cursor:"pointer",fontSize:16,padding:"2px 6px",borderRadius:6}}>‹</button>
+        <div style={{fontSize:13,fontWeight:600,color:"var(--text)",textTransform:"capitalize"}}>{nombreMes}</div>
+        <button onClick={()=>navMes(1)}
+          style={{background:"none",border:"none",color:"var(--text2)",cursor:"pointer",fontSize:16,padding:"2px 6px",borderRadius:6}}>›</button>
+      </div>
+      {/* Labels días */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
+        {["Lu","Ma","Mi","Ju","Vi","Sá","Do"].map(d=>(
+          <div key={d} style={{textAlign:"center",fontSize:10,color:"var(--text3)",fontWeight:600,padding:"2px 0"}}>{d}</div>
+        ))}
+      </div>
+      {/* Días */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        {diasMes().map((d,i)=>{
+          if(!d) return <div key={i}/>;
+          const esHoy     = d === hoy;
+          const esSelec   = d === fecha;
+          const tieneSes  = marcados.includes(d);
+          return (
+            <button key={d} onClick={()=>onChange(d)}
+              style={{
+                background: esSelec ? "#00A896" : esHoy ? "#00A89615" : "none",
+                color:      esSelec ? "#fff" : esHoy ? "#00A896" : "var(--text)",
+                border:     esHoy && !esSelec ? "0.5px solid #00A896" : "none",
+                borderRadius:6, padding:"5px 2px", cursor:"pointer",
+                fontFamily:"inherit", fontSize:12, fontWeight: esHoy||esSelec ? 700 : 400,
+                position:"relative",
+              }}>
+              {d.split("-")[2].replace(/^0/,"")}
+              {tieneSes && !esSelec && (
+                <span style={{position:"absolute",bottom:1,left:"50%",transform:"translateX(-50%)",
+                  width:4,height:4,borderRadius:"50%",background:"#00A896",display:"block"}}/>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {/* Botón hoy */}
+      <div style={{marginTop:8,textAlign:"center"}}>
+        <button onClick={()=>{ onChange(hoy); setMesVista(hoy.slice(0,7)); }}
+          style={{background:"none",border:"none",color:"#00A896",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>
+          Ir a hoy
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── AGENDA MÉDICO / ENFERMERO ─────────────────────────────────
 function AgendaMedico({perfil, cambiarVista}) {
   const f = getRolFlags(perfil);
@@ -2327,6 +2482,7 @@ function AgendaMedico({perfil, cambiarVista}) {
   const [sedesData, setSedesData]   = useState([]);
   const [sedeTab, setSedeTab]       = useState("todas");
   const [prospectosCitas, setProspectosCitas] = useState([]);
+  const [showCalAgenda, setShowCalAgenda] = useState(false);
 
   const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
   const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
@@ -2441,9 +2597,22 @@ function AgendaMedico({perfil, cambiarVista}) {
           <button onClick={()=>navegar(-1)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>‹</button>
           <button onClick={()=>setFechaSelec(hoy)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"#00A896",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
           <button onClick={()=>navegar(1)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>›</button>
-          {/* Selector de fecha */}
-          <input type="date" value={fechaSelec} onChange={e=>setFechaSelec(e.target.value)}
-            style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:8,color:"var(--text)",padding:"6px 10px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+          {/* Selector de fecha — MiniCal */}
+          <div style={{position:"relative"}}>
+            <button onClick={()=>setShowCalAgenda(c=>!c)}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text)",
+                padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,
+                display:"flex",alignItems:"center",gap:6}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              {new Date(fechaSelec+"T12:00:00").toLocaleDateString("es-PE",{day:"numeric",month:"short",year:"numeric"})}
+            </button>
+            {showCalAgenda && (
+              <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,zIndex:100}}
+                onMouseLeave={()=>setShowCalAgenda(false)}>
+                <MiniCal fecha={fechaSelec} onChange={d=>{ setFechaSelec(d); setShowCalAgenda(false); }}/>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -3222,6 +3391,7 @@ function Sesiones({perfil}) {
   const [loading, setLoading]   = useState(true);
   const [verSesion, setVerSesion] = useState(null);  // modal detalle/completar
   const [modalNueva, setModalNueva] = useState(false);
+  const [showCal, setShowCal] = useState(false);
 
   // Data de soporte
   const { data: pacientesData } = useSupabaseQuery(
@@ -3408,14 +3578,23 @@ function Sesiones({perfil}) {
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()-1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
             style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:16,lineHeight:1}}>‹</button>
-          <button onClick={()=>setFecha(hoy)}
-            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"#00A896",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
-            Hoy
-          </button>
+          <div style={{position:"relative"}}>
+            <button onClick={()=>setShowCal(c=>!c)}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text)",
+                padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,
+                display:"flex",alignItems:"center",gap:6}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              {new Date(fecha+"T12:00:00").toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"})}
+            </button>
+            {showCal && (
+              <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,zIndex:100}}
+                onMouseLeave={()=>setShowCal(false)}>
+                <MiniCal fecha={fecha} onChange={d=>{ setFecha(d); setShowCal(false); }}/>
+              </div>
+            )}
+          </div>
           <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()+1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
             style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:16,lineHeight:1}}>›</button>
-          <input type="date" value={fecha} onChange={e=>{ if(e.target.value) setFecha(e.target.value); }}
-            style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"7px 12px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
           {(f.esAdmin || f.esMedico || f.esEnfermero) && (
             <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
           )}
@@ -3819,7 +3998,7 @@ function Alertas({perfil}) {
     [], "Alertas:pacientes"
   );
   const { data: sedesData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("id,nombre").eq("estado","activo"),
+    () => supabase.from("sedes").select("id,nombre").eq("estado","activa"),
     [], "Alertas:sedes"
   );
 
@@ -3837,6 +4016,7 @@ function Alertas({perfil}) {
         `)
         .order("created_at", { ascending: false })
         .limit(100);
+      if(!f.esAdmin && !f.esMedicoEsp && perfil?.sede_id) q = q.eq("sede_id", perfil.sede_id);
       return q;
     }, "Alertas:load");
     setAlertas(data || []);
@@ -3979,8 +4159,8 @@ function Alertas({perfil}) {
             <div key={alerta.id}
               onClick={()=>abrirAlerta(alerta)}
               style={{
-                background:"var(--bg)",
-                border:`1px solid ${alerta.estado==="nueva"?"#F8717140":"var(--border)"}`,
+                background:"var(--surface)",
+                border:`0.5px solid ${alerta.estado==="nueva"?"#F8717140":"var(--border)"}`,
                 borderLeft:`3px solid ${PRIORIDAD_COLOR[alerta.prioridad]}`,
                 borderRadius:12, padding:"14px 18px", marginBottom:8,
                 cursor:"pointer", transition:"border-color .2s",
