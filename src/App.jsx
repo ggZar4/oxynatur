@@ -858,8 +858,8 @@ function Pacientes({perfil}) {
       {/* Modal editar paciente */}
       {modalEditar && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
-          <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #1E2535",display:"flex",justifyContent:"space-between"}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
+            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Editar Paciente</div>
               <button onClick={()=>setModalEditar(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
@@ -3216,7 +3216,7 @@ function Sesiones({perfil}) {
   };
 
   // Fecha seleccionada — default hoy
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = fechaHoyLima();
   const [fecha, setFecha]       = useState(hoy);
   const [sesiones, setSesiones] = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -3283,7 +3283,7 @@ function Sesiones({perfil}) {
     if(!formNueva.camara_id)   e.camara_id   = "Requerido";
     if(!formNueva.fecha)       e.fecha       = "Requerido";
     if(!formNueva.hora_inicio) e.hora_inicio = "Requerido";
-    if(!formNueva.numero_sesion) e.numero_sesion = "Requerido";
+    // numero_sesion se calcula automáticamente si hay compra_id
     setErrNueva(e);
     if(Object.keys(e).length) return;
     setSavingNueva(true);
@@ -3302,7 +3302,7 @@ function Sesiones({perfil}) {
       hora_fin:          formNueva.hora_fin,
       presion_aplicada:  parseFloat(formNueva.presion_aplicada) || 2.0,
       duracion_minutos:  parseInt(formNueva.duracion_minutos) || 90,
-      numero_sesion:     parseInt(formNueva.numero_sesion),
+      numero_sesion:     formNueva.numero_sesion ? parseInt(formNueva.numero_sesion) : (() => { const c = comprasData?.find(x=>x.id===formNueva.compra_id); return c ? c.sesiones_usadas+1 : 1; })(),
       estado:            "programada",
       enfermero_id:      f.esEnfermero ? perfil.id : null,
       medico_id:         f.esMedico ? perfil.id : null,
@@ -3360,7 +3360,7 @@ function Sesiones({perfil}) {
   };
 
   const cancelar = async (sesion) => {
-    if(!confirm("¿Cancelar esta sesión?")) return;
+    if(!window.confirm("¿Cancelar esta sesión?")) return;
     await safeQuery(() => supabase.from("sesiones").update({ estado:"cancelada" }).eq("id", sesion.id), "Sesiones:cancelar");
     load();
   };
@@ -3406,6 +3406,10 @@ function Sesiones({perfil}) {
           <p style={{color:"var(--text3)",fontSize:14}}>Agenda de sesiones hiperbáricas</p>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <button onClick={()=>setFecha(hoy)}
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"#00A896",padding:"8px 14px",borderRadius:10,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
+            Hoy
+          </button>
           <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
             style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"8px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
           {(f.esAdmin || f.esMedico || f.esEnfermero) && (
@@ -3422,9 +3426,9 @@ function Sesiones({perfil}) {
           {label:"Completadas",    val:completadas, color:"#10B981"},
           {label:"Pendientes",     val:pendientes, color:"#F59E0B"},
         ].map((k,i)=>(
-          <Card key={i}>
+          <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
-            <div style={{fontFamily:"Syne,sans-serif",fontSize:30,fontWeight:700,color:k.color,marginTop:6}}>{k.val === 0 ? <span style={{color:"var(--border2)"}}>—</span> : k.val}</div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:k.color,marginTop:8}}>{k.val === 0 ? <span style={{color:"var(--border2)"}}>—</span> : k.val}</div>
           </Card>
         ))}
       </div>
@@ -3439,7 +3443,7 @@ function Sesiones({perfil}) {
             </Card>
           : sesiones.map(s => (
             <div key={s.id} style={{
-              background:"var(--bg)", border:"1px solid #1E2535",
+              background:"var(--surface)", border:"0.5px solid var(--border)",
               borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}`,
               borderRadius:12, padding:"14px 18px", marginBottom:8,
               display:"grid", gridTemplateColumns:"80px 2fr 1fr 1fr 1fr auto",
