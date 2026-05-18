@@ -1772,7 +1772,7 @@ function HistoriasClinicas({perfil}) {
               <Btn onClick={guardarHCMaestra} disabled={savingHC}>{savingHC?"Guardando...":"Guardar HC"}</Btn>
             </div>
           </div>
-        ) : (
+        ) : (<>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             {[
               ["Diagnóstico",         hcMaestra?.diagnostico_principal,    true],
@@ -1820,7 +1820,8 @@ function HistoriasClinicas({perfil}) {
                 </div>
               </div>
             )}
-        )}
+        </div>
+        </>)}
       </Card>
 
       {/* EVALUACIONES POR SESIÓN */}
