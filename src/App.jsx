@@ -3385,7 +3385,7 @@ function Ventas({perfil}) {
           setErr(e => ({...e, paciente_id: "El paciente no tiene Historia Clinica. Debe ser evaluado por el medico primero."}));
           return;
         } else {
-          const ok = window.confirm(""ATENCION: Este paciente no tiene Historia Clinica.\n\nComo administrador podes continuar, pero se recomienda que el medico lo evalue primero.\n\n¿Continuar de todas formas?");
+          const ok = window.confirm("ATENCION: Este paciente no tiene Historia Clinica.\n\nComo administrador podes continuar, pero se recomienda que el medico lo evalue primero.\n\n¿Continuar de todas formas?");
           if(!ok) return;
         }
       } else if(hcApta.apto_hiperbarica === false) {
@@ -3394,14 +3394,14 @@ function Ventas({perfil}) {
           setErr(e => ({...e, paciente_id: "El paciente fue marcado como NO APTO para HBOT. Consulta con el medico."}));
           return;
         } else {
-          const ok = window.confirm(""ADVERTENCIA: Este paciente fue marcado como NO APTO para HBOT por el medico.\n\nComo administrador podes continuar bajo tu responsabilidad.\n\n¿Continuar de todas formas?");
+          const ok = window.confirm("ADVERTENCIA: Este paciente fue marcado como NO APTO para HBOT por el medico.\n\nComo administrador podes continuar bajo tu responsabilidad.\n\n¿Continuar de todas formas?");
           if(!ok) return;
         }
       }
       // apto_hiperbarica === true → ok, continuar
       // apto_hiperbarica === null → HC existe pero médico aún no la completó → advertencia
       if(hcApta && hcApta.apto_hiperbarica === null) {
-        const ok = window.confirm(""ATENCION: El medico aun no ha completado la evaluacion de aptitud de este paciente.\n\n¿Continuar de todas formas?");
+        const ok = window.confirm("ATENCION: El medico aun no ha completado la evaluacion de aptitud de este paciente.\n\n¿Continuar de todas formas?");
         if(!ok) return;
       }
     }
@@ -4083,7 +4083,7 @@ function Sesiones({perfil}) {
   };
 
   const cancelar = async (sesion) => {
-    if(!window.confirm(""¿Cancelar esta sesión?")) return;
+    if(!window.confirm("¿Cancelar esta sesión?")) return;
     await safeQuery(() => supabase.from("sesiones").update({ estado:"cancelada" }).eq("id", sesion.id), "Sesiones:cancelar");
     load();
   };
