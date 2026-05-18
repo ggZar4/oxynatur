@@ -33,16 +33,21 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY
   : null;
 
 // FIX BUG 6: lock huérfano de auth-token.
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-    lock: async (_name, _acquireTimeout, fn) => {
-      return await fn();
+// Singleton para evitar múltiples instancias GoTrueClient en HMR/dev
+if (!globalThis.__oxynatur_supabase) {
+  globalThis.__oxynatur_supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      storageKey: "oxynatur-auth",
+      lock: async (_name, _acquireTimeout, fn) => {
+        return await fn();
+      },
     },
-  },
-});
+  });
+}
+const supabase = globalThis.__oxynatur_supabase;
 
 // ── Helpers para queries de Supabase ──────────────────────────
 async function safeQuery(queryFn, contexto = "query") {
@@ -411,11 +416,13 @@ function DashboardMedico({perfil}) {
         const horasTranscurridas = (Date.now() - fechaEval.getTime()) / (1000*60*60);
         return horasTranscurridas > 12;
       });
-      if(viejos.length > 0 && mounted){
+      // Solo borradores con paciente_id válido (NOT NULL constraint)
+      const viejosConPaciente = viejos.filter(e => e.pacientes?.id);
+      if(viejosConPaciente.length > 0 && mounted){
         // Crear alerta automática si no existe ya
         await safeQuery(()=> supabase.from("alertas_clinicas").insert(
-          viejos.slice(0,3).map(e=>({
-            paciente_id:  e.pacientes?.id || null,
+          viejosConPaciente.slice(0,3).map(e=>({
+            paciente_id:  e.pacientes.id,
             sede_id:      e.sedes?.id || null,
             generada_por: perfil.id,
             origen:       "sistema",
@@ -1280,7 +1287,7 @@ function Pacientes({perfil}) {
       }
       {modal && f.puedeCrearPaciente && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
-          <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Paciente</div>
               <button onClick={()=>setModal(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
@@ -1502,7 +1509,7 @@ function HistoriasClinicas({perfil}) {
       contraindicaciones: hc.contraindicaciones||"",
       observaciones_generales: hc.observaciones_generales||"",
       apto_hiperbarica: hc.apto_hiperbarica !== false,
-      contraindicaciones_screening: hc.contraindicaciones_screening || {},
+      contraindicaciones_screening: Object.keys(hc.contraindicaciones_screening||{}).length > 0 ? hc.contraindicaciones_screening : {"neumotorax":{presente:false},"epilepsia":{presente:false},"embarazo_ci":{presente:false},"claustrofobia_severa":{presente:false},"marcapasos":{presente:false},"infeccion_viral":{presente:false},"quimioterapia":{presente:false},"perforacion_timpanica":{presente:false},"insuf_cardiaca":{presente:false}},
     });
 
     // Cargar compras activas del paciente para el selector de episodio
@@ -3238,6 +3245,9 @@ function Ventas({perfil}) {
   const f = getRolFlags(perfil);
   // Enfermero solo ve su sede; admin ve todo
   const sedeFija = f.ventasSoloSuSede ? perfil?.sede_id : null;
+  // Buscador de paciente en Nueva Venta
+  const [busqPac, setBusqPac] = useState("");
+  const [abiertoDropPac, setAbiertoDropPac] = useState(false);
 
   const { data: pacientesData } = useSupabaseQuery(
     () => {
@@ -3629,8 +3639,48 @@ function Ventas({perfil}) {
               <button onClick={()=>setModal(false)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
             </div>
 
-            <Select label="Paciente" value={form.paciente_id} onChange={v=>setForm({...form,paciente_id:v})}
-              options={(pacientesData||[]).map(p=>({value:p.id,label:`${p.apellidos}, ${p.nombres}${p.dni?` — DNI ${p.dni}`:""}`}))} required/>
+            {/* Buscador de paciente con filtro */}
+            {(()=>{
+              const pacFiltrados = (pacientesData||[]).filter(p=>{
+                if(!busqPac) return true;
+                const q = busqPac.toLowerCase();
+                return (p.apellidos+" "+p.nombres+" "+(p.dni||"")).toLowerCase().includes(q);
+              }).slice(0,40);
+              const selPac = (pacientesData||[]).find(p=>p.id===form.paciente_id);
+              return (
+                <div style={{marginBottom:14,position:"relative"}}>
+                  <label style={{fontSize:12,color:err.paciente_id?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Paciente <span style={{color:"#F87171"}}>*</span></label>
+                  <input
+                    value={abiertoDropPac ? busqPac : (selPac ? `${selPac.apellidos}, ${selPac.nombres}` : "")}
+                    onFocus={()=>{ setAbiertoDropPac(true); setBusqPac(""); }}
+                    onChange={e=>{ setBusqPac(e.target.value); setAbiertoDropPac(true); }}
+                    placeholder="Buscar por nombre o DNI..."
+                    style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${err.paciente_id?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
+                  />
+                  {abiertoDropPac && (
+                    <>
+                      <div style={{position:"fixed",inset:0,zIndex:199}} onMouseDown={()=>setAbiertoDropPac(false)}/>
+                      <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,zIndex:200,maxHeight:220,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.15)"}}>
+                        {pacFiltrados.length === 0
+                          ? <div style={{padding:"10px 14px",fontSize:13,color:"var(--text3)"}}>Sin resultados</div>
+                          : pacFiltrados.map(p=>(
+                            <div key={p.id}
+                              onMouseDown={(e)=>{ e.preventDefault(); setForm(fm=>({...fm,paciente_id:p.id})); setAbiertoDropPac(false); setBusqPac(""); }}
+                              style={{padding:"9px 14px",fontSize:13,color:"var(--text)",cursor:"pointer",borderBottom:"0.5px solid var(--border)"}}
+                              onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
+                              onMouseLeave={e=>e.currentTarget.style.background=""}
+                            >
+                              <span style={{fontWeight:600}}>{p.apellidos}, {p.nombres}</span>
+                              {p.dni && <span style={{color:"var(--text3)",marginLeft:8,fontSize:12}}>DNI {p.dni}</span>}
+                            </div>
+                          ))
+                        }
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
             {err.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paciente_id}</div>}
 
             {/* Sede: fija para enfermero, seleccionable para admin */}
@@ -3810,6 +3860,53 @@ function Sesiones({perfil}) {
   const [modalNueva, setModalNueva] = useState(false);
   const [showCal, setShowCal] = useState(false);
 
+  // Modal iniciar — cuestionario pre + signos pre
+  const [modalIniciar, setModalIniciar]   = useState(null);
+  const [cuestionarioPre, setCuestionarioPre] = useState({});
+  const [signosPre, setSignosPre]         = useState({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
+  const [savingIniciar, setSavingIniciar] = useState(false);
+  const [errIniciar, setErrIniciar] = useState("");
+
+  const CUESTIONARIO_PRE = [
+    {key:"resfriado",        label:"¿Está resfriado o con congestión nasal?",                  accion:"Suspender. Llamar médico.", invertido:false},
+    {key:"dolor_oidos",      label:"¿Tiene dolor de oídos o sinusal en este momento?",          accion:"Suspender. Llamar médico.", invertido:false},
+    {key:"fiebre",           label:"¿Tiene fiebre hoy?",                                        accion:"Suspender. Llamar médico.", invertido:false},
+    {key:"alcohol",          label:"¿Consumió alcohol en las últimas 12 horas?",                accion:"Suspender. Llamar médico.", invertido:false},
+    {key:"medicamento_nuevo",label:"¿Tomó algún medicamento nuevo desde la última sesión?",     accion:"Llamar médico antes de iniciar.", invertido:false},
+    {key:"sintoma_nuevo",    label:"¿Tiene algún síntoma nuevo o cambio en su estado?",         accion:"Llamar médico antes de iniciar.", invertido:false},
+    {key:"comio",            label:"¿Comió al menos 2 horas antes de la sesión?",              accion:"Informar al médico (hipoglucemia).", invertido:true},
+  ];
+
+  const hayAlertaPre = CUESTIONARIO_PRE.some(q=>{
+    const resp = cuestionarioPre[q.key];
+    return q.invertido ? resp===false : resp===true;
+  });
+
+  const confirmarIniciar = async () => {
+    setSavingIniciar(true);
+    setErrIniciar("");
+    const { error } = await safeQuery(()=> supabase.from("sesiones").update({
+      estado:              "en_curso",
+      hora_inicio_real:    new Date().toTimeString().slice(0,5),
+      cuestionario_pre:    cuestionarioPre,
+      presion_arterial_pre: signosPre.presion_arterial_pre||null,
+      saturacion_o2_pre:   signosPre.saturacion_o2_pre ? Number(signosPre.saturacion_o2_pre) : null,
+      frecuencia_cardiaca: signosPre.frecuencia_cardiaca ? Number(signosPre.frecuencia_cardiaca) : null,
+      temperatura:         signosPre.temperatura ? Number(signosPre.temperatura) : null,
+      peso:                signosPre.peso ? Number(signosPre.peso) : null,
+      nivel_dolor:         Number(signosPre.nivel_dolor)||0,
+    }).eq("id", modalIniciar.id), "Sesiones:iniciar");
+    setSavingIniciar(false);
+    if(error) {
+      setErrIniciar(`Error al iniciar: ${error?.message || error?.code || JSON.stringify(error)}`);
+      return;
+    }
+    setModalIniciar(null);
+    setCuestionarioPre({});
+    setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
+    load();
+  };
+
   // Data de soporte
   const { data: pacientesData } = useSupabaseQuery(
     () => {
@@ -3919,6 +4016,8 @@ function Sesiones({perfil}) {
       hora_inicio_real:  formCompletar.hora_inicio_real || verSesion.hora_inicio,
       nivel_dolor:       formCompletar.nivel_dolor,
       estado_general:    formCompletar.estado_general,
+      presion_arterial:  formCompletar.presion_arterial||null,
+      saturacion_o2:     formCompletar.saturacion_o2 ? Number(formCompletar.saturacion_o2) : null,
       tolerancia:        formCompletar.tolerancia,
       observaciones:     formCompletar.observaciones || null,
       requiere_atencion: formCompletar.requiere_atencion,
@@ -4084,8 +4183,8 @@ function Sesiones({perfil}) {
               <div style={{display:"flex",gap:6}}>
                 {s.estado === "programada" && (
                   <>
-                    <button onClick={()=>iniciar(s)}
-                      style={{background:"#00C4B420",border:"1px solid #00C4B440",color:"#00A896",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    <button onClick={(e)=>{ e.stopPropagation(); setModalIniciar(s); setCuestionarioPre({}); setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0}); }}
+                      style={{background:"#00A89620",border:"0.5px solid #00A89640",color:"#00A896",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                       ▶ Iniciar
                     </button>
                     <button onClick={()=>cancelar(s)}
@@ -4095,7 +4194,7 @@ function Sesiones({perfil}) {
                   </>
                 )}
                 {s.estado === "en_curso" && (
-                  <button onClick={()=>{ setVerSesion(s); setFormCompletar({hora_inicio_real:s.hora_inicio_real||s.hora_inicio?.slice(0,5)||"",hora_fin_real:new Date().toTimeString().slice(0,5),nivel_dolor:0,estado_general:"Bueno",tolerancia:"Buena",observaciones:"",requiere_atencion:false}); }}
+                  <button onClick={()=>{ setVerSesion(s); setFormCompletar({hora_inicio_real:s.hora_inicio_real||s.hora_inicio?.slice(0,5)||"",hora_fin_real:new Date().toTimeString().slice(0,5),nivel_dolor:0,estado_general:"Bueno",tolerancia:"Buena",observaciones:"",requiere_atencion:false,presion_arterial:"",saturacion_o2:""}); }}
                     style={{background:"#10B98120",border:"1px solid #10B98140",color:"#10B981",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                     ✓ Completar
                   </button>
@@ -4233,24 +4332,49 @@ function Sesiones({perfil}) {
               ) : (
                 /* Si en_curso — formulario completar */
                 <>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+                  {/* Horario */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
                     <Input label="Hora inicio real" type="time" value={formCompletar.hora_inicio_real}
                       onChange={v=>setFormCompletar(f=>({...f,hora_inicio_real:v}))}/>
                     <Input label="Hora fin real" type="time" value={formCompletar.hora_fin_real}
                       onChange={v=>setFormCompletar(f=>({...f,hora_fin_real:v}))}/>
                   </div>
 
-                  {/* Nivel de dolor */}
-                  <div style={{marginBottom:14}}>
-                    <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:8}}>
-                      Nivel de dolor: <span style={{color: formCompletar.nivel_dolor>=7?"#F87171":formCompletar.nivel_dolor>=4?"#F59E0B":"#10B981",fontWeight:700}}>{formCompletar.nivel_dolor}/10</span>
-                    </label>
-                    <input type="range" min="0" max="10" value={formCompletar.nivel_dolor}
-                      onChange={e=>setFormCompletar(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
-                      style={{width:"100%",accentColor:"#00A896"}}/>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text3)",marginTop:2}}>
-                      <span>Sin dolor</span><span>Dolor máximo</span>
+                  {/* Sección F — Signos vitales POST */}
+                  <div style={{marginBottom:16,border:"0.5px solid #00A89640",borderRadius:10,overflow:"hidden"}}>
+                    <div style={{padding:"8px 14px",background:"#00A89608",fontSize:11,fontWeight:700,color:"#00A896",letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                      F. Signos vitales post-sesión — Al salir de cámara
                     </div>
+                    <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div>
+                        <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Presión arterial</label>
+                        <input type="text" value={formCompletar.presion_arterial||""} placeholder="120/80"
+                          onChange={e=>setFormCompletar(f=>({...f,presion_arterial:e.target.value}))}
+                          style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Saturación O₂ (%)</label>
+                        <input type="number" value={formCompletar.saturacion_o2||""} placeholder="98"
+                          onChange={e=>setFormCompletar(f=>({...f,saturacion_o2:e.target.value}))}
+                          style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                      </div>
+                      <div style={{gridColumn:"1/-1"}}>
+                        <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
+                          Nivel de dolor post: <span style={{color:formCompletar.nivel_dolor>=7?"#F87171":formCompletar.nivel_dolor>=4?"#F59E0B":"#10B981",fontWeight:700}}>{formCompletar.nivel_dolor}/10</span>
+                        </label>
+                        <input type="range" min="0" max="10" value={formCompletar.nivel_dolor}
+                          onChange={e=>setFormCompletar(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
+                          style={{width:"100%",accentColor:"#00A896"}}/>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text3)",marginTop:2}}>
+                          <span>Sin dolor</span><span>Dolor máximo</span>
+                        </div>
+                      </div>
+                    </div>
+                    {formCompletar.saturacion_o2 && Number(formCompletar.saturacion_o2) < 92 && (
+                      <div style={{margin:"0 14px 12px",padding:"8px 12px",background:"#F8717110",border:"0.5px solid #F8717140",borderRadius:8,fontSize:12,color:"#F87171",fontWeight:600}}>
+                        ⚠ SatO₂ post &lt; 92% — Llamar al médico on-call. No dar de alta al paciente.
+                      </div>
+                    )}
                   </div>
 
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -4291,6 +4415,133 @@ function Sesiones({perfil}) {
                   {savingCompletar ? "Guardando..." : "✓ Marcar completada"}
                 </Btn>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Iniciar — Cuestionario pre + Signos vitales pre */}
+      {modalIniciar && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:560,width:"100%",
+            boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+            {/* Header */}
+            <div style={{padding:"16px 20px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
+              <div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>
+                  Iniciar sesión — #{modalIniciar.numero_sesion}
+                </div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
+                  {modalIniciar.paciente} · {modalIniciar.sede_nombre}
+                </div>
+              </div>
+              <button onClick={()=>setModalIniciar(null)}
+                style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:20}}>×</button>
+            </div>
+
+            <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+
+              {/* Sección B — Cuestionario pre-sesión */}
+              <div style={{marginBottom:20}}>
+                <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
+                  B. Cuestionario pre-sesión
+                </div>
+                <div style={{fontSize:11,color:"var(--text3)",marginBottom:10,padding:"8px 12px",background:"var(--surface2)",borderRadius:8}}>
+                  Completar ANTES de que el paciente ingrese a cámara. <strong style={{color:"#F87171"}}>Cualquier Sí → suspender y llamar al médico.</strong>
+                </div>
+
+                {CUESTIONARIO_PRE.map((q,i)=>{
+                  const resp = cuestionarioPre[q.key];
+                  const esAlerta = q.invertido ? resp===false : resp===true;
+                  return (
+                    <div key={q.key} style={{
+                      marginBottom:8,padding:"10px 12px",borderRadius:8,
+                      background: esAlerta ? "#F8717108" : "var(--surface2)",
+                      border: `0.5px solid ${esAlerta?"#F8717140":"var(--border)"}`,
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{display:"flex",gap:12,flexShrink:0}}>
+                          {[["si","Sí",true],["no","No",false]].map(([v,l,val])=>(
+                            <label key={v} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",fontSize:13}}>
+                              <input type="radio"
+                                checked={resp===val}
+                                onChange={()=>setCuestionarioPre(p=>({...p,[q.key]:val}))}
+                                style={{accentColor: val?"#F87171":"#10B981"}}/>
+                              <span style={{fontWeight:resp===val?700:400,color:resp===val?(val?"#F87171":"#10B981"):"var(--text2)"}}>{l}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <span style={{fontSize:13,color:"var(--text)",flex:1}}>{q.label}</span>
+                        {i+1 === CUESTIONARIO_PRE.length && <span style={{fontSize:10,color:"var(--text3)"}}>(Sí = normal)</span>}
+                      </div>
+                      {esAlerta && (
+                        <div style={{marginTop:6,fontSize:11,color:"#F87171",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                          ⚠ {q.accion}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Alerta general */}
+                {hayAlertaPre && (
+                  <div style={{marginTop:10,padding:"12px 14px",background:"#F8717110",border:"1px solid #F8717140",borderRadius:10}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#F87171",marginBottom:4}}>⚠ Alerta de seguridad</div>
+                    <div style={{fontSize:12,color:"#F87171"}}>
+                      El paciente tiene respuestas que requieren evaluación médica antes de ingresar a cámara.
+                      Llamar al médico on-call antes de proceder.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Sección C — Signos vitales pre */}
+              <div>
+                <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
+                  C. Signos vitales pre-sesión — Antes de ingresar a cámara
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                  {[
+                    {key:"presion_arterial_pre", label:"Presión arterial", placeholder:"120/80", type:"text"},
+                    {key:"frecuencia_cardiaca",  label:"Frec. cardíaca (bpm)", placeholder:"72", type:"number"},
+                    {key:"saturacion_o2_pre",    label:"Saturación O₂ (%)", placeholder:"98", type:"number"},
+                    {key:"temperatura",          label:"Temperatura (°C)", placeholder:"36.5", type:"number"},
+                    {key:"peso",                 label:"Peso (kg)", placeholder:"70", type:"number"},
+                    {key:"nivel_dolor",          label:"Dolor (0–10)", placeholder:"0", type:"number"},
+                  ].map(f=>(
+                    <div key={f.key}>
+                      <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>{f.label}</label>
+                      <input type={f.type} value={signosPre[f.key]||""} placeholder={f.placeholder}
+                        onChange={e=>setSignosPre(p=>({...p,[f.key]:e.target.value}))}
+                        style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,
+                          color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginTop:8,fontSize:11,color:"var(--text3)",padding:"6px 10px",background:"var(--surface2)",borderRadius:6}}>
+                  Rangos normales: PA 90/60–140/90 · FC 60–100 lpm · SatO₂ ≥94% · T° ≤37.5°C
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            {errIniciar && (
+              <div style={{margin:"0 20px 8px",padding:"8px 12px",background:"#F8717115",border:"1px solid #F8717140",borderRadius:8,fontSize:12,color:"#F87171"}}>
+                {errIniciar}
+              </div>
+            )}
+            <div style={{padding:"12px 20px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+              <div style={{fontSize:11,color:"var(--text3)"}}>
+                {Object.keys(cuestionarioPre).length}/7 preguntas respondidas
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn variant="ghost" onClick={()=>setModalIniciar(null)}>Cancelar</Btn>
+                <Btn onClick={confirmarIniciar} disabled={savingIniciar||Object.keys(cuestionarioPre).length<7}
+                  style={{background: hayAlertaPre?"#F59E0B":"#00A896"}}>
+                  {savingIniciar ? "Iniciando..." : hayAlertaPre ? "⚠ Iniciar con alerta" : "▶ Iniciar sesión"}
+                </Btn>
+              </div>
             </div>
           </div>
         </div>
@@ -4778,6 +5029,7 @@ function Alertas({perfil}) {
     </div>
   );
 }
+
 
 // ── APP PRINCIPAL ─────────────────────────────────────────────
 
