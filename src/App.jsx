@@ -3382,12 +3382,12 @@ function Ventas({perfil}) {
       if(!hcApta) {
         // No tiene HC en absoluto
         if(!f.esAdmin) {
-          setErr(e => ({...e, paciente_id: "El paciente no tiene Historia Clínica. Debe ser evaluado por el médico primero."}));
+          setErr(e => ({...e, paciente_id: "El paciente no tiene Historia Clinica. Debe ser evaluado por el medico primero."}));
           return;
         } else {
-          const ok = window.confirm("⚠️ Este paciente no tiene Historia Clínica.
+          const ok = window.confirm("ATENCION: Este paciente no tiene Historia Clinica.
 
-Como administrador podés continuar, pero se recomienda que el médico lo evalúe primero.
+Como administrador podes continuar, pero se recomienda que el medico lo evalue primero.
 
 ¿Continuar de todas formas?");
           if(!ok) return;
@@ -3395,12 +3395,12 @@ Como administrador podés continuar, pero se recomienda que el médico lo evalú
       } else if(hcApta.apto_hiperbarica === false) {
         // Tiene HC pero fue marcado NO apto
         if(!f.esAdmin) {
-          setErr(e => ({...e, paciente_id: "El paciente fue marcado como NO APTO para HBOT. Consultá con el médico."}));
+          setErr(e => ({...e, paciente_id: "El paciente fue marcado como NO APTO para HBOT. Consulta con el medico."}));
           return;
         } else {
-          const ok = window.confirm("🚨 Este paciente fue marcado como NO APTO para HBOT por el médico.
+          const ok = window.confirm("ADVERTENCIA: Este paciente fue marcado como NO APTO para HBOT por el medico.
 
-Como administrador podés continuar bajo tu responsabilidad.
+Como administrador podes continuar bajo tu responsabilidad.
 
 ¿Continuar de todas formas?");
           if(!ok) return;
@@ -3409,7 +3409,7 @@ Como administrador podés continuar bajo tu responsabilidad.
       // apto_hiperbarica === true → ok, continuar
       // apto_hiperbarica === null → HC existe pero médico aún no la completó → advertencia
       if(hcApta && hcApta.apto_hiperbarica === null) {
-        const ok = window.confirm("⚠️ El médico aún no ha completado la evaluación de aptitud de este paciente.
+        const ok = window.confirm("ATENCION: El medico aun no ha completado la evaluacion de aptitud de este paciente.
 
 ¿Continuar de todas formas?");
         if(!ok) return;
@@ -5239,7 +5239,7 @@ function Prospectos({perfil}) {
     setShowConvertForm(false);
     setModalVer(null);
     load();
-    alert(`✅ ${convertForm.nombres} ${convertForm.apellidos} fue registrado como paciente. Ya podés agendar sus sesiones.`);
+    alert(`${convertForm.nombres} ${convertForm.apellidos} fue registrado como paciente con HC creada. Ya podes agendar sus sesiones.`);
   };
 
   const cambiarEstado = async (id, nuevoEstado) => {
