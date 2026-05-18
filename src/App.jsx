@@ -5217,6 +5217,21 @@ function Prospectos({perfil}) {
       return;
     }
 
+    // Crear HC maestra vacía y vincular sede
+    await safeQuery(() =>
+      supabase.from("historias_clinicas").insert({
+        paciente_id:          pac.id,
+        sede_apertura_id:     modalVer.sede_id || null,
+        diagnostico_principal: modalVer.motivo_consulta || "",
+      }), "Prospectos:crearHC"
+    );
+    await safeQuery(() =>
+      supabase.from("paciente_sedes").insert({
+        paciente_id: pac.id,
+        sede_id:     modalVer.sede_id || null,
+      }), "Prospectos:pacienteSede"
+    );
+
     await safeQuery(() =>
       supabase.from("prospectos").update({
         estado: "convertido",
