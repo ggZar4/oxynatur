@@ -5222,7 +5222,7 @@ function Prospectos({perfil}) {
       supabase.from("historias_clinicas").insert({
         paciente_id:          pac.id,
         sede_apertura_id:     modalVer.sede_id || null,
-        diagnostico_principal: modalVer.motivo_consulta || "",
+        diagnostico_principal: modalVer.motivo || "",
       }), "Prospectos:crearHC"
     );
     await safeQuery(() =>
