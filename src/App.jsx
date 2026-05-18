@@ -1767,7 +1767,8 @@ function HistoriasClinicas({perfil}) {
                   );
                 })}
               </div>
-            </div>            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setEditandoHC(false)}>Cancelar</Btn>
               <Btn onClick={guardarHCMaestra} disabled={savingHC}>{savingHC?"Guardando...":"Guardar HC"}</Btn>
             </div>
@@ -1820,7 +1821,6 @@ function HistoriasClinicas({perfil}) {
                 </div>
               </div>
             )}
-        </div>
         </>)}
       </Card>
 
