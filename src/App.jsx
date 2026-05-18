@@ -1502,6 +1502,7 @@ function HistoriasClinicas({perfil}) {
       contraindicaciones: hc.contraindicaciones||"",
       observaciones_generales: hc.observaciones_generales||"",
       apto_hiperbarica: hc.apto_hiperbarica !== false,
+      contraindicaciones_screening: hc.contraindicaciones_screening || {},
     });
 
     // Cargar compras activas del paciente para el selector de episodio
@@ -1539,6 +1540,7 @@ function HistoriasClinicas({perfil}) {
         contraindicaciones:       formHC.contraindicaciones,
         observaciones_generales:  formHC.observaciones_generales,
         apto_hiperbarica:         formHC.apto_hiperbarica,
+        contraindicaciones_screening: formHC.contraindicaciones_screening || {},
       }).eq("id", hcMaestra.id),
       "HC:guardarMaestra"
     );
@@ -1665,8 +1667,13 @@ function HistoriasClinicas({perfil}) {
       {/* HC MAESTRA */}
       <Card style={{marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+          <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}>
             Historia Clínica Maestra
+            {hcMaestra?.numero_hc && (
+              <span style={{fontSize:10,color:"var(--text3)",fontWeight:500,background:"var(--surface2)",padding:"1px 8px",borderRadius:99,border:"0.5px solid var(--border)"}}>
+                HC-{String(hcMaestra.numero_hc).padStart(3,"0")}
+              </span>
+            )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <Badge color={pacSelec.apto_hiperbarica!==false?"#10B981":"#F87171"}>
@@ -1705,7 +1712,62 @@ function HistoriasClinicas({perfil}) {
                 style={{width:16,height:16,accentColor:"#00A896"}}/>
               <span style={{fontSize:14,color:"var(--text)"}}>Paciente apto para terapia hiperbárica</span>
             </div>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            {/* Screening de contraindicaciones absolutas */}
+            <div style={{marginBottom:16,border:"0.5px solid #F8717140",borderRadius:10,overflow:"hidden"}}>
+              <div style={{padding:"10px 14px",background:"#F8717108",borderBottom:"0.5px solid #F8717130",fontSize:11,fontWeight:700,color:"#F87171",letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                Screening — Contraindicaciones absolutas para HBOT
+              </div>
+              <div style={{padding:"10px 14px"}}>
+                {[
+                  ["neumotorax","Neumotórax no tratado"],
+                  ["epilepsia","Epilepsia o convulsiones sin tratamiento controlado"],
+                  ["embarazo_ci","Embarazo (salvo riesgo vital)"],
+                  ["claustrofobia_severa","Claustrofobia severa"],
+                  ["marcapasos","Marcapasos u otro dispositivo eléctrico implantable"],
+                  ["infeccion_viral","Infección viral respiratoria activa severa"],
+                  ["quimioterapia","Uso reciente de bleomicina, doxorrubicina o cisplatino (últimos 3 meses)"],
+                  ["perforacion_timpanica","Perforación timpánica activa no tratada"],
+                  ["insuf_cardiaca","Insuficiencia cardíaca descompensada"],
+                ].map(([key, label])=>{
+                  const val = formHC.contraindicaciones_screening?.[key] || {};
+                  return (
+                    <div key={key} style={{marginBottom:10,paddingBottom:10,borderBottom:"0.5px solid var(--border)"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:val.presente ? 6 : 0}}>
+                        <div style={{display:"flex",gap:16,flexShrink:0}}>
+                          {[["si","Sí",true],["no","No",false]].map(([v,l,val_bool])=>(
+                            <label key={v} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",fontSize:13}}>
+                              <input type="radio"
+                                checked={val.presente===val_bool}
+                                onChange={()=>setFormHC(f=>({...f,
+                                  contraindicaciones_screening:{
+                                    ...f.contraindicaciones_screening,
+                                    [key]:{...val, presente:val_bool}
+                                  }
+                                }))}
+                                style={{accentColor: val_bool?"#F87171":"#10B981"}}/>
+                              <span style={{color:val.presente===val_bool?(val_bool?"#F87171":"#10B981"):"var(--text2)",fontWeight:val.presente===val_bool?700:400}}>{l}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <span style={{fontSize:13,color:"var(--text)",flex:1}}>{label}</span>
+                        {val.presente && <span style={{fontSize:10,background:"#F8717120",color:"#F87171",padding:"1px 8px",borderRadius:99,fontWeight:700,flexShrink:0}}>CONTRAINDICADO</span>}
+                      </div>
+                      {val.presente && (
+                        <input value={val.observacion||""} placeholder="Observación..."
+                          onChange={e=>setFormHC(f=>({...f,
+                            contraindicaciones_screening:{
+                              ...f.contraindicaciones_screening,
+                              [key]:{...val, observacion:e.target.value}
+                            }
+                          }))}
+                          style={{width:"100%",background:"var(--surface)",border:"0.5px solid #F8717140",borderRadius:8,
+                            color:"var(--text)",padding:"6px 10px",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setEditandoHC(false)}>Cancelar</Btn>
               <Btn onClick={guardarHCMaestra} disabled={savingHC}>{savingHC?"Guardando...":"Guardar HC"}</Btn>
             </div>
@@ -1726,6 +1788,38 @@ function HistoriasClinicas({perfil}) {
               </div>
             ) : null)}
           </div>
+            {/* Screening — vista de solo lectura */}
+            {hcMaestra?.contraindicaciones_screening && Object.values(hcMaestra.contraindicaciones_screening).some(v=>v.presente) && (
+              <div style={{marginTop:10,border:"0.5px solid #F8717140",borderRadius:10,overflow:"hidden"}}>
+                <div style={{padding:"8px 14px",background:"#F8717108",fontSize:11,fontWeight:700,color:"#F87171",letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                  Contraindicaciones absolutas presentes
+                </div>
+                <div style={{padding:"10px 14px"}}>
+                  {[
+                    ["neumotorax","Neumotórax no tratado"],
+                    ["epilepsia","Epilepsia o convulsiones sin tratamiento controlado"],
+                    ["embarazo_ci","Embarazo (salvo riesgo vital)"],
+                    ["claustrofobia_severa","Claustrofobia severa"],
+                    ["marcapasos","Marcapasos u otro dispositivo eléctrico implantable"],
+                    ["infeccion_viral","Infección viral respiratoria activa severa"],
+                    ["quimioterapia","Uso reciente de bleomicina, doxorrubicina o cisplatino (últimos 3 meses)"],
+                    ["perforacion_timpanica","Perforación timpánica activa no tratada"],
+                    ["insuf_cardiaca","Insuficiencia cardíaca descompensada"],
+                  ].filter(([key])=>hcMaestra.contraindicaciones_screening[key]?.presente).map(([key,label])=>{
+                    const v = hcMaestra.contraindicaciones_screening[key];
+                    return (
+                      <div key={key} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                        <span style={{color:"#F87171",fontWeight:700,flexShrink:0}}>✕</span>
+                        <div>
+                          <div style={{fontSize:13,color:"var(--text)",fontWeight:500}}>{label}</div>
+                          {v.observacion && <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{v.observacion}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
         )}
       </Card>
 
