@@ -3370,42 +3370,6 @@ function Ventas({perfil}) {
   const guardar = async () => {
     if(!validar()) return;
 
-    // 0. Validar HC apta antes de vender — bloqueo soft (admin puede override)
-    if(form.paciente_id) {
-      const { data: hcApta } = await safeQuery(
-        () => supabase.from("historias_clinicas")
-          .select("id, apto_hiperbarica")
-          .eq("paciente_id", form.paciente_id)
-          .limit(1).single(),
-        "Ventas:checkHC"
-      );
-      if(!hcApta) {
-        // No tiene HC en absoluto
-        if(!f.esAdmin) {
-          setErr(e => ({...e, paciente_id: "El paciente no tiene Historia Clinica. Debe ser evaluado por el medico primero."}));
-          return;
-        } else {
-          const ok = window.confirm("ATENCION: Este paciente no tiene Historia Clinica.\n\nComo administrador podes continuar, pero se recomienda que el medico lo evalue primero.\n\n¿Continuar de todas formas?");
-          if(!ok) return;
-        }
-      } else if(hcApta.apto_hiperbarica === false) {
-        // Tiene HC pero fue marcado NO apto
-        if(!f.esAdmin) {
-          setErr(e => ({...e, paciente_id: "El paciente fue marcado como NO APTO para HBOT. Consulta con el medico."}));
-          return;
-        } else {
-          const ok = window.confirm("ADVERTENCIA: Este paciente fue marcado como NO APTO para HBOT por el medico.\n\nComo administrador podes continuar bajo tu responsabilidad.\n\n¿Continuar de todas formas?");
-          if(!ok) return;
-        }
-      }
-      // apto_hiperbarica === true → ok, continuar
-      // apto_hiperbarica === null → HC existe pero médico aún no la completó → advertencia
-      if(hcApta && hcApta.apto_hiperbarica === null) {
-        const ok = window.confirm("ATENCION: El medico aun no ha completado la evaluacion de aptitud de este paciente.\n\n¿Continuar de todas formas?");
-        if(!ok) return;
-      }
-    }
-
     setSaving(true);
 
     // 1. Upload foto si existe
