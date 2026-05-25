@@ -26,11 +26,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   );
 }
 
-// Admin client con service_role — solo para crear/eliminar usuarios
-const SUPABASE_SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
-const supabaseAdmin = SUPABASE_SERVICE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
-  : null;
+// Crear usuario via Edge Function (service_role seguro en servidor)
+const EDGE_CREATE_USER = "https://eyfwqcxcjunrpnqhbbek.supabase.co/functions/v1/create-user";
 
 // FIX BUG 6: lock huérfano de auth-token.
 // Singleton para evitar múltiples instancias GoTrueClient en HMR/dev
@@ -2630,27 +2627,28 @@ function Usuarios({perfil:adminPerfil}) {
 
   const crear = async () => {
     if(!form.email||!form.password||!form.nombre){setMsg("Completa todos los campos requeridos");return;}
-    if(!supabaseAdmin){setMsg("Error: service key no configurada");return;}
     setSaving(true); setMsg("");
     const sedeId = form.rol==="medico" && form.es_especialista ? null : (form.sede_id||null);
-    // 1. Crear auth.user con Admin API (sin confirmación de email)
-    const {data, error} = await supabaseAdmin.auth.admin.createUser({
-      email: form.email,
-      password: form.password,
-      email_confirm: true,
+    // Llamar Edge Function (service_role corre en servidor — seguro)
+    const { data: { session } } = await supabase.auth.getSession();
+    const resp = await fetch(EDGE_CREATE_USER, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({
+        email:          form.email,
+        password:       form.password,
+        nombres:        form.nombre,
+        apellidos:      "",
+        rol:            form.rol,
+        sede_id:        sedeId,
+        es_especialista: form.rol==="medico" ? form.es_especialista : false,
+      }),
     });
-    if(error){setMsg("Error: "+error.message);setSaving(false);return;}
-    const uid = data.user.id;
-    // 2. Actualizar el perfil que el trigger creó automáticamente
-    const {error: e2} = await supabaseAdmin.from("perfiles").update({
-      nombre: form.nombre,
-      rol: form.rol,
-      es_especialista: form.rol==="medico" ? form.es_especialista : false,
-      sede_id: sedeId,
-      email: form.email,
-      activo: true,
-    }).eq("id", uid);
-    if(e2){setMsg("Usuario creado pero error en perfil: "+e2.message);setSaving(false);return;}
+    const result = await resp.json();
+    if(!resp.ok){setMsg("Error: "+(result.error||resp.statusText));setSaving(false);return;}
     setSaving(false); setModal(false);
     setForm({email:"",password:"",nombre:"",rol:"enfermero",sede_id:"",es_especialista:false});
     setMsg(""); load();
