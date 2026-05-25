@@ -5602,8 +5602,9 @@ export default function App() {
       const flags = getRolFlags(p);
       if(!vistaRestaurada) {
         vistaRestaurada = true;
-        // Enfermeros siempre arrancan en sesiones — su vista operativa principal
+        // Enfermeros siempre arrancan en sesiones — limpiar localStorage para no restaurar vista previa
         if(flags.esEnfermero) {
+          localStorage.removeItem("oxynatur-vista");
           setVista("sesiones");
         } else {
           const saved = localStorage.getItem("oxynatur-vista");
