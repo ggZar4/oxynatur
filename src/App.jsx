@@ -118,13 +118,13 @@ function getRolFlags(perfil) {
     puedeVerSedes:        esAdmin,
     puedeVerUsuarios:     esAdmin,
     puedeVerAlertas:      esAdmin || esMedico,
-    puedeVerProspectos:   esAdmin || esATC,
+    puedeVerProspectos:   esAdmin || esATC || esEnfermero,
 
     // ── Restricciones dentro de Ventas ──
     ventasSoloSuSede:     esEnfermero,
 
     // ── Acceso a pacientes ──
-    puedeCrearPaciente:      esAdmin || esMedico || esEnfermero,
+    puedeCrearPaciente:      esAdmin,
     puedeEditarPaciente:     esAdmin,
     puedeVerTodosPacientes:  esAdmin || esMedicoEsp,
 
