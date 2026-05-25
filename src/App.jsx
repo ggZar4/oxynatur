@@ -5602,21 +5602,26 @@ export default function App() {
       const flags = getRolFlags(p);
       if(!vistaRestaurada) {
         vistaRestaurada = true;
-        const saved = localStorage.getItem("oxynatur-vista");
-        const vistaMap = {
-          dashboard: flags.puedeVerDashboard,
-          alertas:   flags.puedeVerAlertas,
-          pacientes: true,
-          ventas:    flags.puedeVerVentas,
-          sesiones:  true,
-          historias: true,
-          finanzas:  flags.puedeVerFinanzas,
-          sedes:     flags.puedeVerSedes,
-          usuarios:  flags.puedeVerUsuarios,
-          prospectos:flags.puedeVerProspectos,
-          agenda:    true,
-        };
-        setVista(saved && vistaMap[saved] ? saved : flags.vistaDefault);
+        // Enfermeros siempre arrancan en sesiones — su vista operativa principal
+        if(flags.esEnfermero) {
+          setVista("sesiones");
+        } else {
+          const saved = localStorage.getItem("oxynatur-vista");
+          const vistaMap = {
+            dashboard: flags.puedeVerDashboard,
+            alertas:   flags.puedeVerAlertas,
+            pacientes: true,
+            ventas:    flags.puedeVerVentas,
+            sesiones:  true,
+            historias: true,
+            finanzas:  flags.puedeVerFinanzas,
+            sedes:     flags.puedeVerSedes,
+            usuarios:  flags.puedeVerUsuarios,
+            prospectos:flags.puedeVerProspectos,
+            agenda:    true,
+          };
+          setVista(saved && vistaMap[saved] ? saved : flags.vistaDefault);
+        }
       }
       setLoading(false);
     };
