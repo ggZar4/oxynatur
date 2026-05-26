@@ -5582,31 +5582,48 @@ function Prospectos({perfil}) {
       }).select().single(), "Prospectos:convertir"
     );
 
+    let pacienteId = pac?.id;
+
     if(error || !pac) {
-      setConvertErr({general: "Error al crear el paciente. Verificá que el DNI no esté duplicado."});
-      setConvirtiendo(false);
-      return;
+      // Si el error es DNI duplicado, buscar el paciente existente y vincularlo
+      if(error?.code === "23505") {
+        const { data: pacExistente } = await safeQuery(() =>
+          supabase.from("pacientes").select("id").eq("dni", convertForm.dni.trim()).single(),
+          "Prospectos:buscarDuplicado"
+        );
+        if(pacExistente?.id) {
+          pacienteId = pacExistente.id;
+        } else {
+          setConvertErr({general: "El DNI ya está registrado pero no se pudo vincular. Contacta al administrador."});
+          setConvirtiendo(false);
+          return;
+        }
+      } else {
+        setConvertErr({general: "Error al crear el paciente. Verificá que el DNI no esté duplicado."});
+        setConvirtiendo(false);
+        return;
+      }
     }
 
-    // Crear HC maestra vacía y vincular sede
+    // Crear HC maestra vacía y vincular sede (solo si no existe ya)
     await safeQuery(() =>
       supabase.from("historias_clinicas").insert({
-        paciente_id:          pac.id,
+        paciente_id:          pacienteId,
         sede_apertura_id:     modalVer.sede_id || null,
         diagnostico_principal: modalVer.motivo || "",
       }), "Prospectos:crearHC"
     );
     await safeQuery(() =>
-      supabase.from("paciente_sedes").insert({
-        paciente_id: pac.id,
+      supabase.from("paciente_sedes").upsert({
+        paciente_id: pacienteId,
         sede_id:     modalVer.sede_id || null,
-      }), "Prospectos:pacienteSede"
+      }, { onConflict: "paciente_id,sede_id", ignoreDuplicates: true }), "Prospectos:pacienteSede"
     );
 
     await safeQuery(() =>
       supabase.from("prospectos").update({
         estado: "convertido",
-        convertido_paciente_id: pac.id,
+        convertido_paciente_id: pacienteId,
         updated_at: new Date().toISOString(),
       }).eq("id", modalVer.id), "Prospectos:vincular"
     );
@@ -5615,7 +5632,7 @@ function Prospectos({perfil}) {
     setShowConvertForm(false);
     setModalVer(null);
     load();
-    alert(`${convertForm.nombres} ${convertForm.apellidos} fue registrado como paciente con HC creada. Ya podes agendar sus sesiones.`);
+    alert(`${convertForm.nombres} ${convertForm.apellidos} fue vinculado como paciente. Ya podes agendar sus sesiones.`);
   };
 
   const cambiarEstado = async (id, nuevoEstado) => {
