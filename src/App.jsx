@@ -1281,6 +1281,13 @@ function Pacientes({perfil}) {
                 </div>
                 <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>{p.sesiones_realizadas}<span style={{color:"var(--text3)",fontWeight:400}}>/{p.total_sesiones_prescritas}</span></div>
                 <div><Badge color={estadoColor[p.estado]||"var(--text3)"}>{p.estado}</Badge></div>
+                {p.canal_origen && (
+                  <div style={{fontSize:11,color:"var(--text3)",background:"var(--surface2)",
+                    border:"0.5px solid var(--border)",borderRadius:6,padding:"2px 8px",
+                    textTransform:"capitalize"}}>
+                    {p.canal_origen}
+                  </div>
+                )}
               </div>
             ))}
             {filtrados.length===0 && <div style={{color:"var(--text3)",textAlign:"center",padding:"40px 0",fontSize:14}}>No se encontraron pacientes</div>}
