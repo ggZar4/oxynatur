@@ -3881,10 +3881,8 @@ function DashboardSede({perfil}) {
       Hora: s.hora_inicio || "",
     }));
     const header = Object.keys(rows[0]||{}).join(",");
-    const body = rows.map(r => Object.values(r).map(v => `"${v}"`).join(",")).join("
-");
-    const blob = new Blob([header + "
-" + body], { type: "text/csv" });
+    const body = rows.map(r => Object.values(r).map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([header + "\n" + body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
     a.download = `Oxynatur_Liquidacion_${sedeData?.nombre||"sede"}_${mes}.csv`;
