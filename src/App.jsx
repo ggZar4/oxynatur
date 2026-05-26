@@ -4888,26 +4888,24 @@ function Sesiones({perfil}) {
                 <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
                   {modalIniciar.paciente} · {modalIniciar.sede_nombre}
                 </div>
-                {/* Barra de progreso */}
-                {modalIniciar.sesiones_totales > 0 && (
-                  <div style={{marginTop:8}}>
-                    <div style={{background:"var(--border)",borderRadius:4,height:4,width:"100%",overflow:"hidden"}}>
-                      <div style={{
-                        background:"#00A896",height:"100%",borderRadius:4,
-                        width:`${Math.min(100,((modalIniciar.numero_sesion-1)/modalIniciar.sesiones_totales)*100)}%`,
-                        transition:"width 0.3s"
-                      }}/>
-                    </div>
-                    <div style={{fontSize:10,color:"var(--text3)",marginTop:3}}>
-                      {modalIniciar.numero_sesion-1} de {modalIniciar.sesiones_totales} sesiones completadas
-                      {modalIniciar.sesiones_restantes != null && (
-                        <span style={{color:modalIniciar.sesiones_restantes<=2?"#F87171":"var(--text3)",marginLeft:6}}>
-                          · {modalIniciar.sesiones_restantes} restantes
+                {modalIniciar.sesiones_totales > 0 && (()=>{
+                  const completadas = modalIniciar.numero_sesion - 1;
+                  const restantes = modalIniciar.sesiones_totales - completadas;
+                  const pct = Math.min(100, (completadas / modalIniciar.sesiones_totales) * 100);
+                  return (
+                    <div style={{marginTop:8}}>
+                      <div style={{background:"var(--border)",borderRadius:4,height:4,width:"100%",overflow:"hidden"}}>
+                        <div style={{background:"#00A896",height:"100%",borderRadius:4,width:`${pct}%`,transition:"width 0.3s"}}/>
+                      </div>
+                      <div style={{fontSize:10,color:"var(--text3)",marginTop:3}}>
+                        {completadas} de {modalIniciar.sesiones_totales} completadas
+                        <span style={{color:restantes<=2?"#F87171":"var(--text3)",marginLeft:6}}>
+                          · {restantes} restantes
                         </span>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
               <button onClick={()=>setModalIniciar(null)}
                 style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:20}}>×</button>
