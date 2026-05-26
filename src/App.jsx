@@ -4201,6 +4201,21 @@ function Sesiones({perfil}) {
   });
   const [savingCompletar, setSavingCompletar] = useState(false);
 
+  // Registro de llamada al médico on-call
+  const [showLlamada, setShowLlamada]   = useState(false);
+  const [formLlamada, setFormLlamada]   = useState({hora:"", motivo:"", respuesta:""});
+  const [llamadasSesion, setLlamadasSesion] = useState([]);
+  const MOTIVOS_LLAMADA = [
+    "Primer sesión del paciente",
+    "Síntoma nuevo reportado",
+    "Signo vital fuera de rango",
+    "Paciente solicitó salir de cámara",
+    "Anomalía técnica del equipo",
+    "Paciente con comorbilidad",
+    "Medicamento nuevo",
+    "Otro motivo",
+  ];
+
   const programar = async () => {
     const e = {};
     if(!formNueva.paciente_id) e.paciente_id = "Requerido";
@@ -4254,6 +4269,7 @@ function Sesiones({perfil}) {
       estado:            "completada",
       hora_fin_real:     formCompletar.hora_fin_real || new Date().toTimeString().slice(0,5),
       hora_inicio_real:  formCompletar.hora_inicio_real || verSesion.hora_inicio,
+      llamadas_oncall:   llamadasSesion.length > 0 ? llamadasSesion : null,
       nivel_dolor:       formCompletar.nivel_dolor,
       estado_general:    formCompletar.estado_general,
       presion_arterial:  formCompletar.presion_arterial||null,
@@ -4644,6 +4660,80 @@ function Sesiones({perfil}) {
                       🔔 Requiere atención médica
                       <span style={{fontSize:12,color:"var(--text3)",display:"block"}}>Genera alerta automática al especialista y médico de sede</span>
                     </label>
+                  </div>
+
+                  {/* ── REGISTRO DE LLAMADA AL MÉDICO ON-CALL ── */}
+                  <div style={{marginTop:16,border:"0.5px solid #F59E0B40",borderRadius:10,overflow:"hidden"}}>
+                    <div style={{background:"#FEF3C7",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>Llamadas al médico on-call {llamadasSesion.length > 0 && <span style={{background:"#F59E0B",color:"white",borderRadius:10,padding:"1px 7px",marginLeft:6,fontSize:11}}>{llamadasSesion.length}</span>}</div>
+                      <button onClick={()=>setShowLlamada(v=>!v)}
+                        style={{fontSize:11,background:"#F59E0B",color:"white",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
+                        {showLlamada ? "Cerrar" : "+ Registrar llamada"}
+                      </button>
+                    </div>
+
+                    {showLlamada && (
+                      <div style={{padding:"12px 14px",background:"var(--surface2)",borderTop:"0.5px solid #F59E0B40"}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                          <div>
+                            <label style={{fontSize:11,fontWeight:600,color:"var(--text2)",display:"block",marginBottom:4}}>Hora de llamada *</label>
+                            <input type="time" value={formLlamada.hora}
+                              onChange={e=>setFormLlamada(f=>({...f,hora:e.target.value}))}
+                              style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                          </div>
+                          <div>
+                            <label style={{fontSize:11,fontWeight:600,color:"var(--text2)",display:"block",marginBottom:4}}>Motivo *</label>
+                            <select value={formLlamada.motivo}
+                              onChange={e=>setFormLlamada(f=>({...f,motivo:e.target.value}))}
+                              style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}>
+                              <option value="">Seleccionar motivo</option>
+                              {MOTIVOS_LLAMADA.map(m=><option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{marginBottom:10}}>
+                          <label style={{fontSize:11,fontWeight:600,color:"var(--text2)",display:"block",marginBottom:4}}>Indicación del médico</label>
+                          <textarea value={formLlamada.respuesta}
+                            onChange={e=>setFormLlamada(f=>({...f,respuesta:e.target.value}))}
+                            placeholder="Ej: Médico indicó continuar sesión, monitorear cada 10 min..."
+                            rows={2}
+                            style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+                        </div>
+                        <button
+                          disabled={!formLlamada.hora || !formLlamada.motivo}
+                          onClick={()=>{
+                            if(!formLlamada.hora || !formLlamada.motivo) return;
+                            setLlamadasSesion(l=>[...l,{...formLlamada, registrada_en: new Date().toISOString()}]);
+                            setFormLlamada({hora:"",motivo:"",respuesta:""});
+                            setShowLlamada(false);
+                          }}
+                          style={{background:"#F59E0B",color:"white",border:"none",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:(!formLlamada.hora||!formLlamada.motivo)?0.5:1}}>
+                          Guardar llamada
+                        </button>
+                      </div>
+                    )}
+
+                    {llamadasSesion.length > 0 && (
+                      <div style={{padding:"8px 14px"}}>
+                        {llamadasSesion.map((ll,i)=>(
+                          <div key={i} style={{fontSize:12,color:"var(--text)",padding:"6px 0",borderTop:i>0?"0.5px solid var(--border)":"none",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                            <div>
+                              <span style={{fontWeight:600,color:"#92400E"}}>{ll.hora}</span>
+                              <span style={{color:"var(--text2)",marginLeft:8}}>{ll.motivo}</span>
+                              {ll.respuesta && <div style={{color:"var(--text3)",marginTop:2,fontSize:11}}>{ll.respuesta}</div>}
+                            </div>
+                            <button onClick={()=>setLlamadasSesion(l=>l.filter((_,j)=>j!==i))}
+                              style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {llamadasSesion.length === 0 && !showLlamada && (
+                      <div style={{padding:"10px 14px",fontSize:12,color:"var(--text3)"}}>
+                        Sin llamadas registradas en esta sesión
+                      </div>
+                    )}
                   </div>
                 </>
               )}
