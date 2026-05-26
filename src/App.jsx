@@ -2753,7 +2753,7 @@ function Usuarios({perfil:adminPerfil}) {
             <Input label="Email" value={form.email} onChange={v=>setF("email",v)} type="email" required/>
             <Input label="Contraseña temporal" value={form.password} onChange={v=>setF("password",v)} type="password" required/>
             <Select label="Rol" value={form.rol} onChange={v=>setF("rol",v)} required
-              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"},{value:"atc",label:"ATC"}]}/>
+              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"},{value:"atc",label:"ATC"},{value:"admin_sede",label:"Admin Sede"}]}/>
             {/* Si es médico, mostrar opción especialista */}
             {form.rol === "medico" && (
               <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface2)",borderRadius:10,border:"1px solid #2A3550"}}>
@@ -2787,7 +2787,7 @@ function Usuarios({perfil:adminPerfil}) {
             </div>
             <Input label="Nombre completo" value={formEdit.nombre} onChange={v=>setFormEdit(f=>({...f,nombre:v}))} required/>
             <Select label="Rol" value={formEdit.rol} onChange={v=>setFormEdit(f=>({...f,rol:v}))}
-              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"},{value:"atc",label:"ATC"}]}/>
+              options={[{value:"admin_general",label:"Admin General"},{value:"medico",label:"Médico"},{value:"enfermero",label:"Enfermero"},{value:"atc",label:"ATC"},{value:"admin_sede",label:"Admin Sede"}]}/>
             {formEdit.rol==="medico" && (
               <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface2)",borderRadius:10,border:"1px solid #2A3550"}}>
                 <input type="checkbox" checked={formEdit.es_especialista}
