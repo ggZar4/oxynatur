@@ -4122,9 +4122,49 @@ function Sesiones({perfil}) {
     return q.invertido ? resp===false : resp===true;
   });
 
+  // Validar rangos de signos vitales — retorna array de alertas
+  const validarSignosPre = () => {
+    const alertas = [];
+    const fc = Number(signosPre.frecuencia_cardiaca);
+    const sat = Number(signosPre.saturacion_o2_pre);
+    const temp = Number(signosPre.temperatura);
+    const dolor = Number(signosPre.nivel_dolor);
+
+    // Presión arterial — parsear sistólica/diastólica
+    if(signosPre.presion_arterial_pre) {
+      const partes = signosPre.presion_arterial_pre.split("/");
+      if(partes.length === 2) {
+        const sist = Number(partes[0]);
+        const diast = Number(partes[1]);
+        if(sist < 90 || sist > 140 || diast < 60 || diast > 90)
+          alertas.push(`Presión arterial ${signosPre.presion_arterial_pre} fuera de rango normal (90/60 – 140/90)`);
+      }
+    }
+    if(signosPre.frecuencia_cardiaca && (fc < 60 || fc > 100))
+      alertas.push(`Frecuencia cardíaca ${fc} bpm fuera de rango normal (60–100 bpm)`);
+    if(signosPre.saturacion_o2_pre && sat < 94)
+      alertas.push(`Saturación O₂ ${sat}% por debajo del mínimo requerido (≥94%)`);
+    if(signosPre.temperatura && (temp < 36.0 || temp > 37.5))
+      alertas.push(`Temperatura ${temp}°C fuera de rango normal (36.0–37.5°C)`);
+    if(dolor > 5)
+      alertas.push(`Nivel de dolor ${dolor}/10 elevado — consultar con médico`);
+    return alertas;
+  };
+
   const confirmarIniciar = async () => {
     setSavingIniciar(true);
     setErrIniciar("");
+
+    // Validar rangos de signos vitales
+    const alertasSignos = validarSignosPre();
+    if(alertasSignos.length > 0) {
+      const msg = "ATENCION: Se detectaron valores fuera de rango:\n\n" +
+        alertasSignos.map(a => "• " + a).join("\n") +
+        "\n\nSegún el protocolo, debe llamar al médico on-call antes de iniciar.\n\n¿Continuar de todas formas?";
+      const ok = window.confirm(msg);
+      if(!ok) { setSavingIniciar(false); return; }
+    }
+
     const { error } = await safeQuery(()=> supabase.from("sesiones").update({
       estado:              "en_curso",
       hora_inicio_real:    new Date().toTimeString().slice(0,5),
@@ -4917,15 +4957,35 @@ function Sesiones({perfil}) {
                     {key:"temperatura",          label:"Temperatura (°C)", placeholder:"36.5", type:"number"},
                     {key:"peso",                 label:"Peso (kg)", placeholder:"70", type:"number"},
                     {key:"nivel_dolor",          label:"Dolor (0–10)", placeholder:"0", type:"number"},
-                  ].map(f=>(
+                  ].map(f=>{
+                    // Determinar si el valor está fuera de rango
+                    const val = signosPre[f.key];
+                    let enAlerta = false;
+                    if(val) {
+                      if(f.key === "frecuencia_cardiaca") enAlerta = Number(val) < 60 || Number(val) > 100;
+                      if(f.key === "saturacion_o2_pre")   enAlerta = Number(val) < 94;
+                      if(f.key === "temperatura")          enAlerta = Number(val) < 36.0 || Number(val) > 37.5;
+                      if(f.key === "nivel_dolor")          enAlerta = Number(val) > 5;
+                      if(f.key === "presion_arterial_pre") {
+                        const p = val.split("/");
+                        if(p.length===2) enAlerta = Number(p[0])<90||Number(p[0])>140||Number(p[1])<60||Number(p[1])>90;
+                      }
+                    }
+                    return (
                     <div key={f.key}>
-                      <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>{f.label}</label>
+                      <label style={{fontSize:11,color:enAlerta?"#F59E0B":"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>
+                        {f.label}{enAlerta && " ⚠"}
+                      </label>
                       <input type={f.type} value={signosPre[f.key]||""} placeholder={f.placeholder}
                         onChange={e=>setSignosPre(p=>({...p,[f.key]:e.target.value}))}
-                        style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,
-                          color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                        style={{width:"100%",background:"var(--surface2)",
+                          border:`0.5px solid ${enAlerta?"#F59E0B":"var(--border)"}`,
+                          borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,
+                          fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                      {enAlerta && <div style={{fontSize:10,color:"#F59E0B",marginTop:2}}>Fuera de rango — llamar al médico</div>}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div style={{marginTop:8,fontSize:11,color:"var(--text3)",padding:"6px 10px",background:"var(--surface2)",borderRadius:6}}>
                   Rangos normales: PA 90/60–140/90 · FC 60–100 lpm · SatO₂ ≥94% · T° ≤37.5°C
