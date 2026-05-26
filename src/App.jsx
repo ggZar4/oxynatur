@@ -104,15 +104,17 @@ function getRolFlags(perfil) {
   const esMedico     = rol === "medico";
   const esEnfermero  = rol === "enfermero";
   const esATC        = rol === "atc";
+  const esAdminSede  = rol === "admin_sede";
   const esMedicoEsp  = esMedico && esEspecialista;
   const esMedicoSede = esMedico && !esEspecialista;
 
   return {
     // ── Identidad ──
-    esAdmin, esMedico, esEnfermero, esATC, esMedicoEsp, esMedicoSede,
+    esAdmin, esMedico, esEnfermero, esATC, esMedicoEsp, esMedicoSede, esAdminSede,
 
     // ── Acceso a módulos ──
     puedeVerDashboard:    esAdmin || esMedico,
+    puedeVerDashboardSede: esAdminSede,
     puedeVerVentas:       esAdmin || esEnfermero,
     puedeVerFinanzas:     esAdmin,
     puedeVerSedes:        esAdmin,
@@ -139,12 +141,14 @@ function getRolFlags(perfil) {
             : esMedicoSede ? "Médico"
             : esEnfermero  ? "Enfermero"
             : esATC        ? "ATC"
+            : esAdminSede  ? "Admin Sede"
             : "Usuario",
 
-    vistaDefault: esAdmin  ? "dashboard"
-                : esMedico ? "alertas"
-                : esATC    ? "prospectos"
-                : "agenda",
+    vistaDefault: esAdmin     ? "dashboard"
+                : esMedico    ? "alertas"
+                : esATC       ? "prospectos"
+                : esAdminSede ? "dashboard_sede"
+                : "sesiones",
   };
 }
 
@@ -268,6 +272,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
     { id:"sedes",     icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>), label:"Sedes",             visible: f.puedeVerSedes },
     { id:"usuarios",  icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.87"/></svg>), label:"Usuarios",          visible: f.puedeVerUsuarios },
     { id:"prospectos", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/><line x1="19" y1="8" x2="23" y2="8"/><line x1="21" y1="6" x2="21" y2="10"/></svg>), label:"Prospectos", visible: f.puedeVerProspectos },
+    { id:"dashboard_sede", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>), label:"Mi Sede",             visible: f.puedeVerDashboardSede },
     { id:"agenda",    icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>), label:"Agenda",            visible: true },
   ].filter(item => item.visible);
 
@@ -3838,6 +3843,135 @@ function Ventas({perfil}) {
 
 // ── SESIONES ──────────────────────────────────────────────────
 // FASE 3: agenda del día + programar + completar con registro clínico
+// ── DASHBOARD SEDE (admin_sede — solo lectura producción) ─────────────────
+function DashboardSede({perfil}) {
+  const hoy   = new Date().toISOString().slice(0,10);
+  const mes   = new Date().toISOString().slice(0,7);
+  const sedeId = perfil?.sede_id;
+
+  const { data: sesionesHoy } = useSupabaseQuery(
+    () => supabase.from("vista_agenda_hoy").select("*").eq("sede_id", sedeId).eq("fecha", hoy),
+    [sedeId, hoy], "DashboardSede:hoy"
+  );
+  const { data: sesionesMes } = useSupabaseQuery(
+    () => supabase.from("sesiones")
+      .select("id, estado, hora_inicio, paciente_id, pacientes(nombres,apellidos)")
+      .eq("sede_id", sedeId)
+      .gte("fecha", mes + "-01")
+      .lte("fecha", hoy)
+      .order("fecha", { ascending: false }),
+    [sedeId, mes], "DashboardSede:mes"
+  );
+  const { data: sedeData } = useSupabaseQuery(
+    () => supabase.from("sedes").select("nombre").eq("id", sedeId).single(),
+    [sedeId], "DashboardSede:sede"
+  );
+
+  const completadas = (sesionesMes||[]).filter(s => s.estado === "completada").length;
+  const enCurso     = (sesionesHoy||[]).filter(s => s.estado === "en_curso").length;
+  const programadas = (sesionesHoy||[]).filter(s => s.estado === "programada").length;
+  const pacientesUnicos = new Set((sesionesMes||[]).map(s => s.paciente_id)).size;
+
+  // Export CSV liquidación
+  const exportarLiquidacion = () => {
+    const rows = (sesionesMes||[]).map(s => ({
+      Fecha: s.fecha || "",
+      Paciente: s.pacientes ? `${s.pacientes.apellidos}, ${s.pacientes.nombres}` : "",
+      Estado: s.estado,
+      Hora: s.hora_inicio || "",
+    }));
+    const header = Object.keys(rows[0]||{}).join(",");
+    const body = rows.map(r => Object.values(r).map(v => `"${v}"`).join(",")).join("
+");
+    const blob = new Blob([header + "
+" + body], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = `Oxynatur_Liquidacion_${sedeData?.nombre||"sede"}_${mes}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const kpi = (label, val, color="#00A896") => (
+    <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,padding:"18px 20px",textAlign:"center"}}>
+      <div style={{fontSize:32,fontWeight:700,color}}>{val ?? "—"}</div>
+      <div style={{fontSize:12,color:"var(--text3)",marginTop:4}}>{label}</div>
+    </div>
+  );
+
+  return (
+    <div style={{padding:24,maxWidth:900,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:700,color:"var(--text)",fontFamily:"Syne,sans-serif"}}>
+            {sedeData?.nombre || "Mi Sede"}
+          </div>
+          <div style={{fontSize:13,color:"var(--text3)",marginTop:2}}>
+            Panel de producción — {new Date().toLocaleDateString("es-PE",{month:"long",year:"numeric"})}
+          </div>
+        </div>
+        <button onClick={exportarLiquidacion}
+          style={{background:"#00A896",color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          ↓ Exportar liquidación
+        </button>
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+        {kpi("Sesiones del mes", completadas, "#00A896")}
+        {kpi("Pacientes atendidos", pacientesUnicos, "#6366F1")}
+        {kpi("En curso hoy", enCurso, "#F59E0B")}
+        {kpi("Programadas hoy", programadas, "#64748B")}
+      </div>
+
+      {/* Tabla sesiones del mes */}
+      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"14px 20px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>Sesiones del mes</div>
+          <div style={{fontSize:12,color:"var(--text3)"}}>{(sesionesMes||[]).length} registros</div>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{background:"var(--surface2)"}}>
+                {["Paciente","Hora","Estado"].map(h=>(
+                  <th key={h} style={{padding:"10px 16px",textAlign:"left",fontWeight:600,color:"var(--text2)",fontSize:12}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(sesionesMes||[]).slice(0,50).map((s,i)=>(
+                <tr key={s.id} style={{borderTop:"0.5px solid var(--border)",background:i%2===0?"":"var(--surface2)"}}>
+                  <td style={{padding:"10px 16px",color:"var(--text)"}}>
+                    {s.pacientes ? `${s.pacientes.apellidos}, ${s.pacientes.nombres}` : "—"}
+                  </td>
+                  <td style={{padding:"10px 16px",color:"var(--text2)"}}>{s.hora_inicio?.slice(0,5)||"—"}</td>
+                  <td style={{padding:"10px 16px"}}>
+                    <span style={{
+                      padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,
+                      background: s.estado==="completada"?"#D1FAE5":s.estado==="en_curso"?"#FEF3C7":"#F1F5F9",
+                      color: s.estado==="completada"?"#065F46":s.estado==="en_curso"?"#92400E":"#64748B"
+                    }}>{s.estado}</span>
+                  </td>
+                </tr>
+              ))}
+              {!(sesionesMes||[]).length && (
+                <tr><td colSpan={3} style={{padding:24,textAlign:"center",color:"var(--text3)"}}>Sin sesiones este mes</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Nota */}
+      <div style={{marginTop:16,fontSize:12,color:"var(--text3)",textAlign:"center"}}>
+        Vista de solo lectura — Oxynatur {new Date().getFullYear()}
+      </div>
+    </div>
+  );
+}
+
+
 function Sesiones({perfil}) {
   const f = getRolFlags(perfil);
 
@@ -5606,6 +5740,10 @@ export default function App() {
         if(flags.esEnfermero) {
           localStorage.removeItem("oxynatur-vista");
           setVista("sesiones");
+        // Admin sede siempre arranca en su dashboard
+        } else if(flags.esAdminSede) {
+          localStorage.removeItem("oxynatur-vista");
+          setVista("dashboard_sede");
         } else {
           const saved = localStorage.getItem("oxynatur-vista");
           const vistaMap = {
@@ -5689,6 +5827,7 @@ export default function App() {
       case "alertas":   return f.puedeVerAlertas     ? <Alertas perfil={perfil}/>     : null;
       case "prospectos": return f.puedeVerProspectos  ? <Prospectos perfil={perfil}/>  : null;
       case "agenda":    return                         <AgendaMedico perfil={perfil} cambiarVista={cambiarVista}/>;
+      case "dashboard_sede": return f.puedeVerDashboardSede ? <DashboardSede perfil={perfil}/> : null;
       default:          return f.puedeVerDashboard   ? <DashboardAdmin/>              : <Pacientes perfil={perfil}/>;
     }
   };
