@@ -3845,125 +3845,217 @@ function Ventas({perfil}) {
 // FASE 3: agenda del día + programar + completar con registro clínico
 // ── DASHBOARD SEDE (admin_sede — solo lectura producción) ─────────────────
 function DashboardSede({perfil}) {
-  const hoy   = new Date().toISOString().slice(0,10);
-  const mes   = new Date().toISOString().slice(0,7);
   const sedeId = perfil?.sede_id;
+
+  // Calcular período de liquidación: del 16 del mes anterior al 15 del mes actual
+  const calcPeriodo = (offset = 0) => {
+    const now = new Date();
+    now.setMonth(now.getMonth() + offset);
+    const y = now.getFullYear();
+    const m = now.getMonth(); // 0-indexed
+    // Período: 16 del mes anterior → 15 del mes actual
+    const desde = new Date(y, m - 1, 16);
+    const hasta = new Date(y, m, 15);
+    return {
+      desde: desde.toISOString().slice(0,10),
+      hasta: hasta.toISOString().slice(0,10),
+      label: `16 ${desde.toLocaleDateString("es-PE",{month:"long"})} → 15 ${hasta.toLocaleDateString("es-PE",{month:"long",year:"numeric"})}`,
+    };
+  };
+
+  const [periodoOffset, setPeriodoOffset] = useState(0);
+  const periodo = calcPeriodo(periodoOffset);
+  const hoy = new Date().toISOString().slice(0,10);
 
   const { data: sesionesHoy } = useSupabaseQuery(
     () => supabase.from("vista_agenda_hoy").select("*").eq("sede_id", sedeId).eq("fecha", hoy),
     [sedeId, hoy], "DashboardSede:hoy"
   );
-  const { data: sesionesMes } = useSupabaseQuery(
+  const { data: sesionesPeriodo, loading } = useSupabaseQuery(
     () => supabase.from("sesiones")
-      .select("id, estado, hora_inicio, paciente_id, pacientes(nombres,apellidos)")
+      .select("id, estado, fecha, hora_inicio, paciente_id, pacientes(nombres,apellidos), compras_paciente(monto_pagado,sesiones_totales)")
       .eq("sede_id", sedeId)
-      .gte("fecha", mes + "-01")
-      .lte("fecha", hoy)
+      .gte("fecha", periodo.desde)
+      .lte("fecha", periodo.hasta)
       .order("fecha", { ascending: false }),
-    [sedeId, mes], "DashboardSede:mes"
+    [sedeId, periodo.desde, periodo.hasta], "DashboardSede:periodo"
+  );
+  const { data: ventasPeriodo } = useSupabaseQuery(
+    () => supabase.from("compras_paciente")
+      .select("id, monto_pagado, fecha_compra, pacientes(nombres,apellidos)")
+      .eq("sede_id", sedeId)
+      .gte("fecha_compra", periodo.desde)
+      .lte("fecha_compra", periodo.hasta),
+    [sedeId, periodo.desde, periodo.hasta], "DashboardSede:ventas"
   );
   const { data: sedeData } = useSupabaseQuery(
     () => supabase.from("sedes").select("nombre").eq("id", sedeId).single(),
     [sedeId], "DashboardSede:sede"
   );
 
-  const completadas = (sesionesMes||[]).filter(s => s.estado === "completada").length;
-  const enCurso     = (sesionesHoy||[]).filter(s => s.estado === "en_curso").length;
-  const programadas = (sesionesHoy||[]).filter(s => s.estado === "programada").length;
-  const pacientesUnicos = new Set((sesionesMes||[]).map(s => s.paciente_id)).size;
+  const completadas    = (sesionesPeriodo||[]).filter(s => s.estado === "completada").length;
+  const enCurso        = (sesionesHoy||[]).filter(s => s.estado === "en_curso").length;
+  const programadasHoy = (sesionesHoy||[]).filter(s => s.estado === "programada").length;
+  const pacientesUnicos = new Set((sesionesPeriodo||[]).map(s => s.paciente_id)).size;
+  const ingresoBruto   = (ventasPeriodo||[]).reduce((acc, v) => acc + Number(v.monto_pagado||0), 0);
+  const parteOxynatur  = ingresoBruto * 0.5;
+  const parteSede      = ingresoBruto * 0.5;
 
-  // Export CSV liquidación
+  const estadoLabel = (e) => ({
+    completada: "Completada", en_curso: "En curso",
+    programada: "Programada", cancelada: "Cancelada"
+  }[e] || e);
+
+  const estadoStyle = (e) => ({
+    padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600,
+    background: e==="completada"?"#D1FAE5":e==="en_curso"?"#FEF3C7":e==="cancelada"?"#FEE2E2":"#F1F5F9",
+    color:      e==="completada"?"#065F46":e==="en_curso"?"#92400E":e==="cancelada"?"#991B1B":"#64748B",
+  });
+
+  const fmtS = (n) => `S/ ${Number(n).toLocaleString("es-PE",{minimumFractionDigits:2})}`;
+
+  // Export CSV liquidación completo
   const exportarLiquidacion = () => {
-    const rows = (sesionesMes||[]).map(s => ({
-      Fecha: s.fecha || "",
-      Paciente: s.pacientes ? `${s.pacientes.apellidos}, ${s.pacientes.nombres}` : "",
-      Estado: s.estado,
-      Hora: s.hora_inicio || "",
-    }));
-    const header = Object.keys(rows[0]||{}).join(",");
-    const body = rows.map(r => Object.values(r).map(v => `"${v}"`).join(",")).join("\n");
-    const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+    const rows = [
+      ["REPORTE DE LIQUIDACION - OXYNATUR"],
+      [`Sede: ${sedeData?.nombre||""}`],
+      [`Periodo: ${periodo.label}`],
+      [`Generado: ${new Date().toLocaleDateString("es-PE")}`],
+      [""],
+      ["RESUMEN"],
+      ["Concepto","Monto"],
+      ["Ingreso bruto del período", fmtS(ingresoBruto)],
+      ["50% Oxynatur", fmtS(parteOxynatur)],
+      ["50% Sede", fmtS(parteSede)],
+      [""],
+      ["DETALLE DE SESIONES"],
+      ["Fecha","Paciente","Hora","Estado"],
+      ...(sesionesPeriodo||[]).map(s => [
+        s.fecha||"",
+        s.pacientes ? `${s.pacientes.apellidos}, ${s.pacientes.nombres}` : "",
+        s.hora_inicio?.slice(0,5)||"",
+        estadoLabel(s.estado),
+      ]),
+      [""],
+      ["DETALLE DE VENTAS"],
+      ["Fecha","Paciente","Monto cobrado"],
+      ...(ventasPeriodo||[]).map(v => [
+        v.fecha_compra||"",
+        v.pacientes ? `${v.pacientes.apellidos}, ${v.pacientes.nombres}` : "",
+        fmtS(v.monto_pagado),
+      ]),
+    ];
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `Oxynatur_Liquidacion_${sedeData?.nombre||"sede"}_${mes}.csv`;
+    a.download = `Oxynatur_Liquidacion_${(sedeData?.nombre||"sede").replace(/ /g,"_")}_${periodo.desde}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 
-  const kpi = (label, val, color="#00A896") => (
+  const kpi = (label, val, color="#00A896", sub="") => (
     <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,padding:"18px 20px",textAlign:"center"}}>
-      <div style={{fontSize:32,fontWeight:700,color}}>{val ?? "—"}</div>
-      <div style={{fontSize:12,color:"var(--text3)",marginTop:4}}>{label}</div>
+      <div style={{fontSize:28,fontWeight:700,color,lineHeight:1}}>{val ?? "—"}</div>
+      {sub && <div style={{fontSize:11,color,marginTop:2}}>{sub}</div>}
+      <div style={{fontSize:11,color:"var(--text3)",marginTop:6}}>{label}</div>
     </div>
   );
 
   return (
-    <div style={{padding:24,maxWidth:900,margin:"0 auto"}}>
+    <div style={{padding:24,maxWidth:960,margin:"0 auto"}}>
+
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
         <div>
           <div style={{fontSize:22,fontWeight:700,color:"var(--text)",fontFamily:"Syne,sans-serif"}}>
             {sedeData?.nombre || "Mi Sede"}
           </div>
-          <div style={{fontSize:13,color:"var(--text3)",marginTop:2}}>
-            Panel de producción — {new Date().toLocaleDateString("es-PE",{month:"long",year:"numeric"})}
-          </div>
+          <div style={{fontSize:13,color:"var(--text3)",marginTop:4}}>Panel de producción — solo lectura</div>
         </div>
         <button onClick={exportarLiquidacion}
-          style={{background:"#00A896",color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          style={{background:"#00A896",color:"white",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
           ↓ Exportar liquidación
         </button>
       </div>
 
-      {/* KPIs */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
-        {kpi("Sesiones del mes", completadas, "#00A896")}
-        {kpi("Pacientes atendidos", pacientesUnicos, "#6366F1")}
-        {kpi("En curso hoy", enCurso, "#F59E0B")}
-        {kpi("Programadas hoy", programadas, "#64748B")}
+      {/* Selector de período */}
+      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <span style={{fontSize:12,fontWeight:600,color:"var(--text2)"}}>PERÍODO DE LIQUIDACIÓN:</span>
+        <button onClick={()=>setPeriodoOffset(o=>o-1)}
+          style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:6,padding:"4px 10px",cursor:"pointer",color:"var(--text)"}}>←</button>
+        <span style={{fontSize:13,fontWeight:600,color:"var(--text)",minWidth:260,textAlign:"center"}}>{periodo.label}</span>
+        <button onClick={()=>setPeriodoOffset(o=>Math.min(0,o+1))}
+          disabled={periodoOffset===0}
+          style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:6,padding:"4px 10px",cursor:"pointer",color:"var(--text)",opacity:periodoOffset===0?0.4:1}}>→</button>
       </div>
 
-      {/* Tabla sesiones del mes */}
-      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
-        <div style={{padding:"14px 20px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>Sesiones del mes</div>
-          <div style={{fontSize:12,color:"var(--text3)"}}>{(sesionesMes||[]).length} registros</div>
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
+        {kpi("Sesiones completadas", completadas, "#00A896")}
+        {kpi("Pacientes atendidos", pacientesUnicos, "#6366F1")}
+        {kpi("Ingreso bruto", fmtS(ingresoBruto), "#059669")}
+        {kpi("En curso hoy", enCurso, "#F59E0B")}
+        {kpi("Programadas hoy", programadasHoy, "#64748B")}
+      </div>
+
+      {/* Resumen liquidación */}
+      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+        <div style={{fontWeight:600,fontSize:14,color:"var(--text)",marginBottom:14}}>Resumen de liquidación</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          {[
+            {label:"Ingreso bruto período",val:fmtS(ingresoBruto),color:"#1F2937"},
+            {label:"50% Oxynatur",val:fmtS(parteOxynatur),color:"#00A896"},
+            {label:"50% "+( sedeData?.nombre||"Sede"),val:fmtS(parteSede),color:"#6366F1"},
+          ].map(({label,val,color})=>(
+            <div key={label} style={{background:"var(--surface2)",borderRadius:8,padding:"12px 16px"}}>
+              <div style={{fontSize:11,color:"var(--text3)",marginBottom:4}}>{label}</div>
+              <div style={{fontSize:20,fontWeight:700,color}}>{val}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:12,fontSize:11,color:"var(--text3)"}}>
+          * Distribución 50/50 sobre ingresos brutos del período. No incluye descuento de costos operativos.
+        </div>
+      </div>
+
+      {/* Tabla sesiones */}
+      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,overflow:"hidden",marginBottom:16}}>
+        <div style={{padding:"12px 20px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>Detalle de sesiones del período</div>
+          <div style={{fontSize:12,color:"var(--text3)"}}>{(sesionesPeriodo||[]).length} registros</div>
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead>
               <tr style={{background:"var(--surface2)"}}>
-                {["Paciente","Hora","Estado"].map(h=>(
-                  <th key={h} style={{padding:"10px 16px",textAlign:"left",fontWeight:600,color:"var(--text2)",fontSize:12}}>{h}</th>
+                {["Fecha","Paciente","Hora","Estado"].map(h=>(
+                  <th key={h} style={{padding:"9px 16px",textAlign:"left",fontWeight:600,color:"var(--text2)",fontSize:12}}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(sesionesMes||[]).slice(0,50).map((s,i)=>(
+              {(sesionesPeriodo||[]).slice(0,60).map((s,i)=>(
                 <tr key={s.id} style={{borderTop:"0.5px solid var(--border)",background:i%2===0?"":"var(--surface2)"}}>
-                  <td style={{padding:"10px 16px",color:"var(--text)"}}>
-                    {s.pacientes ? `${s.pacientes.apellidos}, ${s.pacientes.nombres}` : "—"}
+                  <td style={{padding:"9px 16px",color:"var(--text2)",fontSize:12}}>{s.fecha||"—"}</td>
+                  <td style={{padding:"9px 16px",color:"var(--text)",fontWeight:500}}>
+                    {s.pacientes?`${s.pacientes.apellidos}, ${s.pacientes.nombres}`:"—"}
                   </td>
-                  <td style={{padding:"10px 16px",color:"var(--text2)"}}>{s.hora_inicio?.slice(0,5)||"—"}</td>
-                  <td style={{padding:"10px 16px"}}>
-                    <span style={{
-                      padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,
-                      background: s.estado==="completada"?"#D1FAE5":s.estado==="en_curso"?"#FEF3C7":"#F1F5F9",
-                      color: s.estado==="completada"?"#065F46":s.estado==="en_curso"?"#92400E":"#64748B"
-                    }}>{s.estado}</span>
+                  <td style={{padding:"9px 16px",color:"var(--text2)"}}>{s.hora_inicio?.slice(0,5)||"—"}</td>
+                  <td style={{padding:"9px 16px"}}>
+                    <span style={estadoStyle(s.estado)}>{estadoLabel(s.estado)}</span>
                   </td>
                 </tr>
               ))}
-              {!(sesionesMes||[]).length && (
-                <tr><td colSpan={3} style={{padding:24,textAlign:"center",color:"var(--text3)"}}>Sin sesiones este mes</td></tr>
+              {!(sesionesPeriodo||[]).length && (
+                <tr><td colSpan={4} style={{padding:24,textAlign:"center",color:"var(--text3)"}}>Sin sesiones en este período</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Nota */}
-      <div style={{marginTop:16,fontSize:12,color:"var(--text3)",textAlign:"center"}}>
-        Vista de solo lectura — Oxynatur {new Date().getFullYear()}
+      <div style={{fontSize:11,color:"var(--text3)",textAlign:"center"}}>
+        Vista de solo lectura — Oxynatur {new Date().getFullYear()} · Los costos operativos se descuentan en la liquidación final firmada
       </div>
     </div>
   );
