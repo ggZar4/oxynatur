@@ -4083,6 +4083,23 @@ function Sesiones({perfil}) {
   const [modalNueva, setModalNueva] = useState(false);
   const [showCal, setShowCal] = useState(false);
 
+  // Checklist de cámara — paso previo al cuestionario pre
+  const [modalChecklist, setModalChecklist] = useState(null);
+  const [checklist, setChecklist]           = useState({});
+
+  const CHECKLIST_CAMARA = [
+    {key:"limpieza",       label:"La cámara está limpia y desinfectada"},
+    {key:"oxigeno",        label:"El suministro de oxígeno está conectado y con presión suficiente"},
+    {key:"comunicacion",   label:"El sistema de comunicación interior funciona correctamente"},
+    {key:"valvula",        label:"La válvula de seguridad está operativa"},
+    {key:"visor",          label:"El visor/ventana está libre de daños visibles"},
+    {key:"presurizacion",  label:"El sistema de presurización responde correctamente"},
+    {key:"ropa_paciente",  label:"El paciente tiene ropa de algodón 100%"},
+    {key:"objetos",        label:"El paciente retiró todos los objetos metálicos y electrónicos"},
+    {key:"senal_salida",   label:"El paciente conoce la señal para pedir salida"},
+    {key:"area_libre",     label:"El área alrededor de la cámara está libre de materiales inflamables"},
+  ];
+
   // Modal iniciar — cuestionario pre + signos pre
   const [modalIniciar, setModalIniciar]   = useState(null);
   const [cuestionarioPre, setCuestionarioPre] = useState({});
@@ -4406,7 +4423,7 @@ function Sesiones({perfil}) {
               <div style={{display:"flex",gap:6}}>
                 {s.estado === "programada" && (
                   <>
-                    <button onClick={(e)=>{ e.stopPropagation(); setModalIniciar(s); setCuestionarioPre({}); setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0}); }}
+                    <button onClick={(e)=>{ e.stopPropagation(); setModalChecklist(s); setChecklist({}); }}
                       style={{background:"#00A89620",border:"0.5px solid #00A89640",color:"#00A896",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                       ▶ Iniciar
                     </button>
@@ -4638,6 +4655,84 @@ function Sesiones({perfil}) {
                   {savingCompletar ? "Guardando..." : "✓ Marcar completada"}
                 </Btn>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CHECKLIST DE CÁMARA — paso 1 antes del cuestionario pre ── */}
+      {modalChecklist && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+          <div style={{background:"var(--surface)",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+            {/* Header */}
+            <div style={{padding:"20px 24px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:"#00A896",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Checklist de cámara</div>
+                <div style={{fontSize:18,fontWeight:700,color:"var(--text)",fontFamily:"Syne,sans-serif"}}>
+                  {modalChecklist.paciente}
+                </div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
+                  Sesión #{modalChecklist.numero_sesion} · {modalChecklist.sede_nombre}
+                </div>
+              </div>
+              <button onClick={()=>setModalChecklist(null)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text3)",fontSize:18,padding:4}}>×</button>
+            </div>
+
+            {/* Body */}
+            <div style={{padding:"16px 24px"}}>
+              <div style={{fontSize:12,color:"var(--text2)",marginBottom:16,background:"#FEF3C7",border:"0.5px solid #FCD34D",borderRadius:8,padding:"8px 12px"}}>
+                Verifica cada punto antes de proceder. Todos deben estar confirmados.
+              </div>
+              {CHECKLIST_CAMARA.map((item, i) => {
+                const checked = checklist[item.key] === true;
+                return (
+                  <div key={item.key} onClick={()=>setChecklist(c=>({...c,[item.key]:!c[item.key]}))}
+                    style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",
+                      background: checked ? "#ECFDF5" : "var(--surface2)",
+                      border: `0.5px solid ${checked ? "#6EE7B7" : "var(--border)"}`,
+                      transition:"all 0.15s"}}>
+                    <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${checked?"#00A896":"var(--border)"}`,
+                      background:checked?"#00A896":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                      {checked && <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>}
+                    </div>
+                    <span style={{fontSize:13,color:checked?"#065F46":"var(--text)",fontWeight:checked?500:400}}>
+                      {i+1}. {item.label}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Contador */}
+              <div style={{marginTop:12,fontSize:12,color:"var(--text3)",textAlign:"center"}}>
+                {Object.values(checklist).filter(Boolean).length} de {CHECKLIST_CAMARA.length} verificados
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{padding:"12px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+              <button onClick={()=>setModalChecklist(null)}
+                style={{background:"var(--surface2)",color:"var(--text2)",border:"0.5px solid var(--border)",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer"}}>
+                Cancelar
+              </button>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                {Object.values(checklist).filter(Boolean).length < CHECKLIST_CAMARA.length && (
+                  <span style={{fontSize:11,color:"#F59E0B"}}>
+                    Faltan {CHECKLIST_CAMARA.length - Object.values(checklist).filter(Boolean).length} ítems
+                  </span>
+                )}
+                <button
+                  onClick={()=>{
+                    setModalChecklist(null);
+                    setModalIniciar(modalChecklist);
+                    setCuestionarioPre({});
+                    setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
+                  }}
+                  disabled={Object.values(checklist).filter(Boolean).length < CHECKLIST_CAMARA.length}
+                  style={{background:"#00A896",color:"white",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,fontWeight:600,cursor:"pointer",
+                    opacity: Object.values(checklist).filter(Boolean).length < CHECKLIST_CAMARA.length ? 0.5 : 1}}>
+                  Continuar →
+                </button>
+              </div>
             </div>
           </div>
         </div>
