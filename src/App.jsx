@@ -3309,10 +3309,15 @@ function Ventas({perfil}) {
   const [ventas, setVentas] = useState([]);
   const [loadingVentas, setLoadingVentas] = useState(true);
   const [filtroSede, setFiltroSede] = useState("todas");
+  const [paginaVentas, setPaginaVentas] = useState(0);
+  const [totalVentas, setTotalVentas] = useState(0);
+  const PAGE_SIZE = 20;
 
-  const loadVentas = async (sedeId) => {
+  const loadVentas = async (sedeId, pagina = 0) => {
     setLoadingVentas(true);
     const sedeActiva = sedeId !== undefined ? sedeId : filtroSede;
+    const from = pagina * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
     const { data } = await safeQuery(() => {
       let q = supabase.from("compras_paciente")
         .select(`
@@ -3321,14 +3326,15 @@ function Ventas({perfil}) {
           pacientes(nombres,apellidos,dni),
           paquetes(codigo,nombre),
           sedes(nombre,color)
-        `)
+        `, { count: "exact" })
         .order("fecha_compra", {ascending:false})
-        .limit(50);
+        .range(from, to);
       if(sedeFija) q = q.eq("sede_id", sedeFija);
       else if(sedeActiva !== "todas") q = q.eq("sede_id", sedeActiva);
       return q;
     }, "Ventas:loadVentas");
     setVentas(data || []);
+    if(data?.count !== undefined) setTotalVentas(data.count);
     setLoadingVentas(false);
   };
 
@@ -3604,7 +3610,26 @@ function Ventas({perfil}) {
 
       {/* Tabla */}
       <Card style={{padding:0,overflow:"hidden"}}>
-        <div style={{padding:"14px 18px",borderBottom:"0.5px solid #E2E8F0",fontSize:12,fontWeight:600,color:"var(--text2)",letterSpacing:"0.02em"}}>Últimas ventas</div>
+        <div style={{padding:"14px 18px",borderBottom:"0.5px solid #E2E8F0",fontSize:12,fontWeight:600,color:"var(--text2)",letterSpacing:"0.02em"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>Ventas {totalVentas > 0 && <span style={{fontWeight:400,color:"var(--text3)",marginLeft:6}}>({totalVentas} total)</span>}</span>
+            {totalVentas > PAGE_SIZE && (
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>{ const p=paginaVentas-1; setPaginaVentas(p); loadVentas(undefined,p); }}
+                  disabled={paginaVentas===0}
+                  style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:6,
+                    padding:"3px 10px",cursor:"pointer",color:"var(--text)",fontSize:13,
+                    opacity:paginaVentas===0?0.4:1}}>←</button>
+                <span style={{fontSize:12,color:"var(--text2)"}}>{paginaVentas+1}/{Math.ceil(totalVentas/PAGE_SIZE)}</span>
+                <button onClick={()=>{ const p=paginaVentas+1; setPaginaVentas(p); loadVentas(undefined,p); }}
+                  disabled={(paginaVentas+1)*PAGE_SIZE>=totalVentas}
+                  style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:6,
+                    padding:"3px 10px",cursor:"pointer",color:"var(--text)",fontSize:13,
+                    opacity:(paginaVentas+1)*PAGE_SIZE>=totalVentas?0.4:1}}>→</button>
+              </div>
+            )}
+          </div>
+        </div>
         {loadingVentas ? (
           <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
         ) : ventas.length === 0 ? (
