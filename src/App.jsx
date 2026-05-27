@@ -5612,6 +5612,8 @@ function Prospectos({perfil}) {
   const [showConvertForm, setShowConvertForm] = useState(false);
   const [convertForm, setConvertForm] = useState({nombres:"", apellidos:"", dni:""});
   const [convertErr, setConvertErr] = useState({});
+  const [notaTimeline, setNotaTimeline] = useState("");
+  const [savingNota, setSavingNota] = useState(false);
 
   // Formatear fecha UTC → datetime-local (Lima UTC-5)
   const toLocalInput = (iso) => {
@@ -6019,6 +6021,77 @@ function Prospectos({perfil}) {
             </div>
 
             <div style={{marginBottom:16}}>
+              {/* ── TIMELINE DE ACTIVIDAD ── */}
+              <div style={{marginBottom:16,border:"0.5px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
+                <div style={{background:"var(--surface2)",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"var(--text2)"}}>Actividad</div>
+                </div>
+                {/* Lista de actividades del timeline */}
+                <div style={{maxHeight:180,overflowY:"auto"}}>
+                  {/* Actividad: cambios de estado */}
+                  <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:ESTADO_COLOR[modalVer.estado]||"#888",marginTop:4,flexShrink:0}}/>
+                    <div>
+                      <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>Estado: {ESTADO_LABEL[modalVer.estado]||modalVer.estado}</div>
+                      <div style={{fontSize:11,color:"var(--text3)"}}>{modalVer.fecha_ultimo_contacto ? new Date(modalVer.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}</div>
+                    </div>
+                  </div>
+                  {/* Actividad: fecha de cita si existe */}
+                  {modalVer.fecha_cita && (
+                    <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:"#F59E0B",marginTop:4,flexShrink:0}}/>
+                      <div>
+                        <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>Evaluación agendada</div>
+                        <div style={{fontSize:11,color:"var(--text3)"}}>{new Date(modalVer.fecha_cita).toLocaleDateString("es-PE",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Notas existentes */}
+                  {modalVer.notas && (
+                    <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:"#6366F1",marginTop:4,flexShrink:0}}/>
+                      <div>
+                        <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>Nota</div>
+                        <div style={{fontSize:11,color:"var(--text2)",marginTop:2}}>{modalVer.notas}</div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Conversión */}
+                  {modalVer.estado === "convertido" && (
+                    <div style={{padding:"8px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:"#10B981",marginTop:4,flexShrink:0}}/>
+                      <div>
+                        <div style={{fontSize:12,color:"#10B981",fontWeight:600}}>Convertido a paciente</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Agregar nota rápida */}
+                <div style={{padding:"10px 14px",borderTop:"0.5px solid var(--border)",display:"flex",gap:8}}>
+                  <input value={notaTimeline} onChange={e=>setNotaTimeline(e.target.value)}
+                    placeholder="Agregar nota de seguimiento..."
+                    style={{flex:1,background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,
+                      color:"var(--text)",padding:"6px 10px",fontSize:12,fontFamily:"inherit",outline:"none"}}
+                    onKeyDown={e=>{ if(e.key==="Enter" && notaTimeline.trim()) {
+                      safeQuery(()=>supabase.from("prospectos").update({notas:notaTimeline.trim()}).eq("id",modalVer.id),"Prospectos:nota");
+                      setModalVer(v=>({...v,notas:notaTimeline.trim()}));
+                      setNotaTimeline("");
+                    }}}/>
+                  <button
+                    disabled={!notaTimeline.trim()}
+                    onClick={()=>{
+                      if(!notaTimeline.trim()) return;
+                      safeQuery(()=>supabase.from("prospectos").update({notas:notaTimeline.trim()}).eq("id",modalVer.id),"Prospectos:nota");
+                      setModalVer(v=>({...v,notas:notaTimeline.trim()}));
+                      setNotaTimeline("");
+                    }}
+                    style={{background:"#6366F1",color:"white",border:"none",borderRadius:8,padding:"6px 12px",
+                      fontSize:12,cursor:"pointer",opacity:!notaTimeline.trim()?0.5:1}}>
+                    + Nota
+                  </button>
+                </div>
+              </div>
+
               <div style={{fontSize:12,color:"var(--text2)",fontWeight:600,marginBottom:8}}>Cambiar estado</div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {ESTADOS.map(e=>(
