@@ -1281,13 +1281,22 @@ function Pacientes({perfil}) {
                 </div>
                 <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>{p.sesiones_realizadas}<span style={{color:"var(--text3)",fontWeight:400}}>/{p.total_sesiones_prescritas}</span></div>
                 <div><Badge color={estadoColor[p.estado]||"var(--text3)"}>{p.estado}</Badge></div>
-                {p.canal_origen && (
-                  <div style={{fontSize:11,color:"var(--text3)",background:"var(--surface2)",
-                    border:"0.5px solid var(--border)",borderRadius:6,padding:"2px 8px",
-                    textTransform:"capitalize"}}>
-                    {p.canal_origen}
-                  </div>
-                )}
+                {p.canal_origen && (()=>{
+                  const canalColor = {
+                    whatsapp:  {bg:"#D1FAE5", color:"#065F46", label:"WhatsApp"},
+                    referido:  {bg:"#DBEAFE", color:"#1E40AF", label:"Referido"},
+                    instagram: {bg:"#FCE7F3", color:"#9D174D", label:"Instagram"},
+                    facebook:  {bg:"#EDE9FE", color:"#5B21B6", label:"Facebook"},
+                    directo:   {bg:"#F1F5F9", color:"#475569", label:"Directo"},
+                    otro:      {bg:"#F1F5F9", color:"#475569", label:"Otro"},
+                  }[p.canal_origen?.toLowerCase()] || {bg:"#F1F5F9", color:"#475569", label:p.canal_origen};
+                  return (
+                    <div style={{fontSize:11,fontWeight:600,background:canalColor.bg,color:canalColor.color,
+                      borderRadius:6,padding:"2px 8px",display:"inline-block"}}>
+                      {canalColor.label}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
             {filtrados.length===0 && <div style={{color:"var(--text3)",textAlign:"center",padding:"40px 0",fontSize:14}}>No se encontraron pacientes</div>}
@@ -2244,8 +2253,23 @@ function HistoriasClinicas({perfil}) {
       </div>
 
       {/* Búsqueda */}
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar paciente..."
-        style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 16px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:16}}/>
+      <div style={{position:"relative",marginBottom:16}}>
+        <svg style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--text3)"}} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input value={busq} onChange={e=>setBusq(e.target.value)}
+          placeholder="Buscar por nombre, DNI o diagnóstico..."
+          style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,
+            color:"var(--text)",padding:"10px 16px 10px 38px",fontSize:14,fontFamily:"inherit",
+            outline:"none",boxSizing:"border-box"}}/>
+        {busq && (
+          <button onClick={()=>setBusq("")}
+            style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+              background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:18,padding:2}}>
+            ×
+          </button>
+        )}
+      </div>
 
       {/* Tabs sede */}
       {f.puedeVerTodasHC && sedes.length > 0 && (
