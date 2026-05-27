@@ -5613,7 +5613,9 @@ function Prospectos({perfil}) {
   const [convertForm, setConvertForm] = useState({nombres:"", apellidos:"", dni:""});
   const [convertErr, setConvertErr] = useState({});
   const [notaTimeline, setNotaTimeline] = useState("");
-  const [savingNota, setSavingNota] = useState(false);
+  const [tipoNota, setTipoNota] = useState("nota");
+  const [actividades, setActividades] = useState([]);
+  const [loadingAct, setLoadingAct] = useState(false);
 
   // Formatear fecha UTC → datetime-local (Lima UTC-5)
   const toLocalInput = (iso) => {
@@ -5776,6 +5778,38 @@ function Prospectos({perfil}) {
     alert(`${convertForm.nombres} ${convertForm.apellidos} fue vinculado como paciente. Ya podes agendar sus sesiones.`);
   };
 
+  // Cargar actividades del prospecto
+  const cargarActividades = async (prospectoId) => {
+    setLoadingAct(true);
+    const { data } = await safeQuery(
+      () => supabase.from("prospectos_actividad")
+        .select("*")
+        .eq("prospecto_id", prospectoId)
+        .order("created_at", {ascending: false})
+        .limit(20),
+      "Prospectos:actividades"
+    );
+    setActividades(data || []);
+    setLoadingAct(false);
+  };
+
+  // Guardar actividad
+  const guardarActividad = async (prospectoId, tipo, descripcion) => {
+    if(!descripcion.trim()) return;
+    const nueva = {
+      prospecto_id: prospectoId,
+      tipo,
+      descripcion: descripcion.trim(),
+      usuario_id: null,
+      usuario_nombre: perfil?.nombre || "Usuario",
+    };
+    await safeQuery(
+      () => supabase.from("prospectos_actividad").insert(nueva),
+      "Prospectos:insertActividad"
+    );
+    setActividades(prev => [{...nueva, created_at: new Date().toISOString(), id: Date.now()}, ...prev]);
+  };
+
   const cambiarEstado = async (id, nuevoEstado) => {
     await safeQuery(() =>
       supabase.from("prospectos").update({
@@ -5784,6 +5818,8 @@ function Prospectos({perfil}) {
         updated_at: new Date().toISOString(),
       }).eq("id", id), "Prospectos:update"
     );
+    // Registrar en actividad
+    guardarActividad(id, "cambio_estado", `Estado: ${ESTADO_LABEL[nuevoEstado]||nuevoEstado}`);
     load();
     if(modalVer?.id === id) setModalVer(p => ({...p, estado: nuevoEstado}));
   };
@@ -5887,7 +5923,7 @@ function Prospectos({perfil}) {
                         : p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
                     </td>
                     <td style={{padding:"11px 14px"}}>
-                      <button onClick={()=>{ setModalVer(p); setEditFecha(p.fecha_cita ? toLocalInput(p.fecha_cita) : ""); }}
+                      <button onClick={()=>{ setModalVer(p); setEditFecha(p.fecha_cita ? toLocalInput(p.fecha_cita) : ""); cargarActividades(p.id); }}
                         style={{background:"none",border:"none",color:"#00A896",cursor:"pointer",fontSize:12,fontWeight:600}}>
                         Ver
                       </button>
@@ -6025,70 +6061,58 @@ function Prospectos({perfil}) {
               <div style={{marginBottom:16,border:"0.5px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
                 <div style={{background:"var(--surface2)",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{fontSize:12,fontWeight:700,color:"var(--text2)"}}>Actividad</div>
+                  <div style={{fontSize:11,color:"var(--text3)"}}>{actividades.length} registros</div>
                 </div>
-                {/* Lista de actividades del timeline */}
-                <div style={{maxHeight:180,overflowY:"auto"}}>
-                  {/* Actividad: cambios de estado */}
-                  <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:ESTADO_COLOR[modalVer.estado]||"#888",marginTop:4,flexShrink:0}}/>
-                    <div>
-                      <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>Estado: {ESTADO_LABEL[modalVer.estado]||modalVer.estado}</div>
-                      <div style={{fontSize:11,color:"var(--text3)"}}>{modalVer.fecha_ultimo_contacto ? new Date(modalVer.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}</div>
-                    </div>
+                <div style={{maxHeight:200,overflowY:"auto"}}>
+                  {loadingAct ? (
+                    <div style={{padding:"12px 14px",fontSize:12,color:"var(--text3)"}}>Cargando...</div>
+                  ) : actividades.length === 0 ? (
+                    <div style={{padding:"12px 14px",fontSize:12,color:"var(--text3)"}}>Sin actividad registrada aún</div>
+                  ) : actividades.map((act,i) => {
+                    const tipoColor = {cambio_estado:"#00A896",nota:"#6366F1",llamada:"#F59E0B",whatsapp:"#10B981",email:"#3B82F6",sistema:"#9CA3AF"}[act.tipo]||"#9CA3AF";
+                    const tipoIcon = {cambio_estado:"↻",nota:"✎",llamada:"☎",whatsapp:"💬",email:"✉",sistema:"⚙"}[act.tipo]||"●";
+                    return (
+                      <div key={act.id||i} style={{padding:"8px 14px",borderBottom:i<actividades.length-1?"0.5px solid var(--border)":"none",display:"flex",gap:10,alignItems:"flex-start"}}>
+                        <div style={{width:20,height:20,borderRadius:"50%",background:tipoColor+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                          <span style={{fontSize:10,color:tipoColor}}>{tipoIcon}</span>
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{act.descripcion}</div>
+                          <div style={{fontSize:10,color:"var(--text3)",marginTop:2,display:"flex",gap:8}}>
+                            <span>{act.usuario_nombre||"Sistema"}</span>
+                            <span>·</span>
+                            <span>{act.created_at ? new Date(act.created_at).toLocaleDateString("es-PE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{padding:"10px 14px",borderTop:"0.5px solid var(--border)"}}>
+                  <div style={{display:"flex",gap:6,marginBottom:8}}>
+                    {[["nota","✎ Nota"],["llamada","☎ Llamada"],["whatsapp","💬 WhatsApp"]].map(([tipo,label])=>(
+                      <button key={tipo} onClick={()=>setTipoNota(tipo)}
+                        style={{fontSize:11,padding:"3px 10px",borderRadius:20,cursor:"pointer",fontFamily:"inherit",
+                          border:`0.5px solid ${tipoNota===tipo?"#6366F1":"var(--border)"}`,
+                          background:tipoNota===tipo?"#6366F1":"var(--surface2)",
+                          color:tipoNota===tipo?"white":"var(--text2)"}}>
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                  {/* Actividad: fecha de cita si existe */}
-                  {modalVer.fecha_cita && (
-                    <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:"#F59E0B",marginTop:4,flexShrink:0}}/>
-                      <div>
-                        <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>Evaluación agendada</div>
-                        <div style={{fontSize:11,color:"var(--text3)"}}>{new Date(modalVer.fecha_cita).toLocaleDateString("es-PE",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Notas existentes */}
-                  {modalVer.notas && (
-                    <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border)",display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:"#6366F1",marginTop:4,flexShrink:0}}/>
-                      <div>
-                        <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>Nota</div>
-                        <div style={{fontSize:11,color:"var(--text2)",marginTop:2}}>{modalVer.notas}</div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Conversión */}
-                  {modalVer.estado === "convertido" && (
-                    <div style={{padding:"8px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:"#10B981",marginTop:4,flexShrink:0}}/>
-                      <div>
-                        <div style={{fontSize:12,color:"#10B981",fontWeight:600}}>Convertido a paciente</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {/* Agregar nota rápida */}
-                <div style={{padding:"10px 14px",borderTop:"0.5px solid var(--border)",display:"flex",gap:8}}>
-                  <input value={notaTimeline} onChange={e=>setNotaTimeline(e.target.value)}
-                    placeholder="Agregar nota de seguimiento..."
-                    style={{flex:1,background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,
-                      color:"var(--text)",padding:"6px 10px",fontSize:12,fontFamily:"inherit",outline:"none"}}
-                    onKeyDown={e=>{ if(e.key==="Enter" && notaTimeline.trim()) {
-                      safeQuery(()=>supabase.from("prospectos").update({notas:notaTimeline.trim()}).eq("id",modalVer.id),"Prospectos:nota");
-                      setModalVer(v=>({...v,notas:notaTimeline.trim()}));
-                      setNotaTimeline("");
-                    }}}/>
-                  <button
-                    disabled={!notaTimeline.trim()}
-                    onClick={()=>{
-                      if(!notaTimeline.trim()) return;
-                      safeQuery(()=>supabase.from("prospectos").update({notas:notaTimeline.trim()}).eq("id",modalVer.id),"Prospectos:nota");
-                      setModalVer(v=>({...v,notas:notaTimeline.trim()}));
-                      setNotaTimeline("");
-                    }}
-                    style={{background:"#6366F1",color:"white",border:"none",borderRadius:8,padding:"6px 12px",
-                      fontSize:12,cursor:"pointer",opacity:!notaTimeline.trim()?0.5:1}}>
-                    + Nota
-                  </button>
+                  <div style={{display:"flex",gap:8}}>
+                    <input value={notaTimeline} onChange={e=>setNotaTimeline(e.target.value)}
+                      placeholder={`Registrar ${tipoNota}...`}
+                      style={{flex:1,background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,
+                        color:"var(--text)",padding:"6px 10px",fontSize:12,fontFamily:"inherit",outline:"none"}}
+                      onKeyDown={e=>{ if(e.key==="Enter"&&notaTimeline.trim()){guardarActividad(modalVer.id,tipoNota,notaTimeline);setNotaTimeline("");}}}/>
+                    <button disabled={!notaTimeline.trim()}
+                      onClick={()=>{if(!notaTimeline.trim())return;guardarActividad(modalVer.id,tipoNota,notaTimeline);setNotaTimeline("");}}
+                      style={{background:"#6366F1",color:"white",border:"none",borderRadius:8,padding:"6px 12px",
+                        fontSize:12,cursor:"pointer",fontFamily:"inherit",opacity:!notaTimeline.trim()?0.5:1}}>
+                      Guardar
+                    </button>
+                  </div>
                 </div>
               </div>
 
