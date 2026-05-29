@@ -394,15 +394,22 @@ function DashboardMedico({perfil}) {
         }, "DashMed:sesiones"),
         safeQuery(()=> supabase.from("vista_resumen_sedes").select("*"), "DashMed:resumen"),
         // Cola de firmas pendientes
-        safeQuery(()=> supabase.from("evaluaciones_medicas")
-          .select(`id,numero_sesion,fecha,hora,evolucion,incidencias,observaciones,
-            presion_arterial,frecuencia_cardiaca,saturacion_o2,temperatura,peso,nivel_dolor,estado_general,
-            presion_indicada,duracion_minutos,otitis,claustrofobia,embarazo,fiebre_activa,
-            pacientes(nombres,apellidos,dni),sedes(nombre),compras_paciente(paquetes(nombre))`)
-          .eq("es_borrador", true)
-          .order("fecha",{ascending:true})
-          .order("hora",{ascending:true})
-          .limit(50), "DashMed:firmasPend"),
+        safeQuery(()=> {
+          let q = supabase.from("evaluaciones_medicas")
+            .select(`id,numero_sesion,fecha,hora,evolucion,incidencias,observaciones,
+              presion_arterial,frecuencia_cardiaca,saturacion_o2,temperatura,peso,nivel_dolor,estado_general,
+              presion_indicada,duracion_minutos,otitis,claustrofobia,embarazo,fiebre_activa,
+              pacientes(nombres,apellidos,dni),sedes(nombre,id),compras_paciente(paquetes(nombre))`)
+            .eq("es_borrador", true)
+            .order("fecha",{ascending:true})
+            .order("hora",{ascending:true})
+            .limit(50);
+          // Médico de sede solo ve firmas de su sede
+          if(f.esMedicoSede && perfil.sede_id) {
+            q = q.eq("sede_id", perfil.sede_id);
+          }
+          return q;
+        }, "DashMed:firmasPend"),
       ]);
       if(!mounted) return;
       setAlertas(r1.data||[]);
