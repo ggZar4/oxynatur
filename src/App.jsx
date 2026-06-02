@@ -5591,7 +5591,8 @@ function Alertas({perfil}) {
 function Prospectos({perfil}) {
   const f = getRolFlags(perfil);
   const CANALES = ["whatsapp","instagram","facebook","referido","google","tiktok","otro"];
-  const ESTADOS = ["nuevo","contactado","evaluacion_agendada","convertido","perdido"];
+  // "convertido" no aparece en dropdown — solo se activa via flujo de conversión con DNI
+  const ESTADOS = ["nuevo","contactado","evaluacion_agendada","perdido"];
   const ESTADO_LABEL = {
     nuevo:"Nuevo", contactado:"Contactado",
     evaluacion_agendada:"Eval. Agendada", convertido:"Convertido", perdido:"Perdido"
@@ -5913,6 +5914,12 @@ function Prospectos({perfil}) {
                       <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.motivo||"—"}</div>
                     </td>
                     <td style={{padding:"11px 14px"}}>
+                      {p.estado === "convertido" ? (
+                        <span style={{background:"#10B98115",border:"0.5px solid #10B981",
+                          color:"#10B981",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>
+                          Convertido ✓
+                        </span>
+                      ) : (
                       <select value={p.estado} onChange={e=>cambiarEstado(p.id, e.target.value)}
                         style={{background:ESTADO_COLOR[p.estado]+"15",border:`0.5px solid ${ESTADO_COLOR[p.estado]}`,
                           color:ESTADO_COLOR[p.estado],borderRadius:20,padding:"3px 10px",fontSize:11,
@@ -5921,6 +5928,7 @@ function Prospectos({perfil}) {
                           <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
                         ))}
                       </select>
+                      )}
                     </td>
                     <td style={{padding:"11px 14px",fontSize:11,color:"var(--text3)"}}>
                       {p.estado === "evaluacion_agendada" && p.fecha_cita
