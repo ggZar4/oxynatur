@@ -113,26 +113,29 @@ function getRolFlags(perfil) {
     esAdmin, esMedico, esEnfermero, esATC, esMedicoEsp, esMedicoSede, esAdminSede,
 
     // ── Acceso a módulos ──
-    puedeVerDashboard:    esAdmin || esMedico,
-    puedeVerDashboardSede: esAdminSede,
-    puedeVerVentas:       esAdmin || esEnfermero,
-    puedeVerFinanzas:     esAdmin,
-    puedeVerSedes:        esAdmin,
-    puedeVerUsuarios:     esAdmin,
-    puedeVerAlertas:      esAdmin || esMedico,
-    puedeVerProspectos:   esAdmin || esATC || esEnfermero,
+    puedeVerDashboard:      esAdmin || esMedico,
+    puedeVerDashboardSede:  esAdminSede,
+    puedeVerVentas:         esAdmin || esEnfermero || esAdminSede,
+    puedeVerFinanzas:       esAdmin,
+    puedeVerSedes:          esAdmin,
+    puedeVerUsuarios:       esAdmin,
+    puedeVerAlertas:        esAdmin || esMedico,
+    // Admin sede y ATC ven prospectos — filtrados por sede en el query
+    puedeVerProspectos:     esAdmin || esATC || esEnfermero || esAdminSede,
 
-    // ── Restricciones dentro de Ventas ──
-    ventasSoloSuSede:     esEnfermero,
+    // ── Restricciones por sede ──
+    // true = solo ve/opera sobre su sede_id
+    soloSuSede:             esEnfermero || esAdminSede,
+    ventasSoloSuSede:       esEnfermero || esAdminSede,
 
     // ── Acceso a pacientes ──
-    puedeCrearPaciente:      esAdmin,
-    puedeEditarPaciente:     esAdmin,
+    puedeCrearPaciente:      esAdmin || esAdminSede,
+    puedeEditarPaciente:     esAdmin || esAdminSede,
     puedeVerTodosPacientes:  esAdmin || esMedicoEsp,
 
     // ── Acceso a historias clínicas ──
     puedeEscribirProtocolo:    esAdmin || esMedicoEsp,
-    puedeEscribirObservacion:  esAdmin || esMedico || esEnfermero,
+    puedeEscribirObservacion:  esAdmin || esMedico || esEnfermero || esAdminSede,
     puedeVerTodasHC:           esAdmin || esMedicoEsp,
 
     // ── UI helpers ──
@@ -5657,9 +5660,16 @@ function Prospectos({perfil}) {
   const load = async () => {
     setLoading(true);
     const [{ data: p }, { data: s }] = await Promise.all([
-      safeQuery(() => supabase.from("prospectos")
-        .select("*, sedes(nombre)")
-        .order("created_at", {ascending:false}), "Prospectos:load"),
+      safeQuery(() => {
+        let q = supabase.from("prospectos")
+          .select("*, sedes(nombre)")
+          .order("created_at", {ascending:false});
+        // Enfermeros y admin_sede solo ven prospectos de su sede
+        if((f.esEnfermero || f.esAdminSede) && perfil.sede_id) {
+          q = q.eq("sede_id", perfil.sede_id);
+        }
+        return q;
+      }, "Prospectos:load"),
       safeQuery(() => supabase.from("sedes").select("id,nombre"), "Prospectos:sedes"),
     ]);
     setProspectos(p || []);
@@ -5808,7 +5818,7 @@ function Prospectos({perfil}) {
       prospecto_id: prospectoId,
       tipo,
       descripcion: descripcion.trim(),
-      usuario_id: null,
+      usuario_id: perfil?.id || null,
       usuario_nombre: perfil?.nombre || "Usuario",
     };
     await safeQuery(
