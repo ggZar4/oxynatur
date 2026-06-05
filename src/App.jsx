@@ -2480,7 +2480,7 @@ function Finanzas() {
   }).filter(s=>s.ventas>0);
 
   // Desglose por método de pago
-  const porMetodo = ["efectivo","transferencia","tarjeta","yape","plin"].map(m=>{
+  const porMetodo = ["efectivo","transferencia","tarjeta","yape","plin","kiwi"].map(m=>{
     const vs = ventas.filter(v=>v.metodo_pago===m);
     const total = vs.reduce((a,v)=>a+Number(v.monto_pagado||0),0);
     return {metodo:m, total, count:vs.length};
@@ -3361,7 +3361,7 @@ function Ventas({perfil}) {
 
   const formInicial = {
     paciente_id:"", sede_id: sedeFija || "", paquete_id:"",
-    monto_pagado:"", metodo_pago:"efectivo", notas:"",
+    monto_pagado:"", metodo_pago:"efectivo", notas:"", es_vecino: false,
     numero_comprobante:"", fotoFile: null, fotoPreview: null,
     fecha_compra: new Date().toISOString().slice(0,10),
   };
@@ -3384,6 +3384,7 @@ function Ventas({perfil}) {
           p_paquete_id: form.paquete_id,
           p_fecha: new Date().toISOString().slice(0,10),
           p_sede_id: form.sede_id || null,
+          p_es_vecino: form.es_vecino || false,
         }), "Ventas:calcular_precio"
       );
       if(!mounted) return;
@@ -3393,7 +3394,8 @@ function Ventas({perfil}) {
       setCalculando(false);
     })();
     return ()=>{ mounted = false; };
-  }, [form.paquete_id]);
+  // Recalcular precio cuando cambia paquete O sede (precios varían por sede)
+  }, [form.paquete_id, form.sede_id]);
 
   const openModal = () => { setForm(formInicial); setCalculo(null); setErr({}); setModal(true); };
 
@@ -3802,7 +3804,42 @@ function Ventas({perfil}) {
             )}
 
             <Select label="Método de pago" value={form.metodo_pago} onChange={v=>setForm({...form,metodo_pago:v})}
-              options={[{value:"efectivo",label:"Efectivo"},{value:"transferencia",label:"Transferencia"},{value:"tarjeta",label:"Tarjeta"},{value:"yape",label:"Yape / Plin"},{value:"otro",label:"Otro"}]}/>
+              options={[{value:"efectivo",label:"Efectivo"},{value:"transferencia",label:"Transferencia"},{value:"tarjeta",label:"Tarjeta"},{value:"yape",label:"Yape / Plin"},{value:"kiwi",label:"Kiwi (financiamiento)"},{value:"otro",label:"Otro"}]}/>
+
+            {/* Nota Kiwi: monto neto después de comisión 5% */}
+            {form.metodo_pago === "kiwi" && form.monto_pagado && Number(form.monto_pagado) > 0 && (
+              <div style={{padding:"10px 14px",background:"#7C6AF715",border:"0.5px solid #7C6AF740",borderRadius:10,fontSize:12,color:"var(--text2)",marginBottom:14}}>
+                <div style={{fontWeight:700,color:"#7C6AF7",marginBottom:4}}>Financiamiento Kiwi</div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <span>Monto al paciente</span>
+                  <span>{fmtSol(Number(form.monto_pagado))}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <span>Comisión Kiwi (5%)</span>
+                  <span style={{color:"#F87171"}}>-{fmtSol(Number(form.monto_pagado)*0.05)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,borderTop:"0.5px solid #7C6AF740",paddingTop:6,marginTop:4}}>
+                  <span>Neto a recibir</span>
+                  <span style={{color:"#7C6AF7"}}>{fmtSol(Number(form.monto_pagado)*0.95)}</span>
+                </div>
+                <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Desembolso al día hábil siguiente</div>
+              </div>
+            )}
+
+            {/* Tarifa vecino La Molina — solo si la sede es Molisalud */}
+            {form.sede_id === "ba7ebacd-eeca-46a8-aea4-48cad115ac37" && (
+              <div style={{marginBottom:14,padding:"10px 14px",background:"#00A89610",border:"0.5px solid #00A89630",borderRadius:10}}>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                  <input type="checkbox" checked={form.es_vecino}
+                    onChange={e=>setForm(f=>({...f,es_vecino:e.target.checked}))}
+                    style={{width:16,height:16,accentColor:"#00A896"}}/>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:"#00A896"}}>Tarifa Vecino La Molina</div>
+                    <div style={{fontSize:11,color:"var(--text3)"}}>Requiere DNI con domicilio en La Molina</div>
+                  </div>
+                </label>
+              </div>
+            )}
 
             {/* Fecha de venta */}
             <div style={{marginBottom:14}}>
