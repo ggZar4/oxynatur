@@ -197,9 +197,9 @@ const Select = ({label,value,onChange,options=[],required=false}) => (
   <div style={{marginBottom:14}}>
     {label && <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
     <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:value?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
-      <option value="">Seleccionar...</option>
-      {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+      style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:value?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",colorScheme:"light dark"}}>
+      <option value="" style={{background:"var(--surface)",color:"var(--text3)"}}>Seleccionar...</option>
+      {options.map(o=><option key={o.value} value={o.value} style={{background:"var(--surface)",color:"var(--text)"}}>{o.label}</option>)}
     </select>
   </div>
 );
@@ -3303,7 +3303,7 @@ function Ventas({perfil}) {
   );
   const { data: paquetesData } = useSupabaseQuery(
     () => supabase.from("paquetes")
-      .select("*, paquetes_precios(sede_id, precio, sesiones_incluidas)")
+      .select("*, paquetes_precios(sede_id, precio, sesiones_incluidas, activo, incluye_evaluacion, descripcion_sede)")
       .eq("activo", true).order("cantidad_sesiones"),
     [], "Ventas:paquetes"
   );
@@ -3768,11 +3768,23 @@ function Ventas({perfil}) {
             }
 
             <Select label="Paquete" value={form.paquete_id} onChange={v=>setForm({...form,paquete_id:v})}
-              options={(paquetesData||[]).map(p=>{
-                const precioSede = p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
-                const precio = precioSede ? precioSede.precio : p.precio_total;
-                return {value:p.id, label:`${p.codigo} — ${p.nombre} — ${fmtSol(precio)}`};
-              })} required/>
+              options={(paquetesData||[])
+                .filter(p => {
+                  // Si hay sede seleccionada, solo mostrar paquetes activos para esa sede
+                  if(!form.sede_id) return true;
+                  const precioSede = p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
+                  // Si no tiene precio para esta sede, no mostrar
+                  if(!precioSede) return false;
+                  // Si tiene columna activo, respetar su valor
+                  if(precioSede.activo === false) return false;
+                  return true;
+                })
+                .map(p=>{
+                  const precioSede = p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
+                  const precio = precioSede ? precioSede.precio : p.precio_total;
+                  const extra = precioSede?.incluye_evaluacion ? " (inc. evaluación)" : "";
+                  return {value:p.id, label:`${p.codigo} — ${p.nombre}${extra} — ${fmtSol(precio)}`};
+                })} required/>
             {err.paquete_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
 
             {calculando && <div style={{padding:14,background:"var(--bg)",borderRadius:10,fontSize:13,color:"var(--text3)",marginBottom:14}}>Calculando precio...</div>}
