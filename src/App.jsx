@@ -3481,12 +3481,54 @@ function Ventas({perfil}) {
 
   const hoyMes      = new Date().toISOString().slice(0,7);
 
-  // Stats del mes — query independiente para no depender de paginación
+  // Ciclos de facturación por sede
+  // Molisalud: 26 del mes anterior → 25 del mes actual
+  // SMA:       16 del mes anterior → 15 del mes actual
+  const SEDE_MOLISALUD = "ba7ebacd-eeca-46a8-aea4-48cad115ac37";
+  const SEDE_SMA       = "355ee0bb-594d-4f7a-9a41-650588697fb1";
+
+  const calcCiclo = (sedeId) => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth(); // 0-indexed
+    if(sedeId === SEDE_MOLISALUD) {
+      // Ciclo 26 → 25
+      const desde = new Date(y, m-1, 26);
+      const hasta = new Date(y, m, 25);
+      return {
+        desde: desde.toISOString().slice(0,10),
+        hasta: hasta.toISOString().slice(0,10),
+        label: `26 ${desde.toLocaleDateString("es-PE",{month:"short"})} → 25 ${hasta.toLocaleDateString("es-PE",{month:"short",year:"numeric"})}`,
+      };
+    } else if(sedeId === SEDE_SMA) {
+      // Ciclo 16 → 15
+      const desde = new Date(y, m-1, 16);
+      const hasta = new Date(y, m, 15);
+      return {
+        desde: desde.toISOString().slice(0,10),
+        hasta: hasta.toISOString().slice(0,10),
+        label: `16 ${desde.toLocaleDateString("es-PE",{month:"short"})} → 15 ${hasta.toLocaleDateString("es-PE",{month:"short",year:"numeric"})}`,
+      };
+    } else {
+      // Todas las sedes → mes calendario
+      const desde = new Date(y, m, 1);
+      const hasta = new Date(y, m+1, 0);
+      return {
+        desde: desde.toISOString().slice(0,10),
+        hasta: hasta.toISOString().slice(0,10),
+        label: now.toLocaleDateString("es-PE",{month:"long",year:"numeric"}),
+      };
+    }
+  };
+
+  const cicloActual = calcCiclo(sedeFija || (filtroSede === "todas" ? null : filtroSede));
+
+  // Stats del ciclo — query independiente para no depender de paginación
   const [statsMes, setStatsMes] = useState({ total: 0, descuentos: 0, cantidad: 0 });
   useEffect(() => {
     const calcStats = async () => {
-      const primerDia = `${hoyMes}-01`;
-      const ultimoDia = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).toISOString().slice(0,10);
+      const primerDia = cicloActual.desde;
+      const ultimoDia = cicloActual.hasta;
       const { data } = await safeQuery(() => {
         let q = supabase.from("compras_paciente")
           .select("monto_pagado, precio_sugerido, estado")
@@ -3494,6 +3536,7 @@ function Ventas({perfil}) {
           .lte("fecha_compra", ultimoDia)
           .neq("estado", "cancelado");
         if(sedeFija) q = q.eq("sede_id", sedeFija);
+        else if(filtroSede !== "todas") q = q.eq("sede_id", filtroSede);
         return q;
       }, "Ventas:statsMes");
       if(data) {
@@ -3503,7 +3546,7 @@ function Ventas({perfil}) {
       }
     };
     calcStats();
-  }, [hoyMes]); // eslint-disable-line
+  }, [hoyMes, filtroSede]); // eslint-disable-line
 
   const totalMes    = statsMes.total;
   const descuentosMes = statsMes.descuentos;
@@ -3629,9 +3672,10 @@ function Ventas({perfil}) {
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
         <Card style={{borderTop:"3px solid #00A896",paddingTop:16}}>
-          <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Ventas del mes</div>
-          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#00A896",marginTop:8}}>{fmtSol(totalMes)}</div>
-          <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{statsMes.cantidad} ventas</div>
+          <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Período activo</div>
+          <div style={{fontSize:11,color:"var(--text2)",fontWeight:600,marginTop:4,marginBottom:4}}>{cicloActual.label}</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#00A896",marginTop:4}}>{fmtSol(totalMes)}</div>
+          <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{statsMes.cantidad} ventas en el período</div>
         </Card>
         <Card style={{borderTop:"3px solid #F59E0B",paddingTop:16}}>
           <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Descuentos otorgados</div>
