@@ -4701,9 +4701,9 @@ function Sesiones({perfil}) {
 
               {/* Aviso sin paquete */}
               {formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length === 0 && (
-                <div style={{background:"rgba(251,191,36,0.1)",border:"1px solid rgba(251,191,36,0.4)",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:16}}>⚠️</span>
-                  <span style={{fontSize:13,color:"#FBBF24",fontWeight:500}}>Este paciente no tiene sesiones disponibles. Registra una venta primero.</span>
+                <div style={{background:"rgba(248,113,113,0.12)",border:"1px solid rgba(248,113,113,0.5)",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:16}}>🚫</span>
+                  <span style={{fontSize:13,color:"#F87171",fontWeight:600}}>Sin paquete activo. Registra una venta antes de programar sesión.</span>
                 </div>
               )}
 
@@ -4729,7 +4729,7 @@ function Sesiones({perfil}) {
             </div>
             <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setModalNueva(false)}>Cancelar</Btn>
-              <Btn onClick={programar} disabled={savingNueva || (formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length === 0)}>{savingNueva?"Guardando...":"Programar"}</Btn>
+              <Btn onClick={programar} disabled={savingNueva}>{savingNueva?"Guardando...":"Programar"}</Btn>
             </div>
           </div>
         </div>
