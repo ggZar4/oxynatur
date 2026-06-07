@@ -4379,6 +4379,10 @@ function Sesiones({perfil}) {
     if(!formNueva.camara_id)   e.camara_id   = "Requerido";
     if(!formNueva.fecha)       e.fecha       = "Requerido";
     if(!formNueva.hora_inicio) e.hora_inicio = "Requerido";
+    // Validar que el paciente tenga paquete con sesiones disponibles
+    if(formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length === 0) {
+      e.paciente_id = "Este paciente no tiene sesiones disponibles. Debe adquirir un paquete primero.";
+    }
     // numero_sesion se calcula automáticamente si hay compra_id
     setErrNueva(e);
     if(Object.keys(e).length) return;
@@ -4693,6 +4697,14 @@ function Sesiones({perfil}) {
                     value:c.id,
                     label:`${c.paquetes?.nombre} — ${c.sesiones_usadas}/${c.sesiones_totales} usadas`
                   }))}/>
+              )}
+
+              {/* Aviso sin paquete */}
+              {formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length === 0 && (
+                <div style={{background:"rgba(251,191,36,0.1)",border:"1px solid rgba(251,191,36,0.4)",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:16}}>⚠️</span>
+                  <span style={{fontSize:13,color:"#FBBF24",fontWeight:500}}>Este paciente no tiene sesiones disponibles. Registra una venta primero.</span>
+                </div>
               )}
 
               <Select label="Cámara" value={formNueva.camara_id}
