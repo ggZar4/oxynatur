@@ -3321,6 +3321,7 @@ function Ventas({perfil}) {
   const [filtroSede, setFiltroSede] = useState("todas");
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
+  const [busqVenta, setBusqVenta] = useState("");
   const [paginaVentas, setPaginaVentas] = useState(0);
   const [totalVentas, setTotalVentas] = useState(0);
   const PAGE_SIZE = 20;
@@ -3701,8 +3702,9 @@ function Ventas({perfil}) {
         </Card>
       </div>
 
-      {/* Filtro por fecha */}
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+      {/* Filtro por fecha + buscador */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>Período:</span>
         <input type="date" value={filtroDesde}
           onChange={e=>{ setFiltroDesde(e.target.value); loadVentas(undefined,0,e.target.value,filtroHasta); }}
@@ -3715,6 +3717,15 @@ function Ventas({perfil}) {
           style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"none",color:"var(--text3)",fontSize:12,cursor:"pointer"}}>
           Limpiar
         </button>
+        </div>
+        {/* Buscador */}
+        <input
+          type="text"
+          placeholder="🔍 Buscar paciente o comprobante..."
+          value={busqVenta}
+          onChange={e=>setBusqVenta(e.target.value)}
+          style={{padding:"7px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit",minWidth:260,outline:"none"}}
+        />
       </div>
 
       {/* Tabla */}
@@ -3754,18 +3765,26 @@ function Ventas({perfil}) {
                 </tr>
               </thead>
               <tbody>
-                {ventas.map(v=>{
+                {ventas.filter(v=>{
+                  if(!busqVenta) return true;
+                  const q = busqVenta.toLowerCase();
+                  const nombre = `${v.pacientes?.nombres||""} ${v.pacientes?.apellidos||""}`.toLowerCase();
+                  const comp = (v.numero_comprobante||"").toLowerCase();
+                  const dni = (v.pacientes?.dni||"").toLowerCase();
+                  return nombre.includes(q) || comp.includes(q) || dni.includes(q);
+                }).map(v=>{
                   const sug = Number(v.precio_sugerido||0);
                   const pag = Number(v.monto_pagado||0);
                   const conDesc = sug > 0 && pag < sug;
+                  const anulada = v.estado === "cancelado";
                   return (
-                    <tr key={v.id} style={{borderTop:"0.5px solid #E2E8F0"}}>
+                    <tr key={v.id} style={{borderTop:"0.5px solid var(--border)",opacity:anulada?0.5:1,background:anulada?"var(--surface)":"transparent"}}>
                       <td style={{padding:"11px 14px",fontSize:13,color:"var(--text2)"}}>{v.fecha_compra}</td>
                       <td style={{padding:"11px 14px",fontSize:13,color:"var(--text)",fontWeight:600}}>
                         {v.numero_comprobante || <span style={{color:"var(--text3)"}}>—</span>}
                       </td>
                       <td style={{padding:"11px 14px",fontSize:13,color:"var(--text)"}}>
-                        {v.pacientes ? `${v.pacientes.nombres} ${v.pacientes.apellidos}` : "—"}
+                        {v.pacientes ? `${v.pacientes.apellidos}, ${v.pacientes.nombres}` : "—"}
                         {v.pacientes?.dni && <div style={{fontSize:11,color:"var(--text3)"}}>DNI {v.pacientes.dni}</div>}
                       </td>
                       <td style={{padding:"11px 14px",fontSize:13,color:"var(--text)"}}>
@@ -3782,13 +3801,14 @@ function Ventas({perfil}) {
                         }
                       </td>
                       <td style={{padding:"11px 14px"}}>
-                        {f.esAdmin && v.estado !== "cancelado" && (
+                        {v.estado === "cancelado"
+                          ? <span style={{fontSize:11,fontWeight:600,color:"#9CA3AF",background:"var(--surface2)",padding:"3px 8px",borderRadius:6}}>Anulada</span>
+                          : f.esAdmin && (
                           <button onClick={()=>anularVenta(v)}
                             style={{background:"none",border:"none",color:"#EF4444",padding:"4px 2px",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:500,textDecoration:"underline",textDecorationColor:"#FECACA"}}>
                             Anular
                           </button>
                         )}
-                        {v.estado === "cancelado" && <span style={{fontSize:11,color:"var(--text3)"}}>Anulada</span>}
                       </td>
                     </tr>
                   );
