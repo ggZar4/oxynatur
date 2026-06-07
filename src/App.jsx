@@ -1017,8 +1017,8 @@ function Pacientes({perfil}) {
     setSavingEditar(true);
     const { error } = await safeQuery(()=>
       supabase.from("pacientes").update({
-        nombres:   formEditar.nombres,
-        apellidos: formEditar.apellidos,
+        nombres:   formEditar.nombres.trim().toUpperCase(),
+        apellidos: formEditar.apellidos.trim().toUpperCase(),
         dni:       formEditar.dni,
         telefono:  formEditar.telefono||null,
         email:     formEditar.email||null,
@@ -1056,7 +1056,7 @@ function Pacientes({perfil}) {
     if(Object.keys(e).length) return;
     setSaving(true);
     const {data:pac,error} = await supabase.from("pacientes").insert({
-      nombres:form.nombres, apellidos:form.apellidos, dni:form.dni,
+      nombres:form.nombres.trim().toUpperCase(), apellidos:form.apellidos.trim().toUpperCase(), dni:form.dni,
       telefono:form.telefono, email:form.email, genero:form.genero||null,
       fecha_nacimiento:form.fecha_nacimiento||null,
       sede_principal_id:form.sede_principal_id,
@@ -4196,6 +4196,8 @@ function Sesiones({perfil}) {
   const [loading, setLoading]   = useState(true);
   const [verSesion, setVerSesion] = useState(null);  // modal detalle/completar
   const [modalNueva, setModalNueva] = useState(false);
+  const [busqPacSes, setBusqPacSes] = useState("");
+  const [abiertoDropPacSes, setAbiertoDropPacSes] = useState(false);
   const [showCal, setShowCal] = useState(false);
 
   // Checklist de cámara — paso previo al cuestionario pre
@@ -4636,9 +4638,51 @@ function Sesiones({perfil}) {
               <button onClick={()=>setModalNueva(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
-              <Select label="Paciente" value={formNueva.paciente_id}
-                onChange={v=>{ setFormNueva(f=>({...f,paciente_id:v,compra_id:""})); }}
-                options={(pacientesData||[]).map(p=>({value:p.id,label:`${p.apellidos}, ${p.nombres} — DNI ${p.dni}`}))} required/>
+              {/* Buscador de paciente */}
+              <div style={{marginBottom:14,position:"relative"}}>
+                <label style={{fontSize:12,color:errNueva.paciente_id?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                  Paciente <span style={{color:"#F87171"}}>*</span>
+                </label>
+                <div style={{position:"relative"}}>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o DNI..."
+                    value={abiertoDropPacSes
+                      ? busqPacSes
+                      : (() => { const p = (pacientesData||[]).find(x=>x.id===formNueva.paciente_id); return p ? `${p.apellidos}, ${p.nombres} — DNI ${p.dni}` : ""; })()
+                    }
+                    onFocus={()=>{ setAbiertoDropPacSes(true); setBusqPacSes(""); }}
+                    onChange={e=>{ setBusqPacSes(e.target.value); setAbiertoDropPacSes(true); }}
+                    style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${errNueva.paciente_id?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
+                  />
+                  {abiertoDropPacSes && (
+                    <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,zIndex:9999,maxHeight:200,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.3)"}}>
+                      {(pacientesData||[])
+                        .filter(p => {
+                          const q = busqPacSes.toLowerCase();
+                          return !q || `${p.nombres} ${p.apellidos} ${p.dni}`.toLowerCase().includes(q);
+                        })
+                        .slice(0,20)
+                        .map(p => (
+                          <div key={p.id}
+                            onMouseDown={e=>{ e.preventDefault(); setFormNueva(f=>({...f,paciente_id:p.id,compra_id:""})); setAbiertoDropPacSes(false); setBusqPacSes(""); }}
+                            style={{padding:"10px 14px",fontSize:13,color:"var(--text)",cursor:"pointer",borderBottom:"0.5px solid var(--border)"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
+                            onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                          >
+                            <span style={{fontWeight:600}}>{p.apellidos}, {p.nombres}</span>
+                            <span style={{color:"var(--text2)",marginLeft:8,fontSize:12}}>DNI {p.dni}</span>
+                          </div>
+                        ))
+                      }
+                      {(pacientesData||[]).filter(p=>{ const q=busqPacSes.toLowerCase(); return !q||`${p.nombres} ${p.apellidos} ${p.dni}`.toLowerCase().includes(q); }).length===0 && (
+                        <div style={{padding:"10px 14px",fontSize:13,color:"var(--text2)"}}>No se encontraron pacientes</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {abiertoDropPacSes && <div style={{position:"fixed",inset:0,zIndex:9998}} onClick={()=>setAbiertoDropPacSes(false)}/>}
+              </div>
               {errNueva.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.paciente_id}</div>}
 
               {/* Paquete activo del paciente */}
