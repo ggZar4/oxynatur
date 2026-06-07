@@ -3480,9 +3480,34 @@ function Ventas({perfil}) {
   };
 
   const hoyMes      = new Date().toISOString().slice(0,7);
-  const ventasMes   = ventas.filter(v => (v.fecha_compra||"").startsWith(hoyMes) && v.estado !== "cancelado");
-  const totalMes    = ventasMes.reduce((a,v)=>a+Number(v.monto_pagado||0), 0);
-  const descuentosMes = ventasMes.reduce((a,v)=>a+Math.max(Number(v.precio_sugerido||0)-Number(v.monto_pagado||0),0), 0);
+
+  // Stats del mes — query independiente para no depender de paginación
+  const [statsMes, setStatsMes] = useState({ total: 0, descuentos: 0, cantidad: 0 });
+  useEffect(() => {
+    const calcStats = async () => {
+      const primerDia = `${hoyMes}-01`;
+      const ultimoDia = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).toISOString().slice(0,10);
+      const { data } = await safeQuery(() => {
+        let q = supabase.from("compras_paciente")
+          .select("monto_pagado, precio_sugerido, estado")
+          .gte("fecha_compra", primerDia)
+          .lte("fecha_compra", ultimoDia)
+          .neq("estado", "cancelado");
+        if(sedeFija) q = q.eq("sede_id", sedeFija);
+        return q;
+      }, "Ventas:statsMes");
+      if(data) {
+        const total = data.reduce((a,v)=>a+Number(v.monto_pagado||0), 0);
+        const descuentos = data.reduce((a,v)=>a+Math.max(Number(v.precio_sugerido||0)-Number(v.monto_pagado||0),0), 0);
+        setStatsMes({ total, descuentos, cantidad: data.length });
+      }
+    };
+    calcStats();
+  }, [hoyMes]); // eslint-disable-line
+
+  const totalMes    = statsMes.total;
+  const descuentosMes = statsMes.descuentos;
+  const ventasMes   = { length: statsMes.cantidad };
   const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
   // ── Modal exportar Excel ──
@@ -3606,7 +3631,7 @@ function Ventas({perfil}) {
         <Card style={{borderTop:"3px solid #00A896",paddingTop:16}}>
           <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Ventas del mes</div>
           <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#00A896",marginTop:8}}>{fmtSol(totalMes)}</div>
-          <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{ventasMes.length} ventas</div>
+          <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{statsMes.cantidad} ventas</div>
         </Card>
         <Card style={{borderTop:"3px solid #F59E0B",paddingTop:16}}>
           <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Descuentos otorgados</div>
