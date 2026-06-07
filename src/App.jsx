@@ -3319,11 +3319,13 @@ function Ventas({perfil}) {
   const [ventas, setVentas] = useState([]);
   const [loadingVentas, setLoadingVentas] = useState(true);
   const [filtroSede, setFiltroSede] = useState("todas");
+  const [filtroDesde, setFiltroDesde] = useState("");
+  const [filtroHasta, setFiltroHasta] = useState("");
   const [paginaVentas, setPaginaVentas] = useState(0);
   const [totalVentas, setTotalVentas] = useState(0);
   const PAGE_SIZE = 20;
 
-  const loadVentas = async (sedeId, pagina = 0) => {
+  const loadVentas = async (sedeId, pagina = 0, desde, hasta) => {
     setLoadingVentas(true);
     const sedeActiva = sedeId !== undefined ? sedeId : filtroSede;
     const from = pagina * PAGE_SIZE;
@@ -3341,6 +3343,10 @@ function Ventas({perfil}) {
         .range(from, to);
       if(sedeFija) q = q.eq("sede_id", sedeFija);
       else if(sedeActiva !== "todas") q = q.eq("sede_id", sedeActiva);
+      const d = desde !== undefined ? desde : filtroDesde;
+      const h = hasta !== undefined ? hasta : filtroHasta;
+      if(d) q = q.gte("fecha_compra", d);
+      if(h) q = q.lte("fecha_compra", h);
       return q;
     }, "Ventas:loadVentas");
     setVentas(data || []);
@@ -3658,7 +3664,13 @@ function Ventas({perfil}) {
       {!sedeFija && sedesData && sedesData.length >= 1 && (
         <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           {[{id:"todas",nombre:"Todas las sedes"}, ...sedesData].map(s=>(
-            <button key={s.id} onClick={()=>{ setFiltroSede(s.id); loadVentas(s.id); }}
+            <button key={s.id} onClick={()=>{
+                const ciclo = calcCiclo(s.id === "todas" ? null : s.id);
+                setFiltroSede(s.id);
+                setFiltroDesde(ciclo.desde);
+                setFiltroHasta(ciclo.hasta);
+                loadVentas(s.id, 0, ciclo.desde, ciclo.hasta);
+              }}
               style={{padding:"6px 14px",borderRadius:20,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",
                 borderColor: filtroSede===s.id ? "#00A896" : "var(--border)",
                 background:  filtroSede===s.id ? "#F0FDFB" : "none",
@@ -3687,6 +3699,22 @@ function Ventas({perfil}) {
           <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#7C6AF7",marginTop:8}}>{ventas.length}</div>
           <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>últimos 50 movimientos</div>
         </Card>
+      </div>
+
+      {/* Filtro por fecha */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>Período:</span>
+        <input type="date" value={filtroDesde}
+          onChange={e=>{ setFiltroDesde(e.target.value); loadVentas(undefined,0,e.target.value,filtroHasta); }}
+          style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}/>
+        <span style={{fontSize:12,color:"var(--text3)"}}>→</span>
+        <input type="date" value={filtroHasta}
+          onChange={e=>{ setFiltroHasta(e.target.value); loadVentas(undefined,0,filtroDesde,e.target.value); }}
+          style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}/>
+        <button onClick={()=>{ setFiltroDesde(""); setFiltroHasta(""); loadVentas(undefined,0,"",""); }}
+          style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"none",color:"var(--text3)",fontSize:12,cursor:"pointer"}}>
+          Limpiar
+        </button>
       </div>
 
       {/* Tabla */}
