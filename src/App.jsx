@@ -4729,7 +4729,7 @@ function Sesiones({perfil}) {
             </div>
             <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setModalNueva(false)}>Cancelar</Btn>
-              <Btn onClick={programar} disabled={savingNueva}>{savingNueva?"Guardando...":"Programar"}</Btn>
+              <Btn onClick={programar} disabled={savingNueva || (formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length === 0)}>{savingNueva?"Guardando...":"Programar"}</Btn>
             </div>
           </div>
         </div>
