@@ -3303,7 +3303,7 @@ function Ventas({perfil}) {
   );
   const { data: paquetesData } = useSupabaseQuery(
     () => supabase.from("paquetes")
-      .select("*, paquetes_precios(sede_id, precio, sesiones_incluidas, activo, incluye_evaluacion, descripcion_sede)")
+      .select("*, paquetes_precios(sede_id, precio, sesiones_incluidas, activo, incluye_evaluacion, descripcion_sede, segmento)")
       .eq("activo", true).order("cantidad_sesiones"),
     [], "Ventas:paquetes"
   );
@@ -3368,7 +3368,7 @@ function Ventas({perfil}) {
 
   const formInicial = {
     paciente_id:"", sede_id: sedeFija || "", paquete_id:"",
-    monto_pagado:"", metodo_pago:"efectivo", notas:"", es_vecino: false,
+    monto_pagado:"", metodo_pago:"efectivo", notas:"", segmento: "regular",
     numero_comprobante:"", fotoFile: null, fotoPreview: null,
     fecha_compra: new Date().toISOString().slice(0,10),
   };
@@ -3391,7 +3391,7 @@ function Ventas({perfil}) {
           p_paquete_id: form.paquete_id,
           p_fecha: new Date().toISOString().slice(0,10),
           p_sede_id: form.sede_id || null,
-          p_es_vecino: form.es_vecino || false,
+          p_segmento: form.segmento || "regular",
         }), "Ventas:calcular_precio"
       );
       if(!mounted) return;
@@ -3887,17 +3887,18 @@ function Ventas({perfil}) {
             <Select label="Paquete" value={form.paquete_id} onChange={v=>setForm({...form,paquete_id:v})}
               options={(paquetesData||[])
                 .filter(p => {
-                  // Si hay sede seleccionada, solo mostrar paquetes activos para esa sede
                   if(!form.sede_id) return true;
-                  const precioSede = p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
-                  // Si no tiene precio para esta sede, no mostrar
+                  const precioSede = p.paquetes_precios?.find(pp=>
+                    pp.sede_id===form.sede_id && (pp.segmento||"regular")===(form.segmento||"regular")
+                  ) || p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
                   if(!precioSede) return false;
-                  // Si tiene columna activo, respetar su valor
                   if(precioSede.activo === false) return false;
                   return true;
                 })
                 .map(p=>{
-                  const precioSede = p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
+                  const precioSede = p.paquetes_precios?.find(pp=>
+                    pp.sede_id===form.sede_id && (pp.segmento||"regular")===(form.segmento||"regular")
+                  ) || p.paquetes_precios?.find(pp=>pp.sede_id===form.sede_id);
                   const precio = precioSede ? precioSede.precio : p.precio_total;
                   const extra = precioSede?.incluye_evaluacion ? " (inc. evaluación)" : "";
                   return {value:p.id, label:`${p.codigo} — ${p.nombre}${extra} — ${fmtSol(precio)}`};
@@ -3957,16 +3958,26 @@ function Ventas({perfil}) {
 
             {/* Tarifa vecino La Molina — solo si la sede es Molisalud */}
             {form.sede_id === "ba7ebacd-eeca-46a8-aea4-48cad115ac37" && (
-              <div style={{marginBottom:14,padding:"10px 14px",background:"#00A89610",border:"0.5px solid #00A89630",borderRadius:10}}>
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-                  <input type="checkbox" checked={form.es_vecino}
-                    onChange={e=>setForm(f=>({...f,es_vecino:e.target.checked}))}
-                    style={{width:16,height:16,accentColor:"#00A896"}}/>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600,color:"#00A896"}}>Tarifa Vecino La Molina</div>
-                    <div style={{fontSize:11,color:"var(--text3)"}}>Requiere DNI con domicilio en La Molina</div>
-                  </div>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
+                  Tipo de tarifa
                 </label>
+                <div style={{display:"flex",gap:8}}>
+                  {[
+                    {value:"regular", label:"Regular", desc:"Precio estándar"},
+                    {value:"vecino",  label:"🏠 Vecino La Molina", desc:"Requiere DNI domicilio La Molina"},
+                  ].map(s=>(
+                    <button key={s.value} type="button"
+                      onClick={()=>setForm(f=>({...f,segmento:s.value,paquete_id:""}))}
+                      style={{flex:1,padding:"8px 12px",borderRadius:10,border:`1.5px solid ${form.segmento===s.value?"#00A896":"var(--border)"}`,
+                        background:form.segmento===s.value?"#00A89610":"var(--surface)",
+                        color:form.segmento===s.value?"#00A896":"var(--text2)",
+                        cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
+                      <div style={{fontSize:13,fontWeight:600}}>{s.label}</div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{s.desc}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
