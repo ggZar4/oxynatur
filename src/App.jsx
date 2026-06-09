@@ -1551,7 +1551,9 @@ function HistoriasClinicas({perfil}) {
     );
     setComprasPaciente(compras||[]);
     setLoadingEvals(true);
-    const { data } = await safeQuery(()=>
+
+    // Cargar evaluaciones médicas formales
+    const { data: evalsData } = await safeQuery(()=>
       supabase.from("evaluaciones_medicas")
         .select("*, sedes(nombre), perfiles!medico_id(nombre), compras_paciente(id,fecha_compra,paquetes(nombre,cantidad_sesiones))")
         .eq("paciente_id", hc.paciente_id)
@@ -1559,7 +1561,61 @@ function HistoriasClinicas({perfil}) {
         .order("numero_sesion",{ascending:false}),
       "HC:evals"
     );
-    setEvals(data||[]);
+
+    // Cargar sesiones completadas que no tienen evaluacion_id (sin evaluación médica aún)
+    const { data: sesionesData } = await safeQuery(()=>
+      supabase.from("sesiones")
+        .select("id,numero_sesion,fecha,hora_inicio,hora_inicio_real,hora_fin_real,duracion_minutos,presion_aplicada,presion_arterial,presion_arterial_pre,saturacion_o2,saturacion_o2_pre,frecuencia_cardiaca,temperatura,peso,nivel_dolor,estado_general,tolerancia,observaciones,requiere_atencion,compra_id,sede_id,hc_completada,sedes(nombre),cuestionario_pre")
+        .eq("paciente_id", hc.paciente_id)
+        .eq("estado", "completada")
+        .is("evaluacion_id", null)
+        .order("fecha",{ascending:false})
+        .order("numero_sesion",{ascending:false}),
+      "HC:sesiones"
+    );
+
+    // Convertir sesiones completadas al formato de evaluaciones (como borradores)
+    const sesionesComoEvals = (sesionesData||[]).map(s => ({
+      id: `sesion_${s.id}`,
+      _es_sesion: true,
+      _sesion_id: s.id,
+      numero_sesion: s.numero_sesion,
+      fecha: s.fecha,
+      hora: s.hora_inicio_real || s.hora_inicio,
+      presion_arterial: s.presion_arterial,
+      presion_arterial_pre: s.presion_arterial_pre,
+      saturacion_o2: s.saturacion_o2,
+      saturacion_o2_pre: s.saturacion_o2_pre,
+      frecuencia_cardiaca: s.frecuencia_cardiaca,
+      temperatura: s.temperatura,
+      peso: s.peso,
+      nivel_dolor: s.nivel_dolor,
+      estado_general: s.estado_general,
+      tolerancia: s.tolerancia,
+      observaciones: s.observaciones,
+      requiere_atencion: s.requiere_atencion,
+      presion_indicada: s.presion_aplicada,
+      duracion_minutos: s.duracion_minutos,
+      compra_id: s.compra_id,
+      sede_id: s.sede_id,
+      sedes: s.sedes,
+      es_borrador: true,
+      firma_medico: null,
+      evolucion: null,
+      cuestionario_pre: s.cuestionario_pre,
+    }));
+
+    // IDs de sesiones ya evaluadas (para no duplicar)
+    const evalIds = new Set((evalsData||[]).map(e=>e.sesion_id).filter(Boolean));
+    const sesionsFiltradas = sesionesComoEvals.filter(s=>!evalIds.has(s._sesion_id));
+
+    // Combinar y ordenar por fecha + numero_sesion
+    const combined = [...(evalsData||[]), ...sesionsFiltradas].sort((a,b)=>{
+      if(b.fecha !== a.fecha) return b.fecha.localeCompare(a.fecha);
+      return (b.numero_sesion||0) - (a.numero_sesion||0);
+    });
+
+    setEvals(combined);
     setLoadingEvals(false);
   };
 
@@ -1949,13 +2005,38 @@ function HistoriasClinicas({perfil}) {
                               {ev.es_borrador && <Badge color="#F59E0B">Borrador</Badge>}
                               {!ev.es_borrador && ev.firma_medico && <Badge color="#10B981">✓ Firmado</Badge>}
                             </div>
+                            {/* PRE y POST separados para sesiones, solo POST para evaluaciones */}
+                            {ev._es_sesion && (ev.presion_arterial_pre || ev.saturacion_o2_pre) && (
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+                                <div style={{background:"var(--surface2)",borderRadius:8,padding:"6px 10px"}}>
+                                  <div style={{fontSize:10,color:"#7C6AF7",fontWeight:700,marginBottom:4}}>PRE-SESIÓN</div>
+                                  <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:12}}>
+                                    {ev.presion_arterial_pre && <span><b>PA:</b> {ev.presion_arterial_pre}</span>}
+                                    {ev.frecuencia_cardiaca && <span><b>FC:</b> {ev.frecuencia_cardiaca}</span>}
+                                    {ev.saturacion_o2_pre && <span><b>SatO₂:</b> {ev.saturacion_o2_pre}%</span>}
+                                    {ev.temperatura && <span><b>T°:</b> {ev.temperatura}°C</span>}
+                                    {ev.peso && <span><b>Peso:</b> {ev.peso}kg</span>}
+                                  </div>
+                                </div>
+                                <div style={{background:"var(--surface2)",borderRadius:8,padding:"6px 10px"}}>
+                                  <div style={{fontSize:10,color:"#00A896",fontWeight:700,marginBottom:4}}>POST-SESIÓN</div>
+                                  <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:12}}>
+                                    {ev.presion_arterial && <span><b>PA:</b> {ev.presion_arterial}</span>}
+                                    {ev.saturacion_o2 && <span><b>SatO₂:</b> {ev.saturacion_o2}%</span>}
+                                    {ev.nivel_dolor!=null && <span><b>Dolor:</b> {ev.nivel_dolor}/10</span>}
+                                    {ev.estado_general && <span><b>Estado:</b> {ev.estado_general}</span>}
+                                    {ev.tolerancia && <span><b>Tolerancia:</b> {ev.tolerancia}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:ev.evolucion?8:0}}>
                               {[
-                                ["PA",    ev.presion_arterial],
-                                ["FC",    ev.frecuencia_cardiaca],
-                                ["SatO₂", ev.saturacion_o2],
-                                ["Dolor", ev.nivel_dolor!=null?`${ev.nivel_dolor}/10`:null],
-                                ["Estado",ev.estado_general],
+                                ["PA",    ev._es_sesion ? null : ev.presion_arterial],
+                                ["FC",    ev._es_sesion ? null : ev.frecuencia_cardiaca],
+                                ["SatO₂", ev._es_sesion ? null : ev.saturacion_o2],
+                                ["Dolor", ev._es_sesion ? null : (ev.nivel_dolor!=null?`${ev.nivel_dolor}/10`:null)],
+                                ["Estado",ev._es_sesion ? null : ev.estado_general],
                               ].filter(([,v])=>v).map(([k,v])=>(
                                 <div key={k} style={{background:"var(--surface)",borderRadius:8,padding:"5px 8px",textAlign:"center"}}>
                                   <div style={{fontSize:10,color:"var(--text3)",textTransform:"uppercase"}}>{k}</div>
