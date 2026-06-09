@@ -2031,6 +2031,7 @@ function HistoriasClinicas({perfil}) {
                                   <div style={{fontSize:10,color:"#00A896",fontWeight:700,marginBottom:4}}>POST-SESIÓN</div>
                                   <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:12}}>
                                     {ev.presion_arterial && <span><b>PA:</b> {ev.presion_arterial}</span>}
+                                    {ev.frecuencia_cardiaca_post && <span><b>FC:</b> {ev.frecuencia_cardiaca_post} bpm</span>}
                                     {ev.saturacion_o2 && <span><b>SatO₂:</b> {ev.saturacion_o2}%</span>}
                                     {ev.nivel_dolor!=null && <span><b>Dolor:</b> {ev.nivel_dolor}/10</span>}
                                     {ev.estado_general && <span><b>Estado:</b> {ev.estado_general}</span>}
@@ -4572,6 +4573,7 @@ function Sesiones({perfil}) {
   const [formCompletar, setFormCompletar] = useState({
     hora_inicio_real:"", hora_fin_real:"",
     nivel_dolor:0, estado_general:"Bueno", tolerancia:"Buena",
+    presion_arterial:"", saturacion_o2:"", frecuencia_cardiaca_post:"",
     observaciones:"", requiere_atencion:false,
   });
   const [savingCompletar, setSavingCompletar] = useState(false);
@@ -4653,6 +4655,7 @@ function Sesiones({perfil}) {
       estado_general:    formCompletar.estado_general,
       presion_arterial:  formCompletar.presion_arterial||null,
       saturacion_o2:     formCompletar.saturacion_o2 ? Number(formCompletar.saturacion_o2) : null,
+      frecuencia_cardiaca_post: formCompletar.frecuencia_cardiaca_post ? Number(formCompletar.frecuencia_cardiaca_post) : null,
       tolerancia:        formCompletar.tolerancia,
       observaciones:     formCompletar.observaciones || null,
       requiere_atencion: formCompletar.requiere_atencion,
@@ -5010,6 +5013,9 @@ function Sesiones({perfil}) {
                   {[
                     ["Hora inicio real", verSesion.hora_inicio_real?.slice(0,5)],
                     ["Hora fin real",    verSesion.hora_fin_real?.slice(0,5)],
+                    ["PA post",          verSesion.presion_arterial],
+                    ["FC post",          verSesion.frecuencia_cardiaca_post ? `${verSesion.frecuencia_cardiaca_post} bpm` : null],
+                    ["SatO₂ post",       verSesion.saturacion_o2 ? `${verSesion.saturacion_o2}%` : null],
                     ["Nivel de dolor",   verSesion.nivel_dolor != null ? `${verSesion.nivel_dolor}/10` : null],
                     ["Estado general",   verSesion.estado_general],
                     ["Tolerancia",       verSesion.tolerancia],
@@ -5047,6 +5053,12 @@ function Sesiones({perfil}) {
                         <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Presión arterial</label>
                         <input type="text" value={formCompletar.presion_arterial||""} placeholder="120/80"
                           onChange={e=>setFormCompletar(f=>({...f,presion_arterial:e.target.value}))}
+                          style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Frec. cardíaca post (bpm)</label>
+                        <input type="number" value={formCompletar.frecuencia_cardiaca_post||""} placeholder="72"
+                          onChange={e=>setFormCompletar(f=>({...f,frecuencia_cardiaca_post:e.target.value}))}
                           style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                       </div>
                       <div>
