@@ -1714,15 +1714,55 @@ function HistoriasClinicas({perfil}) {
   const confirmarFirma = async () => {
     if(!firmaTexto.trim()) return;
     setSavingFirma(true);
-    await safeQuery(()=>
-      supabase.from("evaluaciones_medicas").update({
-        evolucion:    firmaModal.evolucionEdit || firmaModal.evolucion || "",
-        firma_medico: firmaTexto.trim(),
-        es_borrador:  false,
-        medico_id:    perfil.id,
-      }).eq("id", firmaModal.id),
-      "HC:firmar"
-    );
+
+    if(firmaModal._es_sesion) {
+      // Crear evaluación médica desde sesión completada
+      const { data: nuevaEval } = await safeQuery(()=>
+        supabase.from("evaluaciones_medicas").insert({
+          paciente_id:       pacSelec.paciente_id,
+          sede_id:           firmaModal.sede_id,
+          compra_id:         firmaModal.compra_id || null,
+          numero_sesion:     firmaModal.numero_sesion,
+          fecha:             firmaModal.fecha,
+          hora:              firmaModal.hora,
+          presion_arterial:  firmaModal.presion_arterial,
+          frecuencia_cardiaca: firmaModal.frecuencia_cardiaca,
+          saturacion_o2:     firmaModal.saturacion_o2,
+          presion_arterial_pre: firmaModal.presion_arterial_pre,
+          saturacion_o2_pre: firmaModal.saturacion_o2_pre,
+          temperatura:       firmaModal.temperatura,
+          peso:              firmaModal.peso,
+          nivel_dolor:       firmaModal.nivel_dolor,
+          estado_general:    firmaModal.estado_general,
+          tolerancia:        firmaModal.tolerancia,
+          observaciones:     firmaModal.observaciones,
+          presion_indicada:  firmaModal.presion_indicada || firmaModal.presion_aplicada,
+          duracion_minutos:  firmaModal.duracion_minutos,
+          evolucion:         firmaModal.evolucionEdit || "",
+          firma_medico:      firmaTexto.trim(),
+          medico_id:         perfil.id,
+          es_borrador:       false,
+        }).select().single(),
+        "HC:firmar:crear"
+      );
+      if(nuevaEval) {
+        await safeQuery(()=>
+          supabase.from("sesiones").update({ evaluacion_id: nuevaEval.id }).eq("id", firmaModal._sesion_id),
+          "HC:firmar:vincular"
+        );
+      }
+    } else {
+      await safeQuery(()=>
+        supabase.from("evaluaciones_medicas").update({
+          evolucion:    firmaModal.evolucionEdit || firmaModal.evolucion || "",
+          firma_medico: firmaTexto.trim(),
+          es_borrador:  false,
+          medico_id:    perfil.id,
+        }).eq("id", firmaModal.id),
+        "HC:firmar"
+      );
+    }
+
     setSavingFirma(false);
     setFirmaModal(null);
     setFirmaTexto("");
