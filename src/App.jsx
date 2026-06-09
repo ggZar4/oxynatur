@@ -4530,7 +4530,7 @@ function Sesiones({perfil}) {
       hora_fin:          formNueva.hora_fin,
       presion_aplicada:  parseFloat(formNueva.presion_aplicada) || 2.0,
       duracion_minutos:  parseInt(formNueva.duracion_minutos) || 90,
-      numero_sesion:     formNueva.numero_sesion ? parseInt(formNueva.numero_sesion) : (() => { const c = comprasData?.find(x=>x.id===formNueva.compra_id); return c ? c.sesiones_usadas+1 : 1; })(),
+      numero_sesion:     (() => { const c = comprasData?.find(x=>x.id===formNueva.compra_id) || comprasDelPaciente(formNueva.paciente_id)[0]; return c ? c.sesiones_usadas+1 : 1; })(),
       estado:            "programada",
       enfermero_id:      f.esEnfermero ? perfil.id : null,
       medico_id:         f.esMedico ? perfil.id : null,
@@ -4843,8 +4843,20 @@ function Sesiones({perfil}) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <Input label="Fecha" type="date" value={formNueva.fecha}
                   onChange={v=>setFormNueva(f=>({...f,fecha:v}))} required error={errNueva.fecha}/>
-                <Input label="N° de sesión" type="number" value={formNueva.numero_sesion}
-                  onChange={v=>setFormNueva(f=>({...f,numero_sesion:v}))} required error={errNueva.numero_sesion}/>
+                {/* N° de sesión — calculado automáticamente, solo lectura */}
+                <div>
+                  <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                    N° de sesión <span style={{fontSize:10,color:"var(--text3)",fontWeight:400}}>(automático)</span>
+                  </label>
+                  <div style={{padding:"10px 14px",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:10,fontSize:14,color:"var(--text)",fontWeight:600}}>
+                    {formNueva.compra_id
+                      ? (() => { const c = comprasData?.find(x=>x.id===formNueva.compra_id); return c ? `#${c.sesiones_usadas+1} de ${c.sesiones_totales}` : "—"; })()
+                      : formNueva.paciente_id
+                        ? (() => { const c = comprasDelPaciente(formNueva.paciente_id)[0]; return c ? `#${c.sesiones_usadas+1} de ${c.sesiones_totales}` : "—"; })()
+                        : <span style={{color:"var(--text3)",fontWeight:400}}>Selecciona paciente y paquete</span>
+                    }
+                  </div>
+                </div>
                 <Input label="Hora inicio" type="time" value={formNueva.hora_inicio}
                   onChange={v=>setFormNueva(f=>({...f,hora_inicio:v}))} required error={errNueva.hora_inicio}/>
                 <Input label="Hora fin estimada" type="time" value={formNueva.hora_fin}
