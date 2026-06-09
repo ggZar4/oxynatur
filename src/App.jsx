@@ -1441,7 +1441,7 @@ function HistoriasClinicas({perfil}) {
     doc.setFont("helvetica","bold");
     doc.setFontSize(16);
     doc.setTextColor(255,255,255);
-    doc.text("OxyNatur - Historia Clinica",14,12);
+    doc.text("Oxynatur - Historia Clinica",14,12);
     y=28;
 
     // Datos paciente
@@ -1473,12 +1473,21 @@ function HistoriasClinicas({perfil}) {
     txt("EVALUACIONES POR SESION",14,12,true,[0,100,90]); nl(7);
     evals.slice(0,20).forEach((ev,i)=>{
       if(y>240){doc.addPage();y=20;}
+      const rectH = ev._es_sesion ? 32 : 22;
       doc.setFillColor(248,250,252);
-      doc.rect(14,y-4,182,22,"F");
+      doc.rect(14,y-4,182,rectH,"F");
       txt(`Sesion #${ev.numero_sesion} - ${ev.fecha} - ${norm(ev.sedes?.nombre||"")}`,16,10,true); nl(5);
-      txt(`PA: ${ev.presion_arterial||"-"}  FC: ${ev.frecuencia_cardiaca||"-"}  Sat: ${ev.saturacion_o2||"-"}%  Peso: ${ev.peso||"-"}kg`,16,9); nl(5);
-      txt(`Estado: ${norm(ev.estado_general||"-")}  Dolor: ${ev.nivel_dolor}/10  Duracion: ${ev.duracion_minutos}min  Presion: ${ev.presion_indicada}ATA`,16,9); nl(5);
-      if(ev.firma_medico){ txt(`Firmado por: ${norm(ev.firma_medico)}`,16,9,true); nl(5); }
+      if(ev._es_sesion) {
+        // Mostrar PRE y POST separados
+        txt(`PRE:  PA: ${ev.presion_arterial_pre||"-"}  FC: ${ev.frecuencia_cardiaca||"-"}  SatO2: ${ev.saturacion_o2_pre||"-"}%  T: ${ev.temperatura||"-"}C  Peso: ${ev.peso||"-"}kg`,16,9,false,[80,80,180]); nl(5);
+        txt(`POST: PA: ${ev.presion_arterial||"-"}  SatO2: ${ev.saturacion_o2||"-"}%  Dolor: ${ev.nivel_dolor}/10  Estado: ${norm(ev.estado_general||"-")}  Tolerancia: ${norm(ev.tolerancia||"-")}`,16,9,false,[0,130,110]); nl(5);
+      } else {
+        txt(`PA: ${ev.presion_arterial||"-"}  FC: ${ev.frecuencia_cardiaca||"-"}  Sat: ${ev.saturacion_o2||"-"}%  Peso: ${ev.peso||"-"}kg`,16,9); nl(5);
+        txt(`Estado: ${norm(ev.estado_general||"-")}  Dolor: ${ev.nivel_dolor}/10  Duracion: ${ev.duracion_minutos}min  Presion: ${ev.presion_indicada}ATA`,16,9); nl(5);
+      }
+      txt(`Presion: ${ev.presion_indicada||ev.presion_aplicada||"-"}ATA  Duracion: ${ev.duracion_minutos||"-"}min`,16,9); nl(5);
+      if(ev.observaciones){ txt(`Obs: ${norm(ev.observaciones)}`,16,9); nl(5); }
+      if(ev.firma_medico){ txt(`Firmado por: ${norm(ev.firma_medico)}`,16,9,true,[0,120,80]); nl(5); }
       if(ev.es_borrador){ txt("BORRADOR - sin firma medica",16,9,false,[220,100,0]); nl(5); }
       nl(4);
     });
