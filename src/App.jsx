@@ -6083,7 +6083,9 @@ function Prospectos({perfil}) {
     setSaving(true);
     const { error } = await safeQuery(() =>
       supabase.from("prospectos").insert({
-        nombre: form.nombre.trim(),
+        nombre: form.nombre?.trim() || ((form.nombres||"")+" "+(form.apellidos||"")).trim(),
+        nombres: (form.nombres||"").trim() || null,
+        apellidos: (form.apellidos||"").trim() || null,
         telefono: form.telefono.trim(),
         email: form.email.trim() || null,
         canal: form.canal,
@@ -6104,13 +6106,18 @@ function Prospectos({perfil}) {
   };
 
   const abrirConvertForm = () => {
-    // Prellenar nombres/apellidos inteligentemente
-    const partes = modalVer.nombre.trim().split(" ");
+    // Usar nombres/apellidos separados si existen, sino parsear nombre completo
     let nombres = "", apellidos = "";
-    if(partes.length === 1) { nombres = partes[0]; apellidos = ""; }
-    else if(partes.length === 2) { nombres = partes[0]; apellidos = partes[1]; }
-    else if(partes.length === 3) { nombres = partes[0]; apellidos = partes.slice(1).join(" "); }
-    else { nombres = partes.slice(0,2).join(" "); apellidos = partes.slice(2).join(" "); }
+    if(modalVer.nombres && modalVer.apellidos) {
+      nombres = modalVer.nombres;
+      apellidos = modalVer.apellidos;
+    } else {
+      const partes = (modalVer.nombre||"").trim().split(" ");
+      if(partes.length === 1) { nombres = partes[0]; apellidos = ""; }
+      else if(partes.length === 2) { nombres = partes[0]; apellidos = partes[1]; }
+      else if(partes.length === 3) { nombres = partes[0]; apellidos = partes.slice(1).join(" "); }
+      else { nombres = partes.slice(0,2).join(" "); apellidos = partes.slice(2).join(" "); }
+    }
     setConvertForm({nombres, apellidos, dni:""});
     setConvertErr({});
     setShowConvertForm(true);
@@ -6365,7 +6372,10 @@ function Prospectos({perfil}) {
               <button onClick={()=>setModal(false)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
             </div>
 
-            <Input label="Nombre completo" value={form.nombre} onChange={v=>setForm(f=>({...f,nombre:v}))} required error={err.nombre}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
+              <Input label="Nombres (ej: JUAN CARLOS)" placeholder="Solo nombres propios" value={form.nombres||""} onChange={v=>setForm(f=>({...f,nombres:v.toUpperCase(),nombre:(v.toUpperCase()+" "+(f.apellidos||"")).trim()}))} required error={err.nombre}/>
+              <Input label="Apellidos (ej: GARCIA LOPEZ)" placeholder="Apellido paterno + materno" value={form.apellidos||""} onChange={v=>setForm(f=>({...f,apellidos:v.toUpperCase(),nombre:((f.nombres||"")+" "+v.toUpperCase()).trim()}))} required/>
+            </div>
             <Input label="Teléfono" value={form.telefono} onChange={v=>setForm(f=>({...f,telefono:v}))} required error={err.telefono}/>
             <Input label="Email (opcional)" value={form.email} onChange={v=>setForm(f=>({...f,email:v}))}/>
 
