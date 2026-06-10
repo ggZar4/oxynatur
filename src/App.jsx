@@ -1233,8 +1233,8 @@ function Pacientes({perfil}) {
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <Input label="Nombres" value={formEditar.nombres} onChange={v=>setFormEditar(f=>({...f,nombres:v}))} required/>
-                <Input label="Apellidos" value={formEditar.apellidos} onChange={v=>setFormEditar(f=>({...f,apellidos:v}))} required/>
+                <Input label="Nombres (ej: JUAN CARLOS)" placeholder="Solo nombres propios" value={formEditar.nombres} onChange={v=>setFormEditar(f=>({...f,nombres:v.toUpperCase()}))} required/>
+                <Input label="Apellidos (ej: GARCIA LOPEZ)" placeholder="Apellido paterno + materno" value={formEditar.apellidos} onChange={v=>setFormEditar(f=>({...f,apellidos:v.toUpperCase()}))} required/>
                 <Input label="DNI" value={formEditar.dni} onChange={v=>setFormEditar(f=>({...f,dni:v}))} required/>
                 <Input label="Teléfono" value={formEditar.telefono} onChange={v=>setFormEditar(f=>({...f,telefono:v}))}/>
                 <Input label="Email" value={formEditar.email} onChange={v=>setFormEditar(f=>({...f,email:v}))} type="email"/>
@@ -1322,8 +1322,8 @@ function Pacientes({perfil}) {
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-                <Input label="Nombres" value={form.nombres} onChange={v=>setF("nombres",v)} required error={err.nombres}/>
-                <Input label="Apellidos" value={form.apellidos} onChange={v=>setF("apellidos",v)} required error={err.apellidos}/>
+                <Input label="Nombres (ej: JUAN CARLOS)" placeholder="Solo nombres propios" value={form.nombres} onChange={v=>setF("nombres",v.toUpperCase())} required error={err.nombres}/>
+                <Input label="Apellidos (ej: GARCIA LOPEZ)" placeholder="Apellido paterno + materno" value={form.apellidos} onChange={v=>setF("apellidos",v.toUpperCase())} required error={err.apellidos}/>
                 <Input label="DNI" value={form.dni} onChange={v=>setF("dni",v)} required error={err.dni}/>
                 <Input label="Teléfono" value={form.telefono} onChange={v=>setF("telefono",v)}/>
                 <Input label="Email" value={form.email} onChange={v=>setF("email",v)} type="email"/>
