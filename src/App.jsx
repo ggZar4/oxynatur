@@ -1808,9 +1808,9 @@ function HistoriasClinicas({perfil}) {
       cuestionario_pre: s.cuestionario_pre,
     }));
 
-    // IDs de sesiones ya evaluadas (para no duplicar)
-    const evalIds = new Set((evalsData||[]).map(e=>e.sesion_id).filter(Boolean));
-    const sesionsFiltradas = sesionesComoEvals.filter(s=>!evalIds.has(s._sesion_id));
+    // Deduplicar — no mostrar sesión si ya hay evaluación con misma fecha+numero_sesion
+    const evalKeys = new Set((evalsData||[]).map(e=>`${e.fecha}_${e.numero_sesion}`).filter(Boolean));
+    const sesionsFiltradas = sesionesComoEvals.filter(s=>!evalKeys.has(`${s.fecha}_${s.numero_sesion}`));
 
     // Combinar y ordenar por fecha + numero_sesion
     const combined = [...(evalsData||[]), ...sesionsFiltradas].sort((a,b)=>{
@@ -1998,11 +1998,8 @@ function HistoriasClinicas({perfil}) {
           <Btn variant="ghost" onClick={exportarPDF} style={{fontSize:12}}>
             ⬇ Exportar PDF
           </Btn>
-          {(f.esEnfermero || f.esMedico || f.esAdmin) && (
-            <Btn onClick={()=>{ setFormEval(evalInicial); setErrEval({}); setModalNuevaEval(true); }}>
-              + Nueva evaluación
-            </Btn>
-          )}
+          {/* Boton "Nueva evaluacion" eliminado: el flujo ahora es 100% automatico
+              via Sesiones (PRE -> POST -> Firma medica) */}
         </div>
       </div>
 
