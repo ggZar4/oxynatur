@@ -1432,32 +1432,38 @@ function HistoriasClinicas({perfil}) {
     let pageNum = 1;
 
     const addHeader = () => {
-      // Fondo header
-      doc.setFillColor(0, 75, 140);
-      doc.rect(0, 0, PAGE_W, 28, "F");
+      // Fondo header blanco
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, PAGE_W, 26, "F");
       // Logo
-      try { doc.addImage(LOGO_B64, "PNG", MARGIN, 2, 22, 22); } catch(e) {}
+      try { doc.addImage(LOGO_B64, "PNG", MARGIN, 2, 20, 20); } catch(e) {}
       // Titulo
       doc.setFont("helvetica","bold");
-      doc.setFontSize(11);
-      doc.setTextColor(255,255,255);
-      doc.text("HISTORIA CLINICA - OXIGENOTERAPIA HIPERBARICA", 40, 11);
+      doc.setFontSize(10);
+      doc.setTextColor(0, 75, 140);
+      doc.text("HISTORIA CLINICA - OXIGENOTERAPIA HIPERBARICA", 38, 9);
       doc.setFont("helvetica","normal");
-      doc.setFontSize(8);
-      doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781", 40, 17);
+      doc.setFontSize(7.5);
+      doc.setTextColor(80,80,80);
+      doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781", 38, 14.5);
       // Sede info
       const sedeNombre = (pacSelec.sedes?.nombre || "").toLowerCase();
       const sedeInfo = sedeNombre.includes("molisalud") || sedeNombre.includes("molina")
         ? "Molisalud: Av. Javier Prado 5998, La Molina  |  Tel: 987203017"
         : "Clinica San Miguel Arcangel: Jr. Las Gardenias 754, SJL  |  Tel: (01)387-5457";
-      doc.text(sedeInfo, 40, 23);
-      y = 34;
+      doc.text(sedeInfo, 38, 19.5);
+      // Linea separadora
+      doc.setDrawColor(0, 168, 150);
+      doc.setLineWidth(0.8);
+      doc.line(0, 26, PAGE_W, 26);
+      doc.setLineWidth(0.2);
+      y = 32;
     };
 
     const addFooter = () => {
       doc.setDrawColor(200,200,200);
       doc.line(MARGIN, PAGE_H-14, PAGE_W-MARGIN, PAGE_H-14);
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setFont("helvetica","normal");
       doc.setTextColor(120,120,120);
       doc.text("Director Medico: Dr. Raul Aguado  |  CMP 028600  |  RNE 022132", MARGIN, PAGE_H-9);
@@ -1492,7 +1498,7 @@ function HistoriasClinicas({perfil}) {
       doc.setFillColor(0, 168, 150);
       doc.rect(MARGIN, y-4, CONTENT_W, 9, "F");
       doc.setFont("helvetica","bold");
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.setTextColor(255,255,255);
       doc.text(norm(title).toUpperCase(), MARGIN+3, y+1);
       nl(10);
@@ -1509,7 +1515,7 @@ function HistoriasClinicas({perfil}) {
     doc.setFont("helvetica","bold");
     doc.setTextColor(0,75,140);
     doc.text(`${norm(pac?.apellidos||"")}  ${norm(pac?.nombres||"")}`, MARGIN+4, y+5);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont("helvetica","normal");
     doc.setTextColor(60,60,60);
     doc.text(`DNI: ${pac?.dni||"-"}   |   Sede: ${norm(pacSelec.sedes?.nombre||"-")}   |   N° HC: ${norm(hc?.numero_hc||pacSelec.id?.slice(-6)||"-")}`, MARGIN+4, y+12);
@@ -1560,7 +1566,7 @@ function HistoriasClinicas({perfil}) {
       doc.setFillColor(isBorrador ? 245 : 0, isBorrador ? 245 : 168, isBorrador ? 245 : 150);
       doc.rect(MARGIN, y-2, CONTENT_W, 8, "F");
       doc.setFont("helvetica","bold");
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.setTextColor(isBorrador ? 100 : 255, isBorrador ? 80 : 255, isBorrador ? 0 : 255);
       doc.text(`Sesion #${ev.numero_sesion}  -  ${ev.fecha||"-"}  -  ${norm(ev.sedes?.nombre||"")}`, MARGIN+3, y+3);
       if(isBorrador) {
