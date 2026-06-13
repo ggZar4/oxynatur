@@ -6256,7 +6256,7 @@ function Prospectos({perfil}) {
     const [{ data: p }, { data: s }] = await Promise.all([
       safeQuery(() => {
         let q = supabase.from("prospectos")
-          .select("*, sedes(nombre)")
+          .select("*, sedes(nombre), creador:perfiles!creado_por(nombre)")
           .order("created_at", {ascending:false});
         // Enfermeros y admin_sede solo ven prospectos de su sede
         if((f.esEnfermero || f.esAdminSede) && perfil.sede_id) {
@@ -6294,6 +6294,7 @@ function Prospectos({perfil}) {
         estado: form.estado,
         fecha_ultimo_contacto: new Date().toISOString(),
         fecha_cita: form.fecha_cita ? new Date(form.fecha_cita).toISOString() : null,
+        creado_por: perfil?.id || null,
       }), "Prospectos:insert"
     );
     setSaving(false);
@@ -6646,6 +6647,7 @@ function Prospectos({perfil}) {
                 ["Sede", modalVer.sedes?.nombre||"Sin preferencia"],
                 ["Estado", ESTADO_LABEL[modalVer.estado]],
                 ["Registrado", new Date(modalVer.created_at).toLocaleDateString("es-PE")],
+                ["Registrado por", modalVer.creador?.nombre || "—"],
 
               ].map(([k,v])=>(
                 <div key={k} style={{background:"var(--surface2)",borderRadius:8,padding:"10px 12px"}}>
