@@ -3837,18 +3837,22 @@ function Ventas({perfil}) {
     const y = now.getFullYear();
     const m = now.getMonth(); // 0-indexed
     if(sedeId === SEDE_MOLISALUD) {
-      // Ciclo 26 → 25
-      const desde = new Date(y, m-1, 26);
-      const hasta = new Date(y, m, 25);
+      // Ciclo 26 → 25. Si el dia actual es >=26, el ciclo activo arranca este mes y termina el siguiente.
+      const diaActual = now.getDate();
+      const offset = diaActual >= 26 ? 0 : -1;
+      const desde = new Date(y, m+offset, 26);
+      const hasta = new Date(y, m+offset+1, 25);
       return {
         desde: desde.toISOString().slice(0,10),
         hasta: hasta.toISOString().slice(0,10),
         label: `26 ${desde.toLocaleDateString("es-PE",{month:"short"})} → 25 ${hasta.toLocaleDateString("es-PE",{month:"short",year:"numeric"})}`,
       };
     } else if(sedeId === SEDE_SMA) {
-      // Ciclo 16 → 15
-      const desde = new Date(y, m-1, 16);
-      const hasta = new Date(y, m, 15);
+      // Ciclo 16 → 15. Si el dia actual es >=16, el ciclo activo arranca este mes y termina el siguiente.
+      const diaActual = now.getDate();
+      const offset = diaActual >= 16 ? 0 : -1;
+      const desde = new Date(y, m+offset, 16);
+      const hasta = new Date(y, m+offset+1, 15);
       return {
         desde: desde.toISOString().slice(0,10),
         hasta: hasta.toISOString().slice(0,10),
