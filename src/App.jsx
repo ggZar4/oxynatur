@@ -941,9 +941,9 @@ function Pacientes({perfil}) {
     setLoading(true);
     const { data } = await safeQuery(() => {
       let q = supabase.from("pacientes")
-        .select("*, sedes!sede_principal_id(nombre,color)")
+        .select("*, sedes!sede_principal_id(nombre,color), paciente_sedes!inner(sede_id)")
         .order("created_at",{ascending:false});
-      if(!f.puedeVerTodosPacientes && perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
+      if(!f.puedeVerTodosPacientes && perfil?.sede_id) q = q.eq("paciente_sedes.sede_id", perfil.sede_id);
       return q;
     }, "Pacientes:load");
     setPacs(data || []);
@@ -3633,8 +3633,8 @@ function Ventas({perfil}) {
 
   const { data: pacientesData } = useSupabaseQuery(
     () => {
-      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni").order("apellidos");
-      if(sedeFija) q = q.eq("sede_principal_id", sedeFija);
+      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni, paciente_sedes!inner(sede_id)").order("apellidos");
+      if(sedeFija) q = q.eq("paciente_sedes.sede_id", sedeFija);
       return q;
     },
     [], "Ventas:pacientes"
@@ -4777,8 +4777,8 @@ function Sesiones({perfil}) {
   // Data de soporte
   const { data: pacientesData } = useSupabaseQuery(
     () => {
-      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni,sede_principal_id").order("apellidos");
-      if(perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
+      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni,sede_principal_id, paciente_sedes!inner(sede_id)").order("apellidos");
+      if(perfil?.sede_id) q = q.eq("paciente_sedes.sede_id", perfil.sede_id);
       return q;
     }, [], "Sesiones:pacientes"
   );
@@ -4861,7 +4861,7 @@ function Sesiones({perfil}) {
 
     // Obtener sede del paciente o del perfil
     const pac = pacientesData?.find(p => p.id === formNueva.paciente_id);
-    const sede_id = pac?.sede_principal_id || perfil?.sede_id;
+    const sede_id = perfil?.sede_id || pac?.sede_principal_id;
 
     const { error } = await safeQuery(() => supabase.from("sesiones").insert({
       paciente_id:       formNueva.paciente_id,
