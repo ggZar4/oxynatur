@@ -939,19 +939,11 @@ function Pacientes({perfil}) {
 
   const load = async () => {
     setLoading(true);
-    let ids = null;
-    if(!f.puedeVerTodosPacientes && perfil?.sede_id) {
-      const { data: psData } = await safeQuery(() =>
-        supabase.from("paciente_sedes").select("paciente_id").eq("sede_id", perfil.sede_id),
-        "Pacientes:sedes_ids"
-      );
-      ids = (psData || []).map(r => r.paciente_id);
-    }
     const { data } = await safeQuery(() => {
       let q = supabase.from("pacientes")
         .select("*, sedes!sede_principal_id(nombre,color)")
         .order("created_at",{ascending:false});
-      if(ids !== null) q = q.in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+      if(!f.puedeVerTodosPacientes && perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
       return q;
     }, "Pacientes:load");
     setPacs(data || []);
@@ -3639,33 +3631,14 @@ function Ventas({perfil}) {
   const [busqPac, setBusqPac] = useState("");
   const [abiertoDropPac, setAbiertoDropPac] = useState(false);
 
-  const [pacientesData, setPacientesData] = useState([]);
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      if(sedeFija) {
-        const { data: psData } = await safeQuery(() =>
-          supabase.from("paciente_sedes").select("paciente_id").eq("sede_id", sedeFija),
-          "Ventas:sedes_ids"
-        );
-        const ids = (psData || []).map(r => r.paciente_id);
-        const { data } = await safeQuery(() =>
-          supabase.from("pacientes").select("id,nombres,apellidos,dni")
-            .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
-            .order("apellidos"),
-          "Ventas:pacientes"
-        );
-        if(mounted) setPacientesData(data || []);
-      } else {
-        const { data } = await safeQuery(() =>
-          supabase.from("pacientes").select("id,nombres,apellidos,dni").order("apellidos"),
-          "Ventas:pacientes"
-        );
-        if(mounted) setPacientesData(data || []);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [sedeFija]); // eslint-disable-line
+  const { data: pacientesData } = useSupabaseQuery(
+    () => {
+      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni").order("apellidos");
+      if(sedeFija) q = q.eq("sede_principal_id", sedeFija);
+      return q;
+    },
+    [], "Ventas:pacientes"
+  );
   const { data: paquetesData } = useSupabaseQuery(
     () => supabase.from("paquetes")
       .select("*, paquetes_precios(sede_id, precio, sesiones_incluidas, activo, incluye_evaluacion, descripcion_sede, segmento)")
@@ -4802,33 +4775,13 @@ function Sesiones({perfil}) {
   };
 
   // Data de soporte
-  const [pacientesData, setPacientesData] = useState([]);
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      if(perfil?.sede_id) {
-        const { data: psData } = await safeQuery(() =>
-          supabase.from("paciente_sedes").select("paciente_id").eq("sede_id", perfil.sede_id),
-          "Sesiones:sedes_ids"
-        );
-        const ids = (psData || []).map(r => r.paciente_id);
-        const { data } = await safeQuery(() =>
-          supabase.from("pacientes").select("id,nombres,apellidos,dni,sede_principal_id")
-            .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
-            .order("apellidos"),
-          "Sesiones:pacientes"
-        );
-        if(mounted) setPacientesData(data || []);
-      } else {
-        const { data } = await safeQuery(() =>
-          supabase.from("pacientes").select("id,nombres,apellidos,dni,sede_principal_id").order("apellidos"),
-          "Sesiones:pacientes"
-        );
-        if(mounted) setPacientesData(data || []);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [perfil?.sede_id]); // eslint-disable-line
+  const { data: pacientesData } = useSupabaseQuery(
+    () => {
+      let q = supabase.from("pacientes").select("id,nombres,apellidos,dni,sede_principal_id").order("apellidos");
+      if(perfil?.sede_id) q = q.eq("sede_principal_id", perfil.sede_id);
+      return q;
+    }, [], "Sesiones:pacientes"
+  );
   const { data: camarasData } = useSupabaseQuery(
     () => {
       let q = supabase.from("camaras").select("id,numero,modelo,sede_id").eq("estado","operativa");
@@ -4908,7 +4861,7 @@ function Sesiones({perfil}) {
 
     // Obtener sede del paciente o del perfil
     const pac = pacientesData?.find(p => p.id === formNueva.paciente_id);
-    const sede_id = perfil?.sede_id || pac?.sede_principal_id;
+    const sede_id = pac?.sede_principal_id || perfil?.sede_id;
 
     const { error } = await safeQuery(() => supabase.from("sesiones").insert({
       paciente_id:       formNueva.paciente_id,
