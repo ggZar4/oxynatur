@@ -3698,22 +3698,35 @@ function Ventas({perfil}) {
   const buscarVentas = async (texto) => {
     if(!texto || texto.trim().length < 2) { setBusqResultados(null); return; }
     setLoadingBusq(true);
-    const t = texto.trim().toLowerCase();
+    const t = texto.trim();
+    // Paso 1: buscar pacientes que coincidan
+    const { data: pacs } = await safeQuery(() =>
+      supabase.from("pacientes")
+        .select("id")
+        .or(`nombres.ilike.%${t}%,apellidos.ilike.%${t}%,dni.ilike.%${t}%`)
+        .limit(50),
+      "Ventas:buscarPacs"
+    );
+    const ids = (pacs||[]).map(p => p.id);
+    // Paso 2: traer compras por paciente_id o numero_comprobante
     const { data } = await safeQuery(() => {
       let q = supabase.from("compras_paciente")
         .select(`id, fecha_compra, monto_pagado, precio_sugerido, descuento_pct,
           estado, promo_aplicada, metodo_pago, notas, numero_comprobante, comprobante_url,
           pacientes(nombres,apellidos,dni), paquetes(codigo,nombre), sedes(nombre,color)`)
-        .or(`numero_comprobante.ilike.%${t}%,pacientes.nombres.ilike.%${t}%,pacientes.apellidos.ilike.%${t}%,pacientes.dni.ilike.%${t}%`)
         .order("fecha_compra", {ascending:false})
         .limit(100);
+      if(ids.length > 0) {
+        q = q.or(`paciente_id.in.(${ids.join(",")}),numero_comprobante.ilike.%${t}%`);
+      } else {
+        q = q.ilike("numero_comprobante", `%${t}%`);
+      }
       if(sedeFija) q = q.eq("sede_id", sedeFija);
       return q;
-    }, "Ventas:buscar");
+    }, "Ventas:buscarCompras");
     setBusqResultados(data || []);
     setLoadingBusq(false);
   };
-
 
   useEffect(()=>{ loadVentas(); }, []); // eslint-disable-line
 
@@ -4087,7 +4100,7 @@ function Ventas({perfil}) {
           type="text"
           placeholder="🔍 Buscar paciente o comprobante..."
           value={busqVenta}
-          onChange={e=>{ setBusqVenta(e.target.value); if(!e.target.value) { setBusqResultados(null); } else { clearTimeout(window._busqTimer); window._busqTimer = setTimeout(()=>buscarVentas(e.target.value), 400); } }}
+          onChange={e=>{ const v=e.target.value; setBusqVenta(v); if(!v){ setBusqResultados(null); } else { clearTimeout(window._busqVentaTimer); window._busqVentaTimer=setTimeout(()=>buscarVentas(v),400); } }}
           style={{padding:"7px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit",minWidth:260,outline:"none"}}
         />
       </div>
@@ -4117,7 +4130,7 @@ function Ventas({perfil}) {
         {loadingVentas || loadingBusq ? (
           <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
         ) : busqResultados !== null && busqResultados.length === 0 ? (
-          <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>No se encontraron ventas para esa búsqueda</div>
+          <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Sin resultados para esa búsqueda</div>
         ) : busqResultados === null && ventas.length === 0 ? (
           <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>No hay ventas registradas</div>
         ) : (
