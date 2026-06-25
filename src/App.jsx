@@ -3660,6 +3660,8 @@ function Ventas({perfil}) {
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
   const [busqVenta, setBusqVenta] = useState("");
+  const [busqResultados, setBusqResultados] = useState(null);
+  const [loadingBusq, setLoadingBusq] = useState(false);
   const [paginaVentas, setPaginaVentas] = useState(0);
   const [totalVentas, setTotalVentas] = useState(0);
   const PAGE_SIZE = 20;
@@ -3692,6 +3694,26 @@ function Ventas({perfil}) {
     if(data?.count !== undefined) setTotalVentas(data.count);
     setLoadingVentas(false);
   };
+
+  const buscarVentas = async (texto) => {
+    if(!texto || texto.trim().length < 2) { setBusqResultados(null); return; }
+    setLoadingBusq(true);
+    const t = texto.trim().toLowerCase();
+    const { data } = await safeQuery(() => {
+      let q = supabase.from("compras_paciente")
+        .select(`id, fecha_compra, monto_pagado, precio_sugerido, descuento_pct,
+          estado, promo_aplicada, metodo_pago, notas, numero_comprobante, comprobante_url,
+          pacientes(nombres,apellidos,dni), paquetes(codigo,nombre), sedes(nombre,color)`)
+        .or(`numero_comprobante.ilike.%${t}%,pacientes.nombres.ilike.%${t}%,pacientes.apellidos.ilike.%${t}%,pacientes.dni.ilike.%${t}%`)
+        .order("fecha_compra", {ascending:false})
+        .limit(100);
+      if(sedeFija) q = q.eq("sede_id", sedeFija);
+      return q;
+    }, "Ventas:buscar");
+    setBusqResultados(data || []);
+    setLoadingBusq(false);
+  };
+
 
   useEffect(()=>{ loadVentas(); }, []); // eslint-disable-line
 
@@ -4065,7 +4087,7 @@ function Ventas({perfil}) {
           type="text"
           placeholder="🔍 Buscar paciente o comprobante..."
           value={busqVenta}
-          onChange={e=>setBusqVenta(e.target.value)}
+          onChange={e=>{ setBusqVenta(e.target.value); if(!e.target.value) { setBusqResultados(null); } else { clearTimeout(window._busqTimer); window._busqTimer = setTimeout(()=>buscarVentas(e.target.value), 400); } }}
           style={{padding:"7px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit",minWidth:260,outline:"none"}}
         />
       </div>
@@ -4092,9 +4114,11 @@ function Ventas({perfil}) {
             )}
           </div>
         </div>
-        {loadingVentas ? (
+        {loadingVentas || loadingBusq ? (
           <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
-        ) : ventas.length === 0 ? (
+        ) : busqResultados !== null && busqResultados.length === 0 ? (
+          <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>No se encontraron ventas para esa búsqueda</div>
+        ) : busqResultados === null && ventas.length === 0 ? (
           <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>No hay ventas registradas</div>
         ) : (
           <div style={{overflowX:"auto"}}>
@@ -4107,14 +4131,7 @@ function Ventas({perfil}) {
                 </tr>
               </thead>
               <tbody>
-                {ventas.filter(v=>{
-                  if(!busqVenta) return true;
-                  const q = busqVenta.toLowerCase();
-                  const nombre = `${v.pacientes?.nombres||""} ${v.pacientes?.apellidos||""}`.toLowerCase();
-                  const comp = (v.numero_comprobante||"").toLowerCase();
-                  const dni = (v.pacientes?.dni||"").toLowerCase();
-                  return nombre.includes(q) || comp.includes(q) || dni.includes(q);
-                }).map(v=>{
+                {(busqResultados !== null ? busqResultados : ventas).map(v=>{
                   const sug = Number(v.precio_sugerido||0);
                   const pag = Number(v.monto_pagado||0);
                   const conDesc = sug > 0 && pag < sug;
