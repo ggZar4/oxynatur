@@ -46,6 +46,15 @@ if (!globalThis.__oxynatur_supabase) {
 }
 const supabase = globalThis.__oxynatur_supabase;
 
+// ── Helper formato hora 12h AM/PM ─────────────────────────────
+const fmtHora = (hhmm) => {
+  if(!hhmm) return "—";
+  const [h,m] = hhmm.slice(0,5).split(":").map(Number);
+  const ampm = h >= 12 ? "pm" : "am";
+  const h12  = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2,"0")} ${ampm}`;
+};
+
 // ── Helpers para queries de Supabase ──────────────────────────
 async function safeQuery(queryFn, contexto = "query") {
   try {
@@ -558,7 +567,7 @@ function DashboardMedico({perfil}) {
                       <div style={{fontSize:11,color:"var(--text3)",marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                         <span>Sesión #{ev.numero_sesion}</span>
                         <span>·</span>
-                        <span>{ev.fecha} {ev.hora?.slice(0,5)}</span>
+                        <span>{ev.fecha} {fmtHora(ev.hora)}</span>
                         <span>·</span>
                         <span style={{display:"flex",alignItems:"center",gap:3}}>
                           <span style={{width:5,height:5,borderRadius:"50%",background:getColor(ev.sedes?.nombre||""),display:"inline-block"}}/>
@@ -619,7 +628,7 @@ function DashboardMedico({perfil}) {
             ? <div style={{padding:"24px",textAlign:"center",color:"var(--text3)",fontSize:13}}>Sin sesiones programadas para hoy</div>
             : sesionesHoy.map(s=>(
               <div key={s.id} style={{padding:"10px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",alignItems:"center",gap:12}}>
-                <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#00A896",minWidth:44}}>{s.hora_inicio?.slice(0,5)}</div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#00A896",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{s.paciente}</div>
                   <div style={{fontSize:11,color:"var(--text3)"}}>{s.sede_nombre} · Ses. #{s.numero_sesion}</div>
@@ -675,7 +684,7 @@ function DashboardMedico({perfil}) {
                   {firmaModal.pacientes?.nombres} {firmaModal.pacientes?.apellidos} · DNI {firmaModal.pacientes?.dni}
                 </div>
                 <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>
-                  {firmaModal.fecha} {firmaModal.hora?.slice(0,5)} · {firmaModal.sedes?.nombre} · {firmaModal.compras_paciente?.paquetes?.nombre}
+                  {firmaModal.fecha} {fmtHora(firmaModal.hora)} · {firmaModal.sedes?.nombre} · {firmaModal.compras_paciente?.paquetes?.nombre}
                 </div>
               </div>
               <button onClick={()=>setFirmaModal(null)}
@@ -1210,7 +1219,7 @@ function Pacientes({perfil}) {
                   const ECOLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
                   return (
                     <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"#00A896",minWidth:44}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+                      <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"#00A896",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,color:"var(--text)"}}>Sesión #{s.numero_sesion} · {s.fecha}</div>
                         <div style={{fontSize:11,color:"var(--text3)"}}>{s.sedes?.nombre} · Cámara #{s.camaras?.numero||"—"} · {s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
@@ -2257,7 +2266,7 @@ function HistoriasClinicas({perfil}) {
                           <div style={{flex:1}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
                               <span style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"var(--text)"}}>Sesión #{ev.numero_sesion}</span>
-                              <span style={{fontSize:12,color:"var(--text3)"}}>{ev.fecha} · {ev.hora?.slice(0,5)}</span>
+                              <span style={{fontSize:12,color:"var(--text3)"}}>{ev.fecha} · {fmtHora(ev.hora)}</span>
                               {ev.es_borrador && <Badge color="#F59E0B">Borrador</Badge>}
                               {!ev.es_borrador && ev.firma_medico && <Badge color="#10B981">✓ Firmado</Badge>}
                             </div>
@@ -2548,7 +2557,7 @@ function HistoriasClinicas({perfil}) {
               <div>
                 <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Evaluación Firmada · Sesión #{modalEval.numero_sesion}</div>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
-                <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>{modalEval.fecha} · {modalEval.hora?.slice(0,5)} · {modalEval.sedes?.nombre}</div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>{modalEval.fecha} · {fmtHora(modalEval.hora)} · {modalEval.sedes?.nombre}</div>
               </div>
               <button onClick={()=>setModalEval(null)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
@@ -3522,7 +3531,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                   letterSpacing:"0.02em", lineHeight:1,
                   userSelect:"none",
                 }}>
-                  {String(h).padStart(2,"0")}:00
+                  {h===12?"12pm":h>12?`${h-12}pm`:`${h}am`}
                 </div>
               ))}
             </div>
@@ -3662,7 +3671,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                             </div>
                             {height >= 40 && (
                               <div style={{fontSize:8,color:"var(--text3)",marginTop:1,lineHeight:1.2}}>
-                                {s.hora_inicio?.slice(0,5)}
+                                {fmtHora(s.hora_inicio)}
                                 {s.camara_numero ? ` · Cam#${s.camara_numero}` : ""}
                               </div>
                             )}
@@ -3692,7 +3701,7 @@ function AgendaMedico({perfil, cambiarVista}) {
             <div key={p.id} style={{background:"#7C6AF708",border:"0.5px solid #7C6AF730",borderLeft:"3px solid #7C6AF7",borderRadius:12,padding:"14px 18px",display:"grid",gridTemplateColumns:"90px 1fr auto auto",alignItems:"center",gap:14}}>
               <div style={{textAlign:"center"}}>
                 <div style={{fontSize:18,fontWeight:700,color:"#7C6AF7",fontFamily:"Syne,sans-serif",lineHeight:1}}>
-                  {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})}
+                  {fmtHora(new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"America/Lima"}))}
                 </div>
                 <div style={{fontSize:9,color:"var(--text3)",marginTop:4,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Evaluación</div>
               </div>
@@ -3723,13 +3732,13 @@ function AgendaMedico({perfil, cambiarVista}) {
 
                 {/* Hora timeline */}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
-                  <div style={{fontSize:18,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif",lineHeight:1}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+                  <div style={{fontSize:18,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif",lineHeight:1}}>{fmtHora(s.hora_inicio)}</div>
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"3px 0",gap:1}}>
                     <div style={{width:1,height:7,background:"var(--border2)"}}/>
                     <span style={{fontSize:9,color:"var(--text3)",fontWeight:700,padding:"1px 5px",background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:4}}>{s.duracion_minutos||60}m</span>
                     <div style={{width:1,height:7,background:"var(--border2)"}}/>
                   </div>
-                  <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>{s.hora_fin?.slice(0,5)||"—"}</div>
+                  <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>{fmtHora(s.hora_fin)}</div>
                 </div>
 
                 {/* Paciente */}
@@ -4835,7 +4844,7 @@ function DashboardSede({perfil}) {
                   <td style={{padding:"9px 16px",color:"var(--text)",fontWeight:500}}>
                     {s.pacientes?`${s.pacientes.apellidos}, ${s.pacientes.nombres}`:"—"}
                   </td>
-                  <td style={{padding:"9px 16px",color:"var(--text2)"}}>{s.hora_inicio?.slice(0,5)||"—"}</td>
+                  <td style={{padding:"9px 16px",color:"var(--text2)"}}>{fmtHora(s.hora_inicio)}</td>
                   <td style={{padding:"9px 16px"}}>
                     <span style={estadoStyle(s.estado)}>{estadoLabel(s.estado)}</span>
                   </td>
@@ -5249,8 +5258,8 @@ function Sesiones({perfil}) {
             }}>
               {/* Hora */}
               <div style={{textAlign:"center"}}>
-                <div style={{fontSize:16,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif"}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
-                <div style={{fontSize:11,color:"var(--text3)"}}>{s.hora_fin?.slice(0,5)||""}</div>
+                <div style={{fontSize:16,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif"}}>{fmtHora(s.hora_inicio)}</div>
+                <div style={{fontSize:11,color:"var(--text3)"}}>{fmtHora(s.hora_fin)}</div>
               </div>
 
               {/* Paciente */}
@@ -5472,8 +5481,8 @@ function Sesiones({perfil}) {
               {verSesion.estado === "completada" ? (
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                   {[
-                    ["Hora inicio real", verSesion.hora_inicio_real?.slice(0,5)],
-                    ["Hora fin real",    verSesion.hora_fin_real?.slice(0,5)],
+                    ["Hora inicio real", fmtHora(verSesion.hora_inicio_real)],
+                    ["Hora fin real",    fmtHora(verSesion.hora_fin_real)],
                     ["PA post",          verSesion.presion_arterial],
                     ["FC post",          verSesion.frecuencia_cardiaca_post ? `${verSesion.frecuencia_cardiaca_post} bpm` : null],
                     ["SatO₂ post",       verSesion.saturacion_o2 ? `${verSesion.saturacion_o2}%` : null],
@@ -6759,7 +6768,7 @@ function Prospectos({perfil}) {
                     <td style={{padding:"11px 14px",fontSize:11,color:"var(--text3)"}}>
                       {p.estado === "evaluacion_agendada" && p.fecha_cita
                         ? <span style={{color:"#F59E0B",fontWeight:600}}>
-                            📅 {new Date(p.fecha_cita).toLocaleDateString("es-PE",{timeZone:"America/Lima"})} {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})}
+                            📅 {new Date(p.fecha_cita).toLocaleDateString("es-PE",{timeZone:"America/Lima"})} {fmtHora(new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"America/Lima"}))}
                           </span>
                         : p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
                     </td>
