@@ -3570,13 +3570,18 @@ function AgendaMedico({perfil, cambiarVista}) {
             border:`0.5px solid #E2E8F0`,
             borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}`,
             borderRadius:12,padding:"14px 18px",marginBottom:8,
-            display:"grid",gridTemplateColumns:"70px 2fr 1fr 1fr auto",
+            display:"grid",gridTemplateColumns:"90px 2fr 1fr 1fr auto",
             alignItems:"center",gap:12,
           }}>
-            {/* Hora */}
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:16,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif"}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
-              <div style={{fontSize:11,color:"var(--text3)"}}>{s.hora_fin?.slice(0,5)||""}</div>
+            {/* Hora con timeline */}
+            <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <div style={{fontSize:17,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif",lineHeight:1}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,margin:"3px 0"}}>
+                <div style={{width:1,height:6,background:"var(--border2)"}}/>
+                <div style={{fontSize:9,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em"}}>{s.duracion_minutos||60} min</div>
+                <div style={{width:1,height:6,background:"var(--border2)"}}/>
+              </div>
+              <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>{s.hora_fin?.slice(0,5)||""}</div>
             </div>
             {/* Paciente */}
             <div>
@@ -3590,7 +3595,15 @@ function AgendaMedico({perfil, cambiarVista}) {
             </div>
             {/* Cámara + parámetros */}
             <div style={{fontSize:13,color:"var(--text2)"}}>
-              {s.camara_numero ? `Cámara #${s.camara_numero}` : "—"}
+              {s.camara_numero ? (
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  <span style={{
+                    width:8,height:8,borderRadius:"50%",display:"inline-block",
+                    background:s.estado==="en_curso"?"#F87171":s.estado==="programada"?"#F59E0B":"#10B981"
+                  }}/>
+                  {`Cámara #${s.camara_numero}`}
+                </div>
+              ) : "—"}
               <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
             </div>
             {/* Sede — solo si ve varias */}
@@ -3600,10 +3613,27 @@ function AgendaMedico({perfil, cambiarVista}) {
                 <span style={{fontSize:12,color:"var(--text2)"}}>{s.sede_nombre}</span>
               </div>
             )}
-            {/* Estado + Ver HC */}
+            {/* Estado + acciones rápidas */}
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
               <Badge color={ESTADO_COLOR[s.estado]||"var(--text3)"}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
               {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
+              {/* Botón acción rápida según estado */}
+              {s.estado==="programada" && (
+                <button onClick={async()=>{
+                  await safeQuery(()=>supabase.from("sesiones").update({estado:"en_curso"}).eq("id",s.id),"Agenda:iniciar");
+                  load();
+                }} style={{background:"#00A89615",border:"1px solid #00A89640",color:"#00A896",fontSize:11,fontWeight:600,cursor:"pointer",padding:"3px 8px",borderRadius:6,fontFamily:"inherit"}}>
+                  ▶ Iniciar
+                </button>
+              )}
+              {s.estado==="en_curso" && (
+                <button onClick={async()=>{
+                  await safeQuery(()=>supabase.from("sesiones").update({estado:"completada"}).eq("id",s.id),"Agenda:completar");
+                  load();
+                }} style={{background:"#10B98115",border:"1px solid #10B98140",color:"#10B981",fontSize:11,fontWeight:600,cursor:"pointer",padding:"3px 8px",borderRadius:6,fontFamily:"inherit"}}>
+                  ✓ Completar
+                </button>
+              )}
               {s.paciente_id && cambiarVista && (
                 <button onClick={()=>{
                   localStorage.setItem("oxynatur-hc-paciente", s.paciente_id);
