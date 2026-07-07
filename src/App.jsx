@@ -172,22 +172,28 @@ const Spinner = () => (
   </div>
 );
 
-const Badge = ({color, children}) => (
-  <span style={{display:"inline-flex",alignItems:"center",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600,background:color+"22",color,border:`1px solid ${color}33`}}>{children}</span>
+const Badge = ({color, children, variant="default"}) => (
+  <span style={{
+    display:"inline-flex",alignItems:"center",padding:"2px 9px",borderRadius:99,
+    fontSize:11,fontWeight:600,letterSpacing:"0.01em",
+    background:color+"1A",color,border:`1px solid ${color}28`,
+    lineHeight:"18px",
+  }}>{children}</span>
 );
 
 const Card = ({children, style={}}) => (
-  <div style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",...style}}>{children}</div>
+  <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-md)",padding:22,boxShadow:"0 1px 2px rgba(0,0,0,0.03)",...style}}>{children}</div>
 );
 
 const Btn = ({children,onClick,variant="primary",disabled=false,style={}}) => {
   const styles = {
-    primary: {background:"#00A896",color:"white",border:"none"},
-    ghost:   {background:"var(--surface)",color:"var(--text2)",border:"0.5px solid #E2E8F0"},
-    danger:  {background:"#FEE2E2",color:"#DC2626",border:"0.5px solid #FECACA"},
+    primary: {background:"var(--accent)",color:"white",border:"none"},
+    ghost:   {background:"transparent",color:"var(--text2)",border:"0.5px solid var(--border)"},
+    danger:  {background:"#FEE2E220",color:"#DC2626",border:"0.5px solid #FECACA"},
   };
   return (
-    <button onClick={onClick} disabled={disabled} style={{...styles[variant],padding:"9px 20px",borderRadius:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",fontSize:14,fontWeight:600,opacity:disabled?0.5:1,transition:"opacity .2s",...style}}>
+    <button onClick={onClick} disabled={disabled}
+      style={{...styles[variant],padding:"9px 20px",borderRadius:"var(--radius-sm)",cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",fontSize:14,fontWeight:600,opacity:disabled?0.5:1,transition:"all .15s",...style}}>
       {children}
     </button>
   );
@@ -195,18 +201,18 @@ const Btn = ({children,onClick,variant="primary",disabled=false,style={}}) => {
 
 const Input = ({label,value,onChange,type="text",placeholder="",required=false,error=""}) => (
   <div style={{marginBottom:14}}>
-    {label && <label style={{fontSize:12,color:error?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
+    {label && <label style={{fontSize:12,color:error?"#F87171":"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${error?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none"}}/>
+      style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${error?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none",transition:"border-color .15s"}}/>
     {error && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{error}</div>}
   </div>
 );
 
 const Select = ({label,value,onChange,options=[],required=false}) => (
   <div style={{marginBottom:14}}>
-    {label && <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
+    {label && <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
     <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:value?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",colorScheme:"light dark"}}>
+      style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:value?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",colorScheme:"light dark",transition:"border-color .15s"}}>
       <option value="" style={{background:"var(--surface)",color:"var(--text3)"}}>Seleccionar...</option>
       {options.map(o=><option key={o.value} value={o.value} style={{background:"var(--surface)",color:"var(--text)"}}>{o.label}</option>)}
     </select>
@@ -235,11 +241,30 @@ function Login() {
   return (
     <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}:root,[data-theme="light"]{--bg:#F4F6FA;--surface:#FFFFFF;--surface2:#F8FAFC;--border:#E2E8F0;--border2:#CBD5E1;--text:#0F172A;--text2:#64748B;--text3:#94A3B8}[data-theme="dark"]{--bg:#0A0F1F;--surface:#0D1320;--surface2:#1A2035;--border:#2A3550;--border2:#374151;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8}input::placeholder{color:var(--text3)}select option{background:var(--surface);color:var(--text)}input::-ms-reveal,input::-ms-clear{display:none}input::-webkit-credentials-auto-fill-button{display:none}`}</style>
-      <div style={{width:"100%",maxWidth:420,padding:20}}>
-        <div style={{textAlign:"center",marginBottom:40}}>
-          <img src="/logo.jpg" alt="Oxynatur" style={{width:96,height:96,borderRadius:"50%",objectFit:"cover",marginBottom:16,border:"2px solid #00C4B440"}}/>
-          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:800,color:"var(--text)",letterSpacing:"-0.03em"}}>Oxynatur</div>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}
+:root,[data-theme="light"]{
+  --bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;
+  --text:#0D1829;--text2:#4A5568;--text3:#8A97A8;
+  --accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);
+  --radius-sm:8px;--radius-md:12px;--radius-lg:16px;
+}
+[data-theme="dark"]{
+  --bg:#080E1A;--surface:#0E1525;--surface2:#162030;--border:#1E2D42;--border2:#2A3D56;
+  --text:#EEF2F7;--text2:#8FA3BC;--text3:#5A7090;
+  --accent:#00BFA8;--accent-light:rgba(0,191,168,0.12);--accent-mid:rgba(0,191,168,0.20);
+}
+input::placeholder{color:var(--text3)}
+select option{background:var(--surface);color:var(--text)}
+input::-ms-reveal,input::-ms-clear{display:none}
+input::-webkit-credentials-auto-fill-button{display:none}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+`}</style>
+      <div style={{width:"100%",maxWidth:400,padding:20}}>
+        <div style={{textAlign:"center",marginBottom:36}}>
+          <div style={{width:72,height:72,borderRadius:20,background:"var(--accent)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,boxShadow:"0 8px 24px rgba(0,168,150,0.25)"}}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          </div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:"-0.03em"}}>Oxynatur</div>
           <div style={{fontSize:13,color:"var(--text3)",marginTop:4}}>Sistema de Gestión Clínica</div>
         </div>
         <Card style={{padding:32}}>
@@ -289,36 +314,67 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
   ].filter(item => item.visible);
 
   return (
-    <div style={{width:210,background:"var(--surface)",borderRight:"0.5px solid #E2E8F0",padding:"20px 10px",display:"flex",flexDirection:"column",gap:2,flexShrink:0,minHeight:"100vh"}}>
-      <div style={{padding:"0 8px 24px"}}>
-        <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:20,color:"#00A896",letterSpacing:"-0.03em"}}>Oxynatur</div>
-        <div style={{fontSize:10,color:"var(--text3)",marginTop:1,letterSpacing:"0.05em",textTransform:"uppercase"}}>{f.rolLabel}</div>
+    <div style={{width:218,background:"var(--surface)",borderRight:"0.5px solid var(--border)",padding:"0",display:"flex",flexDirection:"column",flexShrink:0,minHeight:"100vh"}}>
+      {/* Logo area */}
+      <div style={{padding:"20px 16px 16px",borderBottom:"0.5px solid var(--border)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:9,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          </div>
+          <div>
+            <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:16,color:"var(--text)",letterSpacing:"-0.02em",lineHeight:1}}>Oxynatur</div>
+            <div style={{fontSize:10,color:"var(--text3)",marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:500}}>{f.rolLabel}</div>
+          </div>
+        </div>
       </div>
-      {navItems.map(item=>(
-        <button key={item.id} onClick={()=>setVista(item.id)}
-          style={{background:vista===item.id?"#00A89620":"none",borderTop:"none",borderRight:"none",borderBottom:"none",borderLeft:vista===item.id?"2px solid #00A896":"2px solid transparent",cursor:"pointer",padding:"9px 14px",borderRadius:8,color:vista===item.id?"#00A896":"var(--text2)",fontFamily:"inherit",fontSize:13,fontWeight:vista===item.id?600:500,display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",transition:"all .15s"}}>
-          <span style={{display:"flex",alignItems:"center",opacity:0.7}}>{item.icon}</span>
-          <span style={{flex:1}}>{item.label}</span>
-          {item.badge && (
-            <span style={{background:"#F87171",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"1px 7px",minWidth:20,textAlign:"center"}}>
-              {item.badge > 99 ? "99+" : item.badge}
-            </span>
-          )}
-        </button>
-      ))}
-      <div style={{marginTop:"auto",padding:"16px 8px 0",borderTop:"0.5px solid #E2E8F0"}}>
-        <div style={{fontSize:13,color:"var(--text3)",fontWeight:500}}>{perfil?.nombre}</div>
-        <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{perfil?.email}</div>
-        <button onClick={onLogout} style={{marginTop:10,background:"none",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,width:"100%"}}>
-          Cerrar sesión
-        </button>
-        <button onClick={()=>setDarkMode(d=>!d)}
-          style={{marginTop:6,background:"none",border:"0.5px solid var(--border)",color:"var(--text3)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          {darkMode
-            ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> Modo claro</>
-            : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg> Modo oscuro</>
-          }
-        </button>
+      {/* Nav items */}
+      <div style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:1,overflowY:"auto"}}>
+        {navItems.map(item=>(
+          <button key={item.id} onClick={()=>setVista(item.id)}
+            style={{
+              background:vista===item.id?"var(--accent-light)":"transparent",
+              border:"none",
+              borderRadius:"var(--radius-sm)",
+              cursor:"pointer",padding:"8px 10px",
+              color:vista===item.id?"var(--accent)":"var(--text2)",
+              fontFamily:"inherit",fontSize:13,
+              fontWeight:vista===item.id?600:400,
+              display:"flex",alignItems:"center",gap:9,
+              width:"100%",textAlign:"left",transition:"all .12s",
+            }}>
+            <span style={{display:"flex",alignItems:"center",flexShrink:0,opacity:vista===item.id?1:0.6}}>{item.icon}</span>
+            <span style={{flex:1}}>{item.label}</span>
+            {item.badge && (
+              <span style={{background:"#F87171",color:"white",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 6px",minWidth:18,textAlign:"center",lineHeight:"16px"}}>
+                {item.badge > 99 ? "99+" : item.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      {/* Footer */}
+      <div style={{padding:"12px 12px 16px",borderTop:"0.5px solid var(--border)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+          <div style={{width:30,height:30,borderRadius:"50%",background:"var(--accent-mid)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:12,fontWeight:700,color:"var(--accent)"}}>{(perfil?.nombre||"?")[0].toUpperCase()}</span>
+          </div>
+          <div style={{overflow:"hidden"}}>
+            <div style={{fontSize:12,color:"var(--text)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{perfil?.nombre}</div>
+            <div style={{fontSize:10,color:"var(--text3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{perfil?.email}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={onLogout} style={{flex:1,background:"transparent",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 8px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:500}}>
+            Salir
+          </button>
+          <button onClick={()=>setDarkMode(d=>!d)}
+            style={{background:"transparent",border:"0.5px solid var(--border)",color:"var(--text3)",padding:"6px 8px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontFamily:"inherit",fontSize:11,display:"flex",alignItems:"center",gap:4}}>
+            {darkMode
+              ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            }
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -809,10 +865,11 @@ function BarChart({ data }) {
           <div style={{
             width:"100%",
             height:`${Math.max((d.val/max)*80,4)}px`,
-            background: i===data.length-1 ? "#00A896" : "#00A89640",
+            background: i===data.length-1 ? "var(--accent)" : "var(--accent-light)",
             borderRadius:"4px 4px 0 0",
             transition:"height 0.5s",
             minHeight:4,
+            border: i===data.length-1 ? "none" : "0.5px solid var(--border)",
           }}/>
           <div style={{fontSize:10,color:"var(--text3)",textTransform:"capitalize"}}>{fmtMes(d.mes)}</div>
         </div>
@@ -863,27 +920,34 @@ function DashboardFinanciero() {
 
   return (
     <div>
-      <div style={{marginBottom:28}}>
-        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"var(--text)"}}>Dashboard</h1>
-        <p style={{color:"var(--text3)",fontSize:14,marginTop:4}}>{new Date().toLocaleDateString("es-PE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
+      <div style={{marginBottom:28,display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",letterSpacing:"-0.01em"}}>Dashboard</h1>
+          <p style={{color:"var(--text3)",fontSize:13,marginTop:3}}>{new Date().toLocaleDateString("es-PE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
+        </div>
+        <div style={{fontSize:11,color:"var(--text3)",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"4px 10px",letterSpacing:"0.02em"}}>
+          Red Oxynatur
+        </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
-          {label:"Pacientes Activos", val:totales.pacientes, color:"#00A896", icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.87"/></svg>)},
-          {label:"Sesiones este mes",  val:totales.sesiones,  color:"#7C6AF7", icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>)},
-          {label:"Ingresos del mes",   val:`S/ ${totales.ingresos.toLocaleString()}`, color:"#10B981", icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v2m0 8v2m-3-5c0 1.1 1.34 2 3 2s3-.9 3-2-1.34-2-3-2-3-.9-3-2 1.34-2 3-2 3 .9 3 2"/></svg>)},
-          {label:"Sesiones hoy",       val:totales.sesHoy,   color:"#F59E0B", icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>)},
+          {label:"Pacientes activos", val:totales.pacientes, color:"#00A896", sub:"en tratamiento"},
+          {label:"Sesiones este mes",  val:totales.sesiones,  color:"#7C6AF7", sub:"hiperbáricas"},
+          {label:"Ingresos del mes",   val:`S/ ${totales.ingresos.toLocaleString()}`, color:"#10B981", sub:"facturado"},
+          {label:"Sesiones hoy",       val:totales.sesHoy,   color:"#F59E0B", sub:"programadas"},
         ].map((k,i)=>(
-          <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>{k.label}</div>
-              <div style={{opacity:0.2,flexShrink:0}}>{k.icon}</div>
-            </div>
-            <div style={{fontSize:28,fontWeight:700,fontFamily:"Syne,sans-serif",color:k.color,marginTop:8}}>{k.val === 0 ? <span style={{color:"var(--border2)"}}>—</span> : k.val}</div>
-          </Card>
+          <div key={i} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-md)",padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:k.color,borderRadius:"12px 12px 0 0"}}/>
+            <div style={{fontSize:11,color:"var(--text3)",fontWeight:500,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>{k.label}</div>
+            <div style={{fontSize:30,fontWeight:700,fontFamily:"Syne,sans-serif",color:k.val===0?"var(--border2)":k.color,lineHeight:1}}>{k.val===0?"—":k.val}</div>
+            <div style={{fontSize:11,color:"var(--text3)",marginTop:6}}>{k.sub}</div>
+          </div>
         ))}
       </div>
-      <div style={{marginBottom:10,fontSize:13,fontWeight:700,color:"var(--text3)",letterSpacing:"0.08em",textTransform:"uppercase"}}>Rendimiento por sede</div>
+      <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+        <div style={{fontSize:11,fontWeight:600,color:"var(--text3)",letterSpacing:"0.08em",textTransform:"uppercase"}}>Rendimiento por sede</div>
+        <div style={{flex:1,height:"0.5px",background:"var(--border)"}}/>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14}}>
         {filas.map(s=>(
           <Card key={s.sede_id} style={{borderTop:`3px solid ${getColor(s.sede)}`}}>
@@ -1095,7 +1159,7 @@ function Pacientes({perfil}) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>{ setPacSelec(null); setPacDetalle(null); setCompras([]); setUltimasSesiones([]); }}
-            style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
             ← Volver
           </button>
           <div>
@@ -1113,7 +1177,7 @@ function Pacientes({perfil}) {
           <Badge color={estadoColor[pacSelec.estado]||"var(--text3)"}>{pacSelec.estado}</Badge>
           {f.puedeEditarPaciente && (
             <button onClick={()=>abrirEditar(pacSelec)}
-              style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
               ✏ Editar
             </button>
           )}
@@ -1275,20 +1339,21 @@ function Pacientes({perfil}) {
         </div>
         {f.puedeCrearPaciente && <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>}
       </div>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar por nombre o DNI..."
-        style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 16px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:18}}/>
+      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por nombre o DNI..."
+        style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"9px 14px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:16,transition:"border-color .15s"}}/>
       {loading
         ? <div style={{color:"var(--text3)",padding:20}}>Cargando...</div>
         : (
           <>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",padding:"0 18px 10px",fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-md)",overflow:"hidden",marginBottom:4}}>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",padding:"9px 18px",background:"var(--surface2)",borderBottom:"0.5px solid var(--border)",fontSize:10,color:"var(--text3)",fontWeight:600,letterSpacing:"0.07em",textTransform:"uppercase"}}>
               <span>Paciente</span><span>DNI</span><span>Sede</span><span>Sesiones</span><span>Estado</span>
             </div>
-            {filtrados.map(p=>(
+            {filtrados.map((p,rowIdx)=>(
               <div key={p.id} onClick={()=>abrirPerfil(p)}
-                style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"14px 18px",marginBottom:8,display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",cursor:"pointer"}}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+                style={{padding:"12px 18px",display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",cursor:"pointer",borderBottom:"0.5px solid var(--border)",background:rowIdx%2===0?"transparent":"var(--surface2)",transition:"background .1s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="var(--accent-light)"}
+                onMouseLeave={e=>e.currentTarget.style.background=rowIdx%2===0?"transparent":"var(--surface2)"}>
                 <div>
                   <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>{p.nombres} {p.apellidos}</div>
                   <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>{p.email||"Sin email"}</div>
@@ -1319,6 +1384,7 @@ function Pacientes({perfil}) {
               </div>
             ))}
             {filtrados.length===0 && <div style={{color:"var(--text3)",textAlign:"center",padding:"40px 0",fontSize:14}}>No se encontraron pacientes</div>}
+            </div>
           </>
         )
       }
@@ -1999,7 +2065,7 @@ function HistoriasClinicas({perfil}) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>{ setPacSelec(null); setEvals([]); setEditandoHC(false); }}
-            style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
             ← Volver
           </button>
           <div>
@@ -2037,7 +2103,7 @@ function HistoriasClinicas({perfil}) {
             </Badge>
             {f.puedeEscribirProtocolo && !editandoHC && (
               <button onClick={()=>setEditandoHC(true)}
-                style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
                 ✏ Editar
               </button>
             )}
@@ -2334,7 +2400,7 @@ function HistoriasClinicas({perfil}) {
                           )}
                           {!ev.es_borrador && (
                             <button onClick={()=>setModalEval(ev)}
-                              style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,flexShrink:0}}>
+                              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,flexShrink:0}}>
                               Ver
                             </button>
                           )}
@@ -2437,13 +2503,13 @@ function HistoriasClinicas({perfil}) {
                 <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Incidencias</label>
                 <textarea value={formEval.incidencias} onChange={e=>setFormEval(f=>({...f,incidencias:e.target.value}))}
                   placeholder="Describe cualquier incidencia durante la sesión..." rows={2}
-                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
               </div>
               <div style={{marginBottom:14}}>
                 <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Observaciones del operador</label>
                 <textarea value={formEval.observaciones} onChange={e=>setFormEval(f=>({...f,observaciones:e.target.value}))}
                   placeholder="Observaciones post-sesión..." rows={2}
-                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
               </div>
 
               {/* SECCIÓN MÉDICO — solo si es médico o admin */}
@@ -2456,7 +2522,7 @@ function HistoriasClinicas({perfil}) {
                     <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Evolución clínica</label>
                     <textarea value={formEval.evolucion} onChange={e=>setFormEval(f=>({...f,evolucion:e.target.value}))}
                       placeholder="Evolución del paciente, respuesta al tratamiento, ajustes de protocolo..." rows={3}
-                      style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                      style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                   </div>
                   <Input label="Firma de supervisión (nombre completo)" value={formEval.firma_medico}
                     onChange={v=>setFormEval(f=>({...f,firma_medico:v}))}
@@ -2489,7 +2555,7 @@ function HistoriasClinicas({perfil}) {
             <div style={{marginBottom:14}}>
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Evolución clínica</label>
               <textarea defaultValue={modalEval.evolucion||""} id="evol-firma" rows={3}
-                style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
             </div>
             <Input label="Firma (nombre completo)" value={formEval.firma_medico}
               onChange={v=>setFormEval(f=>({...f,firma_medico:v}))} placeholder="Dr. Nombre Apellido — CMP"/>
@@ -2648,7 +2714,7 @@ function HistoriasClinicas({perfil}) {
           ? <Card style={{textAlign:"center",padding:"40px",color:"var(--text3)"}}>No hay historias clínicas registradas</Card>
           : filtrados.map(hc=>(
             <div key={hc.id} onClick={()=>abrirPaciente(hc)}
-              style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"14px 18px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"14px 18px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}
               onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
               onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
               <div>
@@ -3117,7 +3183,7 @@ function Usuarios({perfil:adminPerfil}) {
                 <div style={{fontSize:13,color:"var(--text2)"}}>{u.sedes?.nombre||"Todas las sedes"}</div>
                 <div style={{display:"flex",gap:6,alignItems:"center"}}>
                   <button onClick={()=>abrirEditUsuario(u)}
-                    style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
+                    style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
                     ✏ Editar
                   </button>
                   <button onClick={()=>toggleActivo(u)}
@@ -3633,9 +3699,9 @@ function AgendaMedico({perfil, cambiarVista}) {
               </button>
             ))}
           </div>
-          <button onClick={()=>navegar(-1)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>‹</button>
-          <button onClick={()=>setFechaSelec(hoy)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"#00A896",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
-          <button onClick={()=>navegar(1)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>›</button>
+          <button onClick={()=>navegar(-1)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>‹</button>
+          <button onClick={()=>setFechaSelec(hoy)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"#00A896",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
+          <button onClick={()=>navegar(1)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>›</button>
           <div style={{position:"relative"}}>
             <button onClick={()=>setShowCalAgenda(c=>!c)}
               style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text)",
@@ -3662,7 +3728,7 @@ function AgendaMedico({perfil, cambiarVista}) {
           {label:"En curso",    val:kpis.enCurso,     color:"#00A896"},
           {label:"Pendientes",  val:kpis.pendientes,  color:"#F59E0B"},
         ].map((k,i)=>(
-          <div key={i} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"12px 16px",minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div key={i} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"12px 16px",minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:700,color:k.color,marginTop:8}}>{k.val === 0 ? <span style={{color:"var(--border2)",fontSize:22}}>—</span> : k.val}</div>
           </div>
@@ -4387,7 +4453,7 @@ function Ventas({perfil}) {
       {/* Modal nueva venta */}
       {modal && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
-          <div style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:14,maxWidth:540,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",maxHeight:"92vh",overflowY:"auto",padding:24}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:540,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",maxHeight:"92vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"var(--text)"}}>Nueva venta</div>
               <button onClick={()=>setModal(false)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
@@ -4554,7 +4620,7 @@ function Ventas({perfil}) {
               <input type="date" value={form.fecha_compra}
                 onChange={e=>setForm({...form,fecha_compra:e.target.value})}
                 max={new Date().toISOString().slice(0,10)}
-                style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
             </div>
 
             {/* Número de comprobante — OBLIGATORIO */}
@@ -4567,7 +4633,7 @@ function Ventas({perfil}) {
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
                 Foto del comprobante <span style={{color:"var(--text3)",fontWeight:400}}>(opcional)</span>
               </label>
-              <label style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,cursor:"pointer"}}>
+              <label style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,cursor:"pointer"}}>
                 <span style={{fontSize:18}}>📷</span>
                 <span style={{fontSize:13,color:"var(--text3)"}}>
                   {form.fotoFile ? form.fotoFile.name : "Toca para adjuntar foto"}
@@ -4608,7 +4674,7 @@ function Ventas({perfil}) {
       {/* Modal exportar Excel */}
       {modalExport && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
-          <div style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:14,maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",padding:28}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"var(--text)"}}>Exportar ventas</div>
               <button onClick={()=>setModalExport(false)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
@@ -4628,12 +4694,12 @@ function Ventas({perfil}) {
             <div style={{marginBottom:14}}>
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Desde</label>
               <input type="date" value={exportDesde} onChange={e=>setExportDesde(e.target.value)}
-                style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
             </div>
             <div style={{marginBottom:22}}>
               <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Hasta</label>
               <input type="date" value={exportHasta} onChange={e=>setExportHasta(e.target.value)}
-                style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
+                style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}/>
             </div>
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -5319,7 +5385,7 @@ function Sesiones({perfil}) {
                 )}
                 {s.estado === "completada" && (
                   <button onClick={()=>setVerSesion(s)}
-                    style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                    style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
                     Ver
                   </button>
                 )}
@@ -5575,7 +5641,7 @@ function Sesiones({perfil}) {
                       onChange={e=>setFormCompletar(f=>({...f,observaciones:e.target.value}))}
                       placeholder="Incidencias, reacciones, notas del operador..."
                       rows={3}
-                      style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                      style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                   </div>
 
                   {/* Flag alerta */}
@@ -6325,7 +6391,7 @@ function Alertas({perfil}) {
                     onChange={e=>setRespuesta(e.target.value)}
                     placeholder="Indicación clínica, protocolo a seguir, observación..."
                     rows={4}
-                    style={{width:"100%",background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}
+                    style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}
                   />
                 </div>
               )}
@@ -7219,12 +7285,12 @@ export default function App() {
   };
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",width:"100%"}}>
+    <div style={{fontFamily:"'DM Sans',system-ui,sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",width:"100%"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}select option{background:#1A2035}input::placeholder{color:#4B5563}textarea::placeholder{color:#94A3B8}textarea{box-sizing:border-box}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}select option{background:var(--surface)}input::placeholder{color:var(--text3)}textarea::placeholder{color:var(--text3)}textarea{box-sizing:border-box}`}</style>
       <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
         <Sidebar vista={vista} setVista={cambiarVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
-        <div style={{flex:1,overflow:"auto",padding:"28px 40px",background:"var(--bg)"}}>
+        <div style={{flex:1,overflow:"auto",padding:"30px 36px",background:"var(--bg)"}}>
           {renderVista()}
         </div>
       </div>
