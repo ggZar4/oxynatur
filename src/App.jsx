@@ -3282,20 +3282,21 @@ function AgendaMedico({perfil, cambiarVista}) {
 
   const hoy = fechaHoyLima();
   const [fechaSelec, setFechaSelec] = useState(hoy);
-  const [vistaMode, setVistaMode]   = useState("dia");    // "dia" | "semana"
+  const [vistaMode, setVistaMode]   = useState("dia");
   const [agenda, setAgenda]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [sedesData, setSedesData]   = useState([]);
   const [sedeTab, setSedeTab]       = useState("todas");
   const [prospectosCitas, setProspectosCitas] = useState([]);
   const [showCalAgenda, setShowCalAgenda] = useState(false);
+  const [accionando, setAccionando] = useState(null); // id de sesion en acción
 
   const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
   const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
 
-  // Generar rango de fechas para vista semanal
-  const getSemana = (fecha) => {
-    const d = new Date(fecha+"T00:00:00");
+  // FIX #7 — getSemana memoizada, no recalcula en cada render
+  const semana = React.useMemo(() => {
+    const d = new Date(fechaSelec+"T00:00:00");
     const lunes = new Date(d);
     lunes.setDate(d.getDate() - (d.getDay()===0?6:d.getDay()-1));
     return Array.from({length:7},(_,i)=>{
@@ -3303,13 +3304,19 @@ function AgendaMedico({perfil, cambiarVista}) {
       dia.setDate(lunes.getDate()+i);
       return dia.toLocaleDateString("en-CA",{timeZone:"America/Lima"});
     });
-  };
-  const semana = getSemana(fechaSelec);
+  }, [fechaSelec]);
+
+  // FIX #2 — sedes se fetcha solo una vez al montar
+  useEffect(()=>{
+    let mounted = true;
+    safeQuery(()=>supabase.from("sedes").select("id,nombre"), "Agenda:sedes")
+      .then(({data:s})=>{ if(mounted) setSedesData(s||[]); });
+    return ()=>{ mounted=false; };
+  }, []); // eslint-disable-line
 
   const load = async () => {
     setLoading(true);
     const fechas = vistaMode==="semana" ? semana : [fechaSelec];
-    // Ajuste UTC-5 Lima: inicio del día Lima = T05:00Z, fin = día siguiente T04:59Z
     const fechaInicio = fechas[0] + "T05:00:00.000Z";
     const dFin = new Date(fechas[fechas.length-1] + "T05:00:00.000Z");
     dFin.setDate(dFin.getDate()+1);
@@ -3340,15 +3347,26 @@ function AgendaMedico({perfil, cambiarVista}) {
 
   useEffect(()=>{
     let mounted = true;
-    (async()=>{
-      await load();
-      const { data: s } = await safeQuery(()=>supabase.from("sedes").select("id,nombre"), "Agenda:sedes");
-      if(mounted) setSedesData(s||[]);
-    })();
+    (async()=>{ if(mounted) await load(); })();
     return ()=>{ mounted=false; };
   },[fechaSelec, vistaMode]); // eslint-disable-line
 
-  // Navegar días/semanas
+  // FIX #6 — acción rápida con optimistic update + feedback visual
+  const cambiarEstado = async (sesionId, nuevoEstado) => {
+    setAccionando(sesionId);
+    // Optimistic update — actualiza localmente de inmediato
+    setAgenda(prev => prev.map(s => s.id===sesionId ? {...s, estado:nuevoEstado} : s));
+    const {error} = await safeQuery(
+      ()=>supabase.from("sesiones").update({estado:nuevoEstado}).eq("id",sesionId),
+      "Agenda:cambiarEstado"
+    );
+    if(error) {
+      // Rollback si falla
+      await load();
+    }
+    setAccionando(null);
+  };
+
   const navegar = (dir) => {
     const d = new Date(fechaSelec+"T12:00:00");
     d.setDate(d.getDate() + (vistaMode==="semana" ? dir*7 : dir));
@@ -3362,15 +3380,32 @@ function AgendaMedico({perfil, cambiarVista}) {
   const agendaFiltrada = sedeTab==="todas" ? agenda : agenda.filter(s=>s.sede_id===sedeTab);
   const prospectosFiltrados = sedeTab==="todas" ? prospectosCitas : prospectosCitas.filter(p=>p.sede_id===sedeTab);
 
-  // KPIs — incluye evaluaciones de prospectos
-  const evalHoy     = prospectosFiltrados.filter(p=>{
-    const fc = new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"});
-    return fc === fechaSelec;
-  }).length;
-  const total       = agendaFiltrada.length + evalHoy;
-  const completadas = agendaFiltrada.filter(s=>s.estado==="completada").length;
-  const enCurso     = agendaFiltrada.filter(s=>s.estado==="en_curso").length;
-  const pendientes  = agendaFiltrada.filter(s=>s.estado==="programada").length;
+  // FIX #4 + #8 — prospectos del día computados una sola vez con fecha pre-parseada
+  const prospectosHoy = React.useMemo(() =>
+    prospectosFiltrados.filter(p =>
+      new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fechaSelec
+    ),
+  [prospectosFiltrados, fechaSelec]);
+
+  // FIX #5 — KPIs adaptativos según vista
+  const kpis = React.useMemo(() => {
+    if(vistaMode==="semana") {
+      // Totales de toda la semana
+      return {
+        total:      agendaFiltrada.length + prospectosFiltrados.length,
+        completadas: agendaFiltrada.filter(s=>s.estado==="completada").length,
+        enCurso:    agendaFiltrada.filter(s=>s.estado==="en_curso").length,
+        pendientes: agendaFiltrada.filter(s=>s.estado==="programada").length,
+      };
+    }
+    // Vista día — totales del día seleccionado
+    return {
+      total:      agendaFiltrada.length + prospectosHoy.length,
+      completadas: agendaFiltrada.filter(s=>s.estado==="completada").length,
+      enCurso:    agendaFiltrada.filter(s=>s.estado==="en_curso").length,
+      pendientes: agendaFiltrada.filter(s=>s.estado==="programada").length,
+    };
+  }, [agendaFiltrada, prospectosFiltrados, prospectosHoy, vistaMode]);
 
   return (
     <div>
@@ -3385,9 +3420,7 @@ function AgendaMedico({perfil, cambiarVista}) {
             }
           </p>
         </div>
-        {/* Controles de navegación */}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {/* Toggle vista */}
           <div style={{display:"flex",background:"var(--surface2)",borderRadius:8,border:"1px solid #2A3550",overflow:"hidden"}}>
             {["dia","semana"].map(v=>(
               <button key={v} onClick={()=>setVistaMode(v)}
@@ -3399,11 +3432,9 @@ function AgendaMedico({perfil, cambiarVista}) {
               </button>
             ))}
           </div>
-          {/* Navegación */}
           <button onClick={()=>navegar(-1)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>‹</button>
           <button onClick={()=>setFechaSelec(hoy)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"#00A896",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
           <button onClick={()=>navegar(1)} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>›</button>
-          {/* Selector de fecha — MiniCal */}
           <div style={{position:"relative"}}>
             <button onClick={()=>setShowCalAgenda(c=>!c)}
               style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text)",
@@ -3422,13 +3453,13 @@ function AgendaMedico({perfil, cambiarVista}) {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — label cambia según vista */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
         {[
-          {label:"Total",       val:total,       color:"var(--text)"},
-          {label:"Completadas", val:completadas,  color:"#10B981"},
-          {label:"En curso",    val:enCurso,     color:"#00A896"},
-          {label:"Pendientes",  val:pendientes,  color:"#F59E0B"},
+          {label: vistaMode==="semana"?"Total semana":"Total hoy",  val:kpis.total,      color:"var(--text)"},
+          {label:"Completadas", val:kpis.completadas, color:"#10B981"},
+          {label:"En curso",    val:kpis.enCurso,     color:"#00A896"},
+          {label:"Pendientes",  val:kpis.pendientes,  color:"#F59E0B"},
         ].map((k,i)=>(
           <div key={i} style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"12px 16px",minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
@@ -3437,7 +3468,7 @@ function AgendaMedico({perfil, cambiarVista}) {
         ))}
       </div>
 
-      {/* Tabs sede — solo si ve varias */}
+      {/* Tabs sede */}
       {(f.esAdmin || f.esMedicoEsp) && sedesData.length > 0 && (
         <div style={{display:"flex",gap:8,marginBottom:14}}>
           {[{id:"todas",nombre:"Todas"},...sedesData].map(s=>(
@@ -3452,202 +3483,210 @@ function AgendaMedico({perfil, cambiarVista}) {
         </div>
       )}
 
-      {loading ? <div style={{color:"var(--text3)",padding:20}}>Cargando agenda...</div>
+      {loading ? (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:60,color:"var(--text3)",gap:10}}>
+          <div style={{width:18,height:18,border:"2px solid #00A896",borderTopColor:"transparent",borderRadius:"50%"}}/>
+          Cargando agenda...
+        </div>
 
-      /* Vista semanal */
-      : vistaMode==="semana" ? (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
+      ) : vistaMode==="semana" ? (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
           {semana.map(fecha=>{
             const sesiones = agendaFiltrada.filter(s=>s.fecha===fecha);
+            // FIX #4 — fecha_cita parseada una vez por prospecto en vista semana
+            const evalsDia = prospectosFiltrados.filter(p=>
+              new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fecha
+            );
+            const totalDia = sesiones.length + evalsDia.length;
+            const tieneEnCurso = sesiones.some(s=>s.estado==="en_curso");
             return (
-              <div key={fecha} style={{
-                background: esHoy(fecha)?"var(--surface2)":"var(--bg)",
-                border:`1px solid ${esHoy(fecha)?"#00C4B440":"var(--border)"}`,
-                borderRadius:12, padding:"10px 8px", minHeight:120,
-              }}>
-                {/* Cabecera día */}
-                <div style={{textAlign:"center",marginBottom:8}}>
-                  <div style={{fontSize:10,color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+              <div key={fecha}
+                onClick={()=>{ setFechaSelec(fecha); setVistaMode("dia"); }}
+                style={{
+                  background: esHoy(fecha)?"var(--surface2)":"var(--surface)",
+                  border:`1px solid ${tieneEnCurso?"#00A89660":esHoy(fecha)?"#00C4B440":"var(--border)"}`,
+                  borderTop:`3px solid ${tieneEnCurso?"#00A896":esHoy(fecha)?"#00C4B4":"var(--border)"}`,
+                  borderRadius:12, padding:"10px 8px", minHeight:140, cursor:"pointer",
+                }}
+              >
+                <div style={{textAlign:"center",marginBottom:8,paddingBottom:6,borderBottom:"1px solid var(--border)"}}>
+                  <div style={{fontSize:9,color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700}}>
                     {new Date(fecha+"T00:00:00").toLocaleDateString("es-PE",{weekday:"short"})}
                   </div>
                   <div style={{
-                    fontSize:18,fontWeight:700,fontFamily:"Syne,sans-serif",
+                    fontSize:20,fontWeight:700,fontFamily:"Syne,sans-serif",lineHeight:1.1,
                     color:esHoy(fecha)?"#00A896":"var(--text)",
-                    background:esHoy(fecha)?"#00C4B420":"none",
-                    borderRadius:8,padding:"2px 6px",display:"inline-block",marginTop:2,
+                    background:esHoy(fecha)?"#00C4B415":"none",
+                    borderRadius:6,padding:"2px 4px",display:"inline-block",marginTop:2,
                   }}>
                     {new Date(fecha+"T00:00:00").getDate()}
                   </div>
+                  {totalDia > 0 && (
+                    <div style={{marginTop:4}}>
+                      <span style={{
+                        fontSize:9,fontWeight:700,
+                        background:tieneEnCurso?"#00A896":"var(--border2)",
+                        color:tieneEnCurso?"white":"var(--text3)",
+                        borderRadius:10,padding:"1px 6px",
+                      }}>{totalDia} ses.</span>
+                    </div>
+                  )}
                 </div>
-                {(() => {
-                  const evalsDia = prospectosFiltrados.filter(p=>
-                    new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fecha
-                  );
-                  const total = sesiones.length + evalsDia.length;
-                  return total===0
-                    ? <div style={{textAlign:"center",color:"var(--border)",fontSize:11,marginTop:8}}>—</div>
-                    : <>
-                      {evalsDia.map(p=>(
-                        <div key={p.id} style={{
-                          background:"#7C6AF720",border:"1px solid #7C6AF740",
-                          borderRadius:6,padding:"4px 6px",marginBottom:4,
-                        }}>
-                          <div style={{fontSize:11,fontWeight:600,color:"#7C6AF7",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre.split(" ")[0]}</div>
-                          <div style={{fontSize:10,color:"var(--text3)"}}>
-                            {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})} · Eval.
+                {totalDia === 0
+                  ? <div style={{textAlign:"center",color:"var(--border2)",fontSize:10,marginTop:16,opacity:0.6}}>— libre —</div>
+                  : <>
+                    {evalsDia.map(p=>(
+                      <div key={p.id} style={{background:"#7C6AF715",border:"1px solid #7C6AF730",borderLeft:"2px solid #7C6AF7",borderRadius:6,padding:"4px 6px",marginBottom:4}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#7C6AF7",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {p.nombre.split(" ").slice(-1)[0]}
+                        </div>
+                        <div style={{fontSize:9,color:"var(--text3)",marginTop:1}}>
+                          {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})} · Eval
+                        </div>
+                      </div>
+                    ))}
+                    {sesiones.map(s=>{
+                      const col = ESTADO_COLOR[s.estado]||"var(--border2)";
+                      return (
+                        <div key={s.id} style={{background:`${col}12`,border:`1px solid ${col}35`,borderLeft:`2px solid ${col}`,borderRadius:6,padding:"4px 6px",marginBottom:4}}>
+                          <div style={{fontSize:10,fontWeight:700,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {(s.paciente||"").split(" ").slice(-2).join(" ")}
                           </div>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:"#7C6AF7",display:"inline-block",marginTop:2}}/>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:1}}>
+                            <span style={{fontSize:9,color:"var(--text3)",fontWeight:600}}>{s.hora_inicio?.slice(0,5)}</span>
+                            <span style={{width:6,height:6,borderRadius:"50%",background:col,display:"inline-block"}}/>
+                          </div>
+                          {s.camara_numero && <div style={{fontSize:9,color:"var(--text3)",marginTop:1}}>Cam #{s.camara_numero}</div>}
                         </div>
-                      ))}
-                      {sesiones.map(s=>(
-                        <div key={s.id} style={{
-                          background:`${ESTADO_COLOR[s.estado]||"var(--border2)"}20`,
-                          border:`1px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}40`,
-                          borderRadius:6,padding:"4px 6px",marginBottom:4,
-                        }}>
-                          <div style={{fontSize:11,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.paciente?.split(" ")[0]}</div>
-                          <div style={{fontSize:10,color:"var(--text3)"}}>{s.hora_inicio?.slice(0,5)} · #{s.numero_sesion}</div>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:ESTADO_COLOR[s.estado],display:"inline-block",marginTop:2}}/>
-                        </div>
-                      ))}
-                    </>;
-                })()}
+                      );
+                    })}
+                  </>
+                }
               </div>
             );
           })}
         </div>
 
-      /* Vista día */
-      ) : agendaFiltrada.length===0 && prospectosFiltrados.length===0
-        ? <div style={{background:"var(--surface)",border:"0.5px solid #E2E8F0",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"50px",textAlign:"center"}}>
-            <div style={{fontSize:36,opacity:.3,marginBottom:12}}>📅</div>
-            <div style={{color:"var(--text3)"}}>Sin sesiones para este día</div>
+      ) : agendaFiltrada.length===0 && prospectosHoy.length===0 ? (
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:16,padding:"60px 40px",textAlign:"center"}}>
+            <div style={{fontSize:40,opacity:0.2,marginBottom:12}}>📅</div>
+            <div style={{color:"var(--text3)",fontSize:14}}>Sin sesiones para este día</div>
+            <div style={{color:"var(--border2)",fontSize:12,marginTop:6}}>Navega con ‹ › o selecciona otra fecha</div>
           </div>
-        : <>
-          {/* Citas de evaluación de prospectos */}
-          {prospectosFiltrados.filter(p=>{
-            const fechaCita = new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"});
-            return fechaCita === fechaSelec;
-          }).map(p=>(
-            <div key={p.id} style={{
-              background:"#7C6AF710",
-              border:"0.5px solid #7C6AF740",
-              borderLeft:"3px solid #7C6AF7",
-              borderRadius:12,padding:"14px 18px",marginBottom:8,
-              display:"grid",gridTemplateColumns:"70px 2fr 1fr 1fr auto",
-              alignItems:"center",gap:12,
-            }}>
+        ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+          {/* FIX #8 — usa prospectosHoy ya computado, no re-filtra inline */}
+          {prospectosHoy.map(p=>(
+            <div key={p.id} style={{background:"#7C6AF708",border:"0.5px solid #7C6AF730",borderLeft:"3px solid #7C6AF7",borderRadius:12,padding:"14px 18px",display:"grid",gridTemplateColumns:"90px 1fr auto auto",alignItems:"center",gap:14}}>
               <div style={{textAlign:"center"}}>
-                <div style={{fontSize:16,fontWeight:700,color:"#7C6AF7",fontFamily:"Syne,sans-serif"}}>
+                <div style={{fontSize:18,fontWeight:700,color:"#7C6AF7",fontFamily:"Syne,sans-serif",lineHeight:1}}>
                   {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})}
                 </div>
-                <div style={{fontSize:10,color:"var(--text3)"}}>Eval.</div>
+                <div style={{fontSize:9,color:"var(--text3)",marginTop:4,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Evaluación</div>
               </div>
               <div>
-                <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>{p.nombre}</div>
-                <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
-                  {p.telefono} · {p.motivo||"Sin motivo registrado"}
+                <div style={{fontWeight:700,fontSize:14,color:"var(--text)"}}>{p.nombre}</div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:3,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  <span>📞 {p.telefono}</span>
+                  {p.motivo && <span>· {p.motivo}</span>}
+                  {p.canal && <span style={{background:"#7C6AF715",color:"#7C6AF7",borderRadius:4,padding:"1px 6px",fontSize:11}}>vía {p.canal}</span>}
                 </div>
               </div>
-              <div style={{fontSize:13,color:"var(--text2)"}}>
-                <div style={{fontSize:11,color:"var(--text3)"}}>Canal: {p.canal}</div>
-              </div>
               {(f.esAdmin||f.esMedicoEsp) && (
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
                   <span style={{width:7,height:7,borderRadius:"50%",background:"#7C6AF7",display:"inline-block"}}/>
                   <span style={{fontSize:12,color:"var(--text2)"}}>{p.sedes?.nombre||"—"}</span>
                 </div>
               )}
-              <div>
-                <Badge color="#7C6AF7">Evaluación</Badge>
-              </div>
+              <Badge color="#7C6AF7">Eval.</Badge>
             </div>
           ))}
-          {/* Sesiones */}
-          {agendaFiltrada.map(s=>(
-          <div key={s.id} style={{
-            background:"var(--surface)",
-            border:`0.5px solid #E2E8F0`,
-            borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}`,
-            borderRadius:12,padding:"14px 18px",marginBottom:8,
-            display:"grid",gridTemplateColumns:"90px 2fr 1fr 1fr auto",
-            alignItems:"center",gap:12,
-          }}>
-            {/* Hora con timeline */}
-            <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <div style={{fontSize:17,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif",lineHeight:1}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,margin:"3px 0"}}>
-                <div style={{width:1,height:6,background:"var(--border2)"}}/>
-                <div style={{fontSize:9,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em"}}>{s.duracion_minutos||60} min</div>
-                <div style={{width:1,height:6,background:"var(--border2)"}}/>
-              </div>
-              <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>{s.hora_fin?.slice(0,5)||""}</div>
-            </div>
-            {/* Paciente */}
-            <div>
-              <div style={{fontWeight:600,fontSize:14,color:"var(--text)"}}>{s.paciente}</div>
-              <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
-                DNI {s.dni} · Sesión #{s.numero_sesion}
-                {s.sesiones_restantes != null && (
-                  <span style={{color:s.sesiones_restantes<=2?"#F87171":"var(--text3)"}}> · {s.sesiones_restantes} restantes</span>
-                )}
-              </div>
-            </div>
-            {/* Cámara + parámetros */}
-            <div style={{fontSize:13,color:"var(--text2)"}}>
-              {s.camara_numero ? (
-                <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  <span style={{
-                    width:8,height:8,borderRadius:"50%",display:"inline-block",
-                    background:s.estado==="en_curso"?"#F87171":s.estado==="programada"?"#F59E0B":"#10B981"
-                  }}/>
-                  {`Cámara #${s.camara_numero}`}
+
+          {agendaFiltrada.map(s=>{
+            const col = ESTADO_COLOR[s.estado]||"var(--border2)";
+            const camaraCol = s.estado==="en_curso"?"#F87171":s.estado==="programada"?"#F59E0B":"#10B981";
+            const enAccion = accionando===s.id;
+            return (
+              <div key={s.id} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderLeft:`3px solid ${col}`,borderRadius:12,padding:"14px 18px",display:"grid",gridTemplateColumns:"90px 1fr 150px 110px",alignItems:"center",gap:14,opacity:s.estado==="cancelada"||s.estado==="no_asistio"?0.55:1,transition:"opacity 0.2s"}}>
+
+                {/* Hora timeline */}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+                  <div style={{fontSize:18,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif",lineHeight:1}}>{s.hora_inicio?.slice(0,5)||"--:--"}</div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"3px 0",gap:1}}>
+                    <div style={{width:1,height:7,background:"var(--border2)"}}/>
+                    <span style={{fontSize:9,color:"var(--text3)",fontWeight:700,padding:"1px 5px",background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:4}}>{s.duracion_minutos||60}m</span>
+                    <div style={{width:1,height:7,background:"var(--border2)"}}/>
+                  </div>
+                  <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>{s.hora_fin?.slice(0,5)||"—"}</div>
                 </div>
-              ) : "—"}
-              <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
-            </div>
-            {/* Sede — solo si ve varias */}
-            {(f.esAdmin||f.esMedicoEsp) && (
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:getColor(s.sede_nombre),display:"inline-block"}}/>
-                <span style={{fontSize:12,color:"var(--text2)"}}>{s.sede_nombre}</span>
+
+                {/* Paciente */}
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,color:"var(--text)",marginBottom:4}}>{s.paciente}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5,alignItems:"center"}}>
+                    <span style={{fontSize:11,color:"var(--text3)"}}>DNI {s.dni} · #{s.numero_sesion}</span>
+                    {s.sesiones_restantes != null && (
+                      <span style={{fontSize:11,fontWeight:600,color:s.sesiones_restantes===0?"#F87171":s.sesiones_restantes<=2?"#F59E0B":"#10B981",background:s.sesiones_restantes===0?"#F8717115":s.sesiones_restantes<=2?"#F59E0B15":"#10B98115",borderRadius:4,padding:"1px 6px"}}>
+                        {s.sesiones_restantes===0?"última":""+s.sesiones_restantes+" rest."}
+                      </span>
+                    )}
+                  </div>
+                  {(f.esAdmin||f.esMedicoEsp) && s.sede_nombre && (
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5}}>
+                      <span style={{width:6,height:6,borderRadius:"50%",background:getColor(s.sede_nombre),display:"inline-block"}}/>
+                      <span style={{fontSize:11,color:"var(--text3)"}}>{s.sede_nombre}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cámara + params */}
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {s.camara_numero ? (
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:camaraCol,display:"inline-block",flexShrink:0}}/>
+                      <span style={{fontSize:13,color:"var(--text2)",fontWeight:600}}>Cámara #{s.camara_numero}</span>
+                    </div>
+                  ) : <span style={{fontSize:12,color:"var(--border2)"}}>Sin cámara</span>}
+                  <div style={{display:"flex",gap:5}}>
+                    <span style={{fontSize:11,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:4,padding:"2px 7px",color:"var(--text3)",fontWeight:600}}>{s.presion_aplicada||"—"} ATA</span>
+                    <span style={{fontSize:11,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:4,padding:"2px 7px",color:"var(--text3)",fontWeight:600}}>{s.duracion_minutos||60} min</span>
+                  </div>
+                </div>
+
+                {/* Estado + acciones — FIX #1 y #6 */}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
+                  <Badge color={col}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
+                  {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
+                  {s.estado==="programada" && (
+                    <button
+                      disabled={enAccion}
+                      onClick={()=>cambiarEstado(s.id,"en_curso")}
+                      style={{background:enAccion?"var(--border2)":"#00A89618",border:`1px solid ${enAccion?"var(--border)":"#00A89650"}`,color:enAccion?"var(--text3)":"#00A896",fontSize:11,fontWeight:700,cursor:enAccion?"not-allowed":"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"inherit",width:"100%",textAlign:"center",transition:"all 0.15s"}}>
+                      {enAccion?"..." : "▶ Iniciar"}
+                    </button>
+                  )}
+                  {s.estado==="en_curso" && (
+                    <button
+                      disabled={enAccion}
+                      onClick={()=>cambiarEstado(s.id,"completada")}
+                      style={{background:enAccion?"var(--border2)":"#10B98118",border:`1px solid ${enAccion?"var(--border)":"#10B98150"}`,color:enAccion?"var(--text3)":"#10B981",fontSize:11,fontWeight:700,cursor:enAccion?"not-allowed":"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"inherit",width:"100%",textAlign:"center",transition:"all 0.15s"}}>
+                      {enAccion?"..." : "✓ Completar"}
+                    </button>
+                  )}
+                  {s.paciente_id && cambiarVista && (
+                    <button onClick={()=>{ localStorage.setItem("oxynatur-hc-paciente", s.paciente_id); cambiarVista("historias"); }}
+                      style={{background:"none",border:"none",color:"#00A896",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 0",fontFamily:"inherit"}}>
+                      Ver HC →
+                    </button>
+                  )}
+                </div>
+
               </div>
-            )}
-            {/* Estado + acciones rápidas */}
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-              <Badge color={ESTADO_COLOR[s.estado]||"var(--text3)"}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
-              {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
-              {/* Botón acción rápida según estado */}
-              {s.estado==="programada" && (
-                <button onClick={async()=>{
-                  await safeQuery(()=>supabase.from("sesiones").update({estado:"en_curso"}).eq("id",s.id),"Agenda:iniciar");
-                  load();
-                }} style={{background:"#00A89615",border:"1px solid #00A89640",color:"#00A896",fontSize:11,fontWeight:600,cursor:"pointer",padding:"3px 8px",borderRadius:6,fontFamily:"inherit"}}>
-                  ▶ Iniciar
-                </button>
-              )}
-              {s.estado==="en_curso" && (
-                <button onClick={async()=>{
-                  await safeQuery(()=>supabase.from("sesiones").update({estado:"completada"}).eq("id",s.id),"Agenda:completar");
-                  load();
-                }} style={{background:"#10B98115",border:"1px solid #10B98140",color:"#10B981",fontSize:11,fontWeight:600,cursor:"pointer",padding:"3px 8px",borderRadius:6,fontFamily:"inherit"}}>
-                  ✓ Completar
-                </button>
-              )}
-              {s.paciente_id && cambiarVista && (
-                <button onClick={()=>{
-                  localStorage.setItem("oxynatur-hc-paciente", s.paciente_id);
-                  cambiarVista("historias");
-                }}
-                  style={{background:"none",border:"none",color:"#00A896",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 0",fontFamily:"inherit"}}>
-                  Ver HC →
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-        </>
-      }
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
