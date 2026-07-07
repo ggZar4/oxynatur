@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useMemo, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── Helper fecha Lima (UTC-5) ─────────────────────────────────
@@ -3295,7 +3295,7 @@ function AgendaMedico({perfil, cambiarVista}) {
   const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
 
   // FIX #7 — getSemana memoizada, no recalcula en cada render
-  const semana = React.useMemo(() => {
+  const semana = useMemo(() => {
     const d = new Date(fechaSelec+"T00:00:00");
     const lunes = new Date(d);
     lunes.setDate(d.getDate() - (d.getDay()===0?6:d.getDay()-1));
@@ -3381,14 +3381,14 @@ function AgendaMedico({perfil, cambiarVista}) {
   const prospectosFiltrados = sedeTab==="todas" ? prospectosCitas : prospectosCitas.filter(p=>p.sede_id===sedeTab);
 
   // FIX #4 + #8 — prospectos del día computados una sola vez con fecha pre-parseada
-  const prospectosHoy = React.useMemo(() =>
+  const prospectosHoy = useMemo(() =>
     prospectosFiltrados.filter(p =>
       new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fechaSelec
     ),
   [prospectosFiltrados, fechaSelec]);
 
   // FIX #5 — KPIs adaptativos según vista
-  const kpis = React.useMemo(() => {
+  const kpis = useMemo(() => {
     if(vistaMode==="semana") {
       // Totales de toda la semana
       return {
