@@ -7145,9 +7145,9 @@ export default function App() {
     let el = document.getElementById("oxynatur-theme-vars");
     if(!el){ el = document.createElement("style"); el.id="oxynatur-theme-vars"; document.head.appendChild(el); }
     if(darkMode){
-      el.textContent = `:root{--bg:#0A0F1F;--surface:#0D1320;--surface2:#1A2035;--border:#2A3550;--border2:#374151;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8}`;
+      el.textContent = `:root{--bg:#080E1A;--surface:#0E1525;--surface2:#162030;--border:#1E2D42;--border2:#2A3D56;--text:#EEF2F7;--text2:#8FA3BC;--text3:#5A7090;--accent:#00BFA8;--accent-light:rgba(0,191,168,0.12);--accent-mid:rgba(0,191,168,0.20);--radius-sm:8px;--radius-md:12px;--radius-lg:16px}`;
     } else {
-      el.textContent = `:root{--bg:#F4F6FA;--surface:#FFFFFF;--surface2:#F8FAFC;--border:#E2E8F0;--border2:#CBD5E1;--text:#0F172A;--text2:#64748B;--text3:#94A3B8}`;
+      el.textContent = `:root{--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;--text:#0D1829;--text2:#4A5568;--text3:#8A97A8;--accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);--radius-sm:8px;--radius-md:12px;--radius-lg:16px}`;
     }
   }, [darkMode]);
 
