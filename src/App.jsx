@@ -3690,7 +3690,7 @@ function AgendaMedico({perfil, cambiarVista}) {
         </div>
 
       ) : vistaMode==="semana" ? renderSemana
-      ) : agendaFiltrada.length===0 && prospectosHoy.length===0 ? (
+      : agendaFiltrada.length===0 && prospectosHoy.length===0 ? (
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:16,padding:"60px 40px",textAlign:"center"}}>
             <div style={{fontSize:40,opacity:0.2,marginBottom:12}}>📅</div>
             <div style={{color:"var(--text3)",fontSize:14}}>Sin sesiones para este día</div>
