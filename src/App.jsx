@@ -3489,84 +3489,195 @@ function AgendaMedico({perfil, cambiarVista}) {
           Cargando agenda...
         </div>
 
-      ) : vistaMode==="semana" ? (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
-          {semana.map(fecha=>{
-            const sesiones = agendaFiltrada.filter(s=>s.fecha===fecha);
-            // FIX #4 — fecha_cita parseada una vez por prospecto en vista semana
-            const evalsDia = prospectosFiltrados.filter(p=>
-              new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fecha
-            );
-            const totalDia = sesiones.length + evalsDia.length;
-            const tieneEnCurso = sesiones.some(s=>s.estado==="en_curso");
-            return (
-              <div key={fecha}
-                onClick={()=>{ setFechaSelec(fecha); setVistaMode("dia"); }}
-                style={{
-                  background: esHoy(fecha)?"var(--surface2)":"var(--surface)",
-                  border:`1px solid ${tieneEnCurso?"#00A89660":esHoy(fecha)?"#00C4B440":"var(--border)"}`,
-                  borderTop:`3px solid ${tieneEnCurso?"#00A896":esHoy(fecha)?"#00C4B4":"var(--border)"}`,
-                  borderRadius:12, padding:"10px 8px", minHeight:140, cursor:"pointer",
-                }}
-              >
-                <div style={{textAlign:"center",marginBottom:8,paddingBottom:6,borderBottom:"1px solid var(--border)"}}>
-                  <div style={{fontSize:9,color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700}}>
-                    {new Date(fecha+"T00:00:00").toLocaleDateString("es-PE",{weekday:"short"})}
-                  </div>
-                  <div style={{
-                    fontSize:20,fontWeight:700,fontFamily:"Syne,sans-serif",lineHeight:1.1,
-                    color:esHoy(fecha)?"#00A896":"var(--text)",
-                    background:esHoy(fecha)?"#00C4B415":"none",
-                    borderRadius:6,padding:"2px 4px",display:"inline-block",marginTop:2,
-                  }}>
-                    {new Date(fecha+"T00:00:00").getDate()}
-                  </div>
-                  {totalDia > 0 && (
-                    <div style={{marginTop:4}}>
-                      <span style={{
-                        fontSize:9,fontWeight:700,
-                        background:tieneEnCurso?"#00A896":"var(--border2)",
-                        color:tieneEnCurso?"white":"var(--text3)",
-                        borderRadius:10,padding:"1px 6px",
-                      }}>{totalDia} ses.</span>
-                    </div>
-                  )}
-                </div>
-                {totalDia === 0
-                  ? <div style={{textAlign:"center",color:"var(--border2)",fontSize:10,marginTop:16,opacity:0.6}}>— libre —</div>
-                  : <>
-                    {evalsDia.map(p=>(
-                      <div key={p.id} style={{background:"#7C6AF715",border:"1px solid #7C6AF730",borderLeft:"2px solid #7C6AF7",borderRadius:6,padding:"4px 6px",marginBottom:4}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#7C6AF7",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          {p.nombre.split(" ").slice(-1)[0]}
-                        </div>
-                        <div style={{fontSize:9,color:"var(--text3)",marginTop:1}}>
-                          {new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",timeZone:"America/Lima"})} · Eval
-                        </div>
-                      </div>
-                    ))}
-                    {sesiones.map(s=>{
-                      const col = ESTADO_COLOR[s.estado]||"var(--border2)";
-                      return (
-                        <div key={s.id} style={{background:`${col}12`,border:`1px solid ${col}35`,borderLeft:`2px solid ${col}`,borderRadius:6,padding:"4px 6px",marginBottom:4}}>
-                          <div style={{fontSize:10,fontWeight:700,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {(s.paciente||"").split(" ").slice(-2).join(" ")}
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:1}}>
-                            <span style={{fontSize:9,color:"var(--text3)",fontWeight:600}}>{s.hora_inicio?.slice(0,5)}</span>
-                            <span style={{width:6,height:6,borderRadius:"50%",background:col,display:"inline-block"}}/>
-                          </div>
-                          {s.camara_numero && <div style={{fontSize:9,color:"var(--text3)",marginTop:1}}>Cam #{s.camara_numero}</div>}
-                        </div>
-                      );
-                    })}
-                  </>
-                }
-              </div>
-            );
-          })}
-        </div>
+      ) : vistaMode==="semana" ? (() => {
+        // Config timeline
+        const HORA_INICIO = 7;   // 07:00
+        const HORA_FIN    = 20;  // 20:00
+        const HORAS       = HORA_FIN - HORA_INICIO;
+        const PX_HORA     = 64;  // píxeles por hora
+        const TOTAL_H     = HORAS * PX_HORA;
+        const COL_HORAS   = 44;  // ancho columna de horas
 
+        const toMin = (hhmm) => {
+          if(!hhmm) return null;
+          const [h,m] = hhmm.slice(0,5).split(":").map(Number);
+          return h*60 + m;
+        };
+        const toTop  = (min) => ((min - HORA_INICIO*60) / 60) * PX_HORA;
+        const toHeight = (dur) => Math.max((dur/60)*PX_HORA, 28);
+
+        const horas = Array.from({length: HORAS+1}, (_,i) => HORA_INICIO + i);
+
+        return (
+          <div style={{display:"flex", gap:0, overflowX:"auto"}}>
+
+            {/* ── Eje de horas ── */}
+            <div style={{width:COL_HORAS, flexShrink:0, position:"relative", height:TOTAL_H+24, paddingTop:32}}>
+              {horas.map(h=>(
+                <div key={h} style={{
+                  position:"absolute",
+                  top: 32 + ((h-HORA_INICIO)*PX_HORA) - 8,
+                  right:8,
+                  fontSize:10, fontWeight:600, color:"var(--text3)",
+                  letterSpacing:"0.02em", lineHeight:1,
+                  userSelect:"none",
+                }}>
+                  {String(h).padStart(2,"0")}:00
+                </div>
+              ))}
+            </div>
+
+            {/* ── Columnas de días ── */}
+            <div style={{flex:1, display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:0, minWidth:0}}>
+              {semana.map(fecha=>{
+                const sesiones  = agendaFiltrada.filter(s=>s.fecha===fecha);
+                const evalsDia  = prospectosFiltrados.filter(p=>
+                  new Date(p.fecha_cita).toLocaleDateString("en-CA",{timeZone:"America/Lima"}) === fecha
+                );
+                const totalDia     = sesiones.length + evalsDia.length;
+                const tieneEnCurso = sesiones.some(s=>s.estado==="en_curso");
+
+                return (
+                  <div key={fecha} style={{
+                    borderLeft:"1px solid var(--border)",
+                    borderRight: fecha===semana[6] ? "1px solid var(--border)" : "none",
+                    background: esHoy(fecha)?"#00C4B408":"transparent",
+                    position:"relative",
+                  }}>
+
+                    {/* Cabecera día */}
+                    <div
+                      onClick={()=>{ setFechaSelec(fecha); setVistaMode("dia"); }}
+                      style={{
+                        height:32, display:"flex", flexDirection:"column",
+                        alignItems:"center", justifyContent:"center",
+                        borderBottom:`2px solid ${tieneEnCurso?"#00A896":esHoy(fecha)?"#00C4B4":"var(--border)"}`,
+                        background: esHoy(fecha)?"#00C4B410":"var(--surface)",
+                        cursor:"pointer", gap:1,
+                        position:"sticky", top:0, zIndex:2,
+                      }}
+                    >
+                      <div style={{fontSize:8,color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.08em",fontWeight:700,lineHeight:1}}>
+                        {new Date(fecha+"T00:00:00").toLocaleDateString("es-PE",{weekday:"short"})}
+                      </div>
+                      <div style={{
+                        fontSize:15,fontWeight:700,fontFamily:"Syne,sans-serif",lineHeight:1,
+                        color:esHoy(fecha)?"#00A896":"var(--text)",
+                      }}>
+                        {new Date(fecha+"T00:00:00").getDate()}
+                      </div>
+                      {totalDia>0 && (
+                        <div style={{
+                          fontSize:8,fontWeight:700,lineHeight:1,
+                          color:tieneEnCurso?"#00A896":"var(--text3)",
+                        }}>{totalDia}s</div>
+                      )}
+                    </div>
+
+                    {/* Grid de horas — líneas horizontales */}
+                    <div style={{position:"relative", height:TOTAL_H}}>
+                      {horas.map(h=>(
+                        <div key={h} style={{
+                          position:"absolute", top:(h-HORA_INICIO)*PX_HORA,
+                          left:0, right:0,
+                          borderTop: h===HORA_INICIO ? "none" : "1px solid var(--border)",
+                          opacity: 0.5,
+                          pointerEvents:"none",
+                        }}/>
+                      ))}
+
+                      {/* Línea de "ahora" — solo en día de hoy */}
+                      {esHoy(fecha) && (() => {
+                        const ahora = new Date();
+                        const ahoraMin = ahora.getHours()*60 + ahora.getMinutes();
+                        const top = toTop(ahoraMin);
+                        if(top < 0 || top > TOTAL_H) return null;
+                        return (
+                          <div style={{
+                            position:"absolute", top, left:0, right:0, zIndex:3,
+                            display:"flex", alignItems:"center", pointerEvents:"none",
+                          }}>
+                            <div style={{width:6,height:6,borderRadius:"50%",background:"#F87171",flexShrink:0}}/>
+                            <div style={{flex:1,height:1.5,background:"#F87171",opacity:0.7}}/>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Evaluaciones de prospectos */}
+                      {evalsDia.map(p=>{
+                        const min = toMin(new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"America/Lima"}));
+                        const top = min !== null ? toTop(min) : 0;
+                        return (
+                          <div key={p.id} style={{
+                            position:"absolute",
+                            top: Math.max(top,0),
+                            left:2, right:2,
+                            height:28,
+                            background:"#7C6AF720",
+                            border:"1px solid #7C6AF750",
+                            borderLeft:"3px solid #7C6AF7",
+                            borderRadius:5,
+                            padding:"2px 5px",
+                            overflow:"hidden",
+                            zIndex:1,
+                            cursor:"default",
+                          }}>
+                            <div style={{fontSize:9,fontWeight:700,color:"#7C6AF7",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                              {p.nombre.split(" ").slice(-1)[0]}
+                            </div>
+                            <div style={{fontSize:8,color:"var(--text3)"}}>Eval</div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Sesiones */}
+                      {sesiones.map(s=>{
+                        const col    = ESTADO_COLOR[s.estado]||"var(--border2)";
+                        const min    = toMin(s.hora_inicio);
+                        const top    = min !== null ? toTop(min) : 0;
+                        const height = toHeight(s.duracion_minutos||60);
+                        return (
+                          <div key={s.id}
+                            onClick={()=>{ setFechaSelec(fecha); setVistaMode("dia"); }}
+                            style={{
+                              position:"absolute",
+                              top: Math.max(top,0),
+                              left:2, right:2,
+                              height,
+                              background:`${col}18`,
+                              border:`1px solid ${col}50`,
+                              borderLeft:`3px solid ${col}`,
+                              borderRadius:5,
+                              padding:"3px 5px",
+                              overflow:"hidden",
+                              cursor:"pointer",
+                              zIndex:1,
+                              transition:"filter 0.1s",
+                            }}
+                            onMouseEnter={e=>e.currentTarget.style.filter="brightness(0.93)"}
+                            onMouseLeave={e=>e.currentTarget.style.filter="none"}
+                          >
+                            <div style={{fontSize:9,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.2}}>
+                              {(s.paciente||"").split(" ").slice(-2).join(" ")}
+                            </div>
+                            {height >= 40 && (
+                              <div style={{fontSize:8,color:"var(--text3)",marginTop:1,lineHeight:1.2}}>
+                                {s.hora_inicio?.slice(0,5)}
+                                {s.camara_numero ? ` · Cam#${s.camara_numero}` : ""}
+                              </div>
+                            )}
+                            <div style={{position:"absolute",bottom:3,right:4,width:5,height:5,borderRadius:"50%",background:col}}/>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()
       ) : agendaFiltrada.length===0 && prospectosHoy.length===0 ? (
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:16,padding:"60px 40px",textAlign:"center"}}>
             <div style={{fontSize:40,opacity:0.2,marginBottom:12}}>📅</div>
