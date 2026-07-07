@@ -7287,7 +7287,9 @@ export default function App() {
   return (
     <div style={{fontFamily:"'DM Sans',system-ui,sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",width:"100%"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}select option{background:var(--surface)}input::placeholder{color:var(--text3)}textarea::placeholder{color:var(--text3)}textarea{box-sizing:border-box}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;--text:#0D1829;--text2:#4A5568;--text3:#8A97A8;--accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);--radius-sm:8px;--radius-md:12px;--radius-lg:16px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}select option{background:var(--surface)}input::placeholder{color:var(--text3)}textarea::placeholder{color:var(--text3)}textarea{box-sizing:border-box}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}`}</style>
       <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
         <Sidebar vista={vista} setVista={cambiarVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
         <div style={{flex:1,overflow:"auto",padding:"30px 36px",background:"var(--bg)"}}>
