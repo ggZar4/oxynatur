@@ -5730,7 +5730,7 @@ function Sesiones({perfil}) {
               </div>
             </div>
           ))
-          )))();
+          );
         })()}
 
       {/* Modal programar nueva sesión */}
