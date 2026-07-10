@@ -3571,25 +3571,21 @@ function AgendaMedico({perfil, cambiarVista}) {
 
                     {/* Grid de horas — líneas horizontales */}
                     <div style={{position:"relative", height:TOTAL_H}}>
-                      {horas.map(h=>(
-                        <React.Fragment key={h}>
-                          <div style={{
-                            position:"absolute", top:(h-HORA_INICIO)*PX_HORA,
-                            left:0, right:0,
-                            borderTop: h===HORA_INICIO ? "none" : "1px solid var(--border2)",
-                            pointerEvents:"none",
-                          }}/>
-                          {h < HORA_FIN && (
-                            <div style={{
-                              position:"absolute", top:(h-HORA_INICIO)*PX_HORA + PX_HORA/2,
-                              left:0, right:0,
-                              borderTop:"1px dashed var(--border)",
-                              opacity:0.6,
-                              pointerEvents:"none",
-                            }}/>
-                          )}
-                        </React.Fragment>
-                      ))}
+                      {horas.flatMap(h=>[
+                        <div key={`h-${h}`} style={{
+                          position:"absolute", top:(h-HORA_INICIO)*PX_HORA,
+                          left:0, right:0,
+                          borderTop: h===HORA_INICIO ? "none" : "1px solid var(--border2)",
+                          pointerEvents:"none",
+                        }}/>,
+                        h < HORA_FIN ? <div key={`hm-${h}`} style={{
+                          position:"absolute", top:(h-HORA_INICIO)*PX_HORA + PX_HORA/2,
+                          left:0, right:0,
+                          borderTop:"1px dashed var(--border)",
+                          opacity:0.5,
+                          pointerEvents:"none",
+                        }}/> : null,
+                      ].filter(Boolean))}
 
                       {/* Línea de "ahora" — solo en día de hoy */}
                       {esHoy(fecha) && (() => {
