@@ -172,6 +172,57 @@ const Spinner = () => (
   </div>
 );
 
+// ── Toast notification system ──────────────────────────────────────────────
+let __toastFn = null;
+const toast = {
+  success: (msg) => __toastFn && __toastFn({msg, type:"success"}),
+  error:   (msg) => __toastFn && __toastFn({msg, type:"error"}),
+  info:    (msg) => __toastFn && __toastFn({msg, type:"info"}),
+};
+
+const ToastContainer = () => {
+  const [toasts, setToasts] = useState([]);
+  useEffect(()=>{
+    __toastFn = ({msg, type}) => {
+      const id = Date.now();
+      setToasts(t => [...t.slice(-3), {id, msg, type}]);
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3200);
+    };
+    return () => { __toastFn = null; };
+  }, []);
+  const colors = {
+    success: {bg:"#10B981", icon:"✓"},
+    error:   {bg:"#F87171", icon:"✕"},
+    info:    {bg:"#7C6AF7", icon:"i"},
+  };
+  return (
+    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none"}}>
+      {toasts.map(t=>(
+        <div key={t.id} style={{
+          display:"flex",alignItems:"center",gap:10,
+          background:"var(--surface)",border:"0.5px solid var(--border)",
+          borderLeft:`3px solid ${colors[t.type].bg}`,
+          borderRadius:"var(--radius-sm)",padding:"10px 16px",
+          boxShadow:"0 4px 16px rgba(0,0,0,0.12)",
+          fontSize:13,color:"var(--text)",fontWeight:500,
+          minWidth:260,maxWidth:360,
+          animation:"slideIn 0.2s ease",
+          pointerEvents:"auto",
+        }}>
+          <span style={{
+            width:20,height:20,borderRadius:"50%",
+            background:colors[t.type].bg,color:"white",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:11,fontWeight:700,flexShrink:0,
+          }}>{colors[t.type].icon}</span>
+          <span style={{flex:1,lineHeight:1.4}}>{t.msg}</span>
+        </div>
+      ))}
+      <style>{`@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}`}</style>
+    </div>
+  );
+};
+
 const Badge = ({color, children, variant="default"}) => (
   <span style={{
     display:"inline-flex",alignItems:"center",padding:"2px 9px",borderRadius:99,
@@ -531,7 +582,7 @@ function DashboardMedico({perfil}) {
         </h1>
         <p style={{color:"var(--text3)",fontSize:14,marginTop:4}}>
           {new Date().toLocaleDateString("es-PE",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
-          {f.esMedicoEsp && <span style={{color:"#00A896",marginLeft:8}}>· Todas las sedes</span>}
+          {f.esMedicoEsp && <span style={{color:"var(--accent)",marginLeft:8}}>· Todas las sedes</span>}
         </p>
       </div>
 
@@ -540,7 +591,7 @@ function DashboardMedico({perfil}) {
         {[
           {label:"Firmas pendientes",  val:firmasPend.length,  color: firmasPend.length>0?"#F59E0B":"#10B981"},
           {label:"Alertas pendientes", val:alertas.length,    color: alertas.length>0?"#F87171":"#10B981"},
-          {label:"Sesiones hoy",       val:sesionesHoy.length, color:"#00A896"},
+          {label:"Sesiones hoy",       val:sesionesHoy.length, color:"var(--accent)"},
           {label:"Completadas hoy",    val:sesCompletadas,    color:"#10B981"},
         ].map((k,i)=>(
           <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
@@ -677,14 +728,14 @@ function DashboardMedico({perfil}) {
         {/* Sesiones del día */}
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#00A896",letterSpacing:"0.06em",textTransform:"uppercase"}}>⚡ Sesiones de hoy</div>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--accent)",letterSpacing:"0.06em",textTransform:"uppercase"}}>⚡ Sesiones de hoy</div>
             <span style={{fontSize:12,color:"var(--text3)"}}>{sesCompletadas}/{sesionesHoy.length} completadas</span>
           </div>
           {sesionesHoy.length===0
             ? <div style={{padding:"24px",textAlign:"center",color:"var(--text3)",fontSize:13}}>Sin sesiones programadas para hoy</div>
             : sesionesHoy.map(s=>(
               <div key={s.id} style={{padding:"10px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",alignItems:"center",gap:12}}>
-                <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"#00A896",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"var(--accent)",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{s.paciente}</div>
                   <div style={{fontSize:11,color:"var(--text3)"}}>{s.sede_nombre} · Ses. #{s.numero_sesion}</div>
@@ -751,7 +802,7 @@ function DashboardMedico({perfil}) {
             <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
 
               {/* Signos vitales */}
-              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Signos Vitales</div>
+              <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Signos Vitales</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
                 {[
                   ["Presión arterial", firmaModal.presion_arterial],
@@ -931,7 +982,7 @@ function DashboardFinanciero() {
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
-          {label:"Pacientes activos", val:totales.pacientes, color:"#00A896", sub:"en tratamiento"},
+          {label:"Pacientes activos", val:totales.pacientes, color:"var(--accent)", sub:"en tratamiento"},
           {label:"Sesiones este mes",  val:totales.sesiones,  color:"#7C6AF7", sub:"hiperbáricas"},
           {label:"Ingresos del mes",   val:`S/ ${totales.ingresos.toLocaleString()}`, color:"#10B981", sub:"facturado"},
           {label:"Sesiones hoy",       val:totales.sesHoy,   color:"#F59E0B", sub:"programadas"},
@@ -1189,7 +1240,7 @@ function Pacientes({perfil}) {
           {/* Datos generales + progreso */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
             <Card>
-              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Datos del paciente</div>
+              <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Datos del paciente</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 {[
                   ["Sede",        pacSelec.sedes?.nombre],
@@ -1207,7 +1258,7 @@ function Pacientes({perfil}) {
 
             {/* Progreso de sesiones */}
             <Card>
-              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Progreso del tratamiento</div>
+              <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Progreso del tratamiento</div>
               <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
                 <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
                   <svg width="72" height="72" viewBox="0 0 72 72">
@@ -1218,7 +1269,7 @@ function Pacientes({perfil}) {
                       strokeLinecap="round" transform="rotate(-90 36 36)"/>
                   </svg>
                   <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                    <div style={{fontSize:16,fontWeight:700,color:"#00A896"}}>{pacSelec.sesiones_realizadas||0}</div>
+                    <div style={{fontSize:16,fontWeight:700,color:"var(--accent)"}}>{pacSelec.sesiones_realizadas||0}</div>
                     <div style={{fontSize:10,color:"var(--text3)"}}>/{pacSelec.total_sesiones_prescritas||0}</div>
                   </div>
                 </div>
@@ -1283,7 +1334,7 @@ function Pacientes({perfil}) {
                   const ECOLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
                   return (
                     <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"#00A896",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
+                      <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"var(--accent)",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,color:"var(--text)"}}>Sesión #{s.numero_sesion} · {s.fecha}</div>
                         <div style={{fontSize:11,color:"var(--text3)"}}>{s.sedes?.nombre} · Cámara #{s.camaras?.numero||"—"} · {s.presion_aplicada} ATA · {s.duracion_minutos} min</div>
@@ -1319,7 +1370,7 @@ function Pacientes({perfil}) {
               <Select label="Estado" value={formEditar.estado} onChange={v=>setFormEditar(f=>({...f,estado:v}))}
                 options={[{value:"activo",label:"Activo"},{value:"inactivo",label:"Inactivo"},{value:"completado",label:"Completado"},{value:"suspendido",label:"Suspendido"}]}/>
             </div>
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
+            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setModalEditar(false)}>Cancelar</Btn>
               <Btn onClick={guardarEdicion} disabled={savingEditar}>{savingEditar?"Guardando...":"Guardar cambios"}</Btn>
             </div>
@@ -1417,7 +1468,7 @@ function Pacientes({perfil}) {
                 {err.diagnostico_hc && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.diagnostico_hc}</div>}
               </div>
             </div>
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
+            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setModal(false)}>Cancelar</Btn>
               <Btn onClick={guardar} disabled={saving}>{saving?"Guardando...":"Registrar Paciente"}</Btn>
             </div>
@@ -2089,7 +2140,7 @@ function HistoriasClinicas({perfil}) {
       {/* HC MAESTRA */}
       <Card style={{marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}>
             Historia Clínica Maestra
             {hcMaestra?.numero_hc && (
               <span style={{fontSize:10,color:"var(--text3)",fontWeight:500,background:"var(--surface2)",padding:"1px 8px",borderRadius:99,border:"0.5px solid var(--border)"}}>
@@ -2306,7 +2357,7 @@ function HistoriasClinicas({perfil}) {
                                 — {ep.evals[0].compras_paciente.paquetes.nombre}
                               </span>
                             )}
-                            {epIdx===0 && <span style={{fontSize:11,color:"#00A896",marginLeft:8,fontWeight:400}}>● Activo</span>}
+                            {epIdx===0 && <span style={{fontSize:11,color:"var(--accent)",marginLeft:8,fontWeight:400}}>● Activo</span>}
                           </div>
                           <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>
                             {fechaInicio}{fechaFin && fechaFin!==fechaInicio ? ` → ${fechaFin}` : ""} · {evCount} sesiones
@@ -2350,7 +2401,7 @@ function HistoriasClinicas({perfil}) {
                                   </div>
                                 </div>
                                 <div style={{background:"var(--surface2)",borderRadius:8,padding:"6px 10px"}}>
-                                  <div style={{fontSize:10,color:"#00A896",fontWeight:700,marginBottom:4}}>POST-SESIÓN</div>
+                                  <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,marginBottom:4}}>POST-SESIÓN</div>
                                   <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:12}}>
                                     {ev.presion_arterial && <span><b>PA:</b> {ev.presion_arterial}</span>}
                                     {ev.frecuencia_cardiaca_post && <span><b>FC:</b> {ev.frecuencia_cardiaca_post} bpm</span>}
@@ -2419,7 +2470,7 @@ function HistoriasClinicas({perfil}) {
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div>
-                <div style={{fontSize:10,color:"#00A896",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Nueva Evaluación</div>
+                <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Nueva Evaluación</div>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
               </div>
               <button onClick={()=>setModalNuevaEval(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
@@ -2443,7 +2494,7 @@ function HistoriasClinicas({perfil}) {
               )}
 
               {/* SECCIÓN ENFERMERO — Signos vitales */}
-              <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
+              <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:4,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                 📋 Signos Vitales
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -2533,7 +2584,7 @@ function HistoriasClinicas({perfil}) {
                 </>
               )}
             </div>
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:12,color:"var(--text3)"}}>
                 {!(f.esMedico||f.esAdmin) ? "Se guardará como borrador hasta firma médica" : formEval.firma_medico ? "Se guardará como firmada" : "Sin firma — se guardará como borrador"}
               </div>
@@ -2629,7 +2680,7 @@ function HistoriasClinicas({perfil}) {
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
               {[
-                {titulo:"Signos Vitales", color:"#00A896", campos:[
+                {titulo:"Signos Vitales", color:"var(--accent)", campos:[
                   ["Presión arterial",modalEval.presion_arterial],["FC",modalEval.frecuencia_cardiaca],
                   ["SatO₂",modalEval.saturacion_o2],["Temperatura",modalEval.temperatura],["Peso",modalEval.peso?`${modalEval.peso} kg`:null],
                   ["Dolor",`${modalEval.nivel_dolor}/10`],["Estado",modalEval.estado_general],
@@ -2934,7 +2985,7 @@ function Finanzas() {
           {label:"Ingresos del mes",  val:fmtSol(totalIngresos),  color:"#10B981", sub:`${ventas.length} ventas`},
           {label:"Descuentos",        val:fmtSol(totalDescuento), color:"#F59E0B", sub:"vs precio sugerido"},
           {label:"Ticket promedio",   val:fmtSol(ticketPromedio), color:"#7C6AF7", sub:"por venta"},
-          {label:"Precio sugerido",   val:fmtSol(totalSugerido),  color:"#00A896", sub:"total sin descuento"},
+          {label:"Precio sugerido",   val:fmtSol(totalSugerido),  color:"var(--accent)", sub:"total sin descuento"},
         ].map((k,i)=>(
           <Card key={i} style={{borderTop:`3px solid ${k.color}`,paddingTop:16,minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>{k.label}</div>
@@ -2986,7 +3037,7 @@ function Finanzas() {
                   <span style={{fontSize:13,color:"var(--text2)"}}>{fmtSol(m.total)}</span>
                 </div>
                 <div style={{background:"var(--surface2)",borderRadius:4,height:6,overflow:"hidden"}}>
-                  <div style={{background:"#00A896",height:6,borderRadius:4,width:`${Math.round(m.total/totalIngresos*100)}%`,transition:"width 0.5s"}}/>
+                  <div style={{background:"var(--accent)",height:6,borderRadius:4,width:`${Math.round(m.total/totalIngresos*100)}%`,transition:"width 0.5s"}}/>
                 </div>
                 <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{m.count} ventas · {Math.round(m.total/totalIngresos*100)}%</div>
               </div>
@@ -3334,7 +3385,7 @@ function MiniCal({ fecha, onChange, marcados=[] }) {
               {d.split("-")[2].replace(/^0/,"")}
               {tieneSes && !esSelec && (
                 <span style={{position:"absolute",bottom:1,left:"50%",transform:"translateX(-50%)",
-                  width:4,height:4,borderRadius:"50%",background:"#00A896",display:"block"}}/>
+                  width:4,height:4,borderRadius:"50%",background:"var(--accent)",display:"block"}}/>
               )}
             </button>
           );
@@ -3343,7 +3394,7 @@ function MiniCal({ fecha, onChange, marcados=[] }) {
       {/* Botón hoy */}
       <div style={{marginTop:8,textAlign:"center"}}>
         <button onClick={()=>{ onChange(hoy); setMesVista(hoy.slice(0,7)); }}
-          style={{background:"none",border:"none",color:"#00A896",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>
+          style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>
           Ir a hoy
         </button>
       </div>
@@ -3571,21 +3622,15 @@ function AgendaMedico({perfil, cambiarVista}) {
 
                     {/* Grid de horas — líneas horizontales */}
                     <div style={{position:"relative", height:TOTAL_H}}>
-                      {horas.flatMap(h=>[
-                        <div key={`h-${h}`} style={{
+                      {horas.map(h=>(
+                        <div key={h} style={{
                           position:"absolute", top:(h-HORA_INICIO)*PX_HORA,
                           left:0, right:0,
-                          borderTop: h===HORA_INICIO ? "none" : "1px solid var(--border2)",
+                          borderTop: h===HORA_INICIO ? "none" : "1px solid var(--border)",
+                          opacity: 0.5,
                           pointerEvents:"none",
-                        }}/>,
-                        h < HORA_FIN ? <div key={`hm-${h}`} style={{
-                          position:"absolute", top:(h-HORA_INICIO)*PX_HORA + PX_HORA/2,
-                          left:0, right:0,
-                          borderTop:"1px dashed var(--border)",
-                          opacity:0.5,
-                          pointerEvents:"none",
-                        }}/> : null,
-                      ].filter(Boolean))}
+                        }}/>
+                      ))}
 
                       {/* Línea de "ahora" — solo en día de hoy */}
                       {esHoy(fecha) && (() => {
@@ -3747,7 +3792,7 @@ function AgendaMedico({perfil, cambiarVista}) {
             ))}
           </div>
           <button onClick={()=>navegar(-1)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>‹</button>
-          <button onClick={()=>setFechaSelec(hoy)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"#00A896",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
+          <button onClick={()=>setFechaSelec(hoy)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--accent)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>Hoy</button>
           <button onClick={()=>navegar(1)} style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>›</button>
           <div style={{position:"relative"}}>
             <button onClick={()=>setShowCalAgenda(c=>!c)}
@@ -3772,7 +3817,7 @@ function AgendaMedico({perfil, cambiarVista}) {
         {[
           {label: vistaMode==="semana"?"Total semana":"Total hoy",  val:kpis.total,      color:"var(--text)"},
           {label:"Completadas", val:kpis.completadas, color:"#10B981"},
-          {label:"En curso",    val:kpis.enCurso,     color:"#00A896"},
+          {label:"En curso",    val:kpis.enCurso,     color:"var(--accent)"},
           {label:"Pendientes",  val:kpis.pendientes,  color:"#F59E0B"},
         ].map((k,i)=>(
           <div key={i} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"12px 16px",minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
@@ -3799,7 +3844,7 @@ function AgendaMedico({perfil, cambiarVista}) {
 
       {loading ? (
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:60,color:"var(--text3)",gap:10}}>
-          <div style={{width:18,height:18,border:"2px solid #00A896",borderTopColor:"transparent",borderRadius:"50%"}}/>
+          <div style={{width:18,height:18,border:"2px solid var(--accent)",borderTopColor:"transparent",borderRadius:"50%"}}/>
           Cargando agenda...
         </div>
 
@@ -3849,7 +3894,7 @@ function AgendaMedico({perfil, cambiarVista}) {
 
                 {/* Hora timeline */}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
-                  <div style={{fontSize:18,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif",lineHeight:1}}>{fmtHora(s.hora_inicio)}</div>
+                  <div style={{fontSize:18,fontWeight:700,color:"var(--accent)",fontFamily:"Syne,sans-serif",lineHeight:1}}>{fmtHora(s.hora_inicio)}</div>
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",margin:"3px 0",gap:1}}>
                     <div style={{width:1,height:7,background:"var(--border2)"}}/>
                     <span style={{fontSize:9,color:"var(--text3)",fontWeight:700,padding:"1px 5px",background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:4}}>{s.duracion_minutos||60}m</span>
@@ -3913,7 +3958,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                   )}
                   {s.paciente_id && cambiarVista && (
                     <button onClick={()=>{ localStorage.setItem("oxynatur-hc-paciente", s.paciente_id); cambiarVista("historias"); }}
-                      style={{background:"none",border:"none",color:"#00A896",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 0",fontFamily:"inherit"}}>
+                      style={{background:"none",border:"none",color:"var(--accent)",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 0",fontFamily:"inherit"}}>
                       Ver HC →
                     </button>
                   )}
@@ -4121,7 +4166,7 @@ function Ventas({perfil}) {
         .upload(path, form.fotoFile, { upsert: false });
       setUploadProgress(null);
       if(upErr) {
-        alert("Error subiendo foto: " + upErr.message);
+        toast.error("Error subiendo foto: " + upErr.message);
         setSaving(false);
         return;
       }
@@ -4160,8 +4205,9 @@ function Ventas({perfil}) {
       () => supabase.from("compras_paciente").insert(payload), "Ventas:insert"
     );
     setSaving(false);
-    if(error) { alert("Error al guardar la venta: " + (error.message || "ver consola")); return; }
+    if(error) { toast.error("Error al guardar la venta"); return; }
     setModal(false);
+    toast.success("Venta registrada correctamente");
     loadVentas();
   };
 
@@ -4271,7 +4317,7 @@ function Ventas({perfil}) {
     }, "Ventas:exportar");
 
     if(!rows || rows.length === 0) {
-      alert("No hay ventas en ese rango de fechas.");
+      toast.info("No hay ventas en ese rango de fechas.");
       setExportando(false);
       return;
     }
@@ -4370,7 +4416,7 @@ function Ventas({perfil}) {
         <Card style={{borderTop:"3px solid #00A896",paddingTop:16}}>
           <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Período activo</div>
           <div style={{fontSize:11,color:"var(--text2)",fontWeight:600,marginTop:4,marginBottom:4}}>{cicloActual.label}</div>
-          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#00A896",marginTop:4}}>{fmtSol(totalMes)}</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"var(--accent)",marginTop:4}}>{fmtSol(totalMes)}</div>
           <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{statsMes.cantidad} ventas en el período</div>
         </Card>
         <Card style={{borderTop:"3px solid #F59E0B",paddingTop:16}}>
@@ -4413,7 +4459,7 @@ function Ventas({perfil}) {
 
       {/* Tabla */}
       <Card style={{padding:0,overflow:"hidden"}}>
-        <div style={{padding:"14px 18px",borderBottom:"0.5px solid #E2E8F0",fontSize:12,fontWeight:600,color:"var(--text2)",letterSpacing:"0.02em"}}>
+        <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:600,color:"var(--text2)",letterSpacing:"0.02em"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>Ventas {totalVentas > 0 && <span style={{fontWeight:400,color:"var(--text3)",marginLeft:6}}>({totalVentas} total)</span>}</span>
             {totalVentas > PAGE_SIZE && (
@@ -4474,7 +4520,7 @@ function Ventas({perfil}) {
                       <td style={{padding:"11px 14px"}}>
                         {v.comprobante_url
                           ? <a href={v.comprobante_url} target="_blank" rel="noreferrer"
-                              style={{fontSize:12,color:"#00A896",textDecoration:"none"}}>Ver 📎</a>
+                              style={{fontSize:12,color:"var(--accent)",textDecoration:"none"}}>Ver 📎</a>
                           : <span style={{fontSize:12,color:"var(--border2)"}}>—</span>
                         }
                       </td>
@@ -4595,7 +4641,7 @@ function Ventas({perfil}) {
                     <span>-{fmtSol(Number(calculo.precio_base)-Number(calculo.precio_final))}</span>
                   </div>
                 )}
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:700,color:"#00A896",borderTop:"0.5px solid #E2E8F0",paddingTop:8,marginTop:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:700,color:"var(--accent)",borderTop:"0.5px solid var(--border)",paddingTop:8,marginTop:8}}>
                   <span>Sugerido</span><span>{fmtSol(calculo.precio_final)}</span>
                 </div>
               </div>
@@ -4729,7 +4775,7 @@ function Ventas({perfil}) {
 
             {/* Sede que se va a exportar */}
             <div style={{marginBottom:18,padding:"10px 14px",background:"var(--surface2)",borderRadius:10,fontSize:13,color:"var(--text2)"}}>
-              Sede: <strong style={{color:"#00A896"}}>
+              Sede: <strong style={{color:"var(--accent)"}}>
                 {sedeFija
                   ? (sedesData?.[0]?.nombre || "Tu sede")
                   : filtroSede === "todas"
@@ -4894,7 +4940,7 @@ function DashboardSede({perfil}) {
           <div style={{fontSize:13,color:"var(--text3)",marginTop:4}}>Panel de producción — solo lectura</div>
         </div>
         <button onClick={exportarLiquidacion}
-          style={{background:"#00A896",color:"white",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+          style={{background:"var(--accent)",color:"white",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
           ↓ Exportar liquidación
         </button>
       </div>
@@ -4925,7 +4971,7 @@ function DashboardSede({perfil}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
           {[
             {label:"Ingreso bruto período",val:fmtS(ingresoBruto),color:"#1F2937"},
-            {label:"50% Oxynatur",val:fmtS(parteOxynatur),color:"#00A896"},
+            {label:"50% Oxynatur",val:fmtS(parteOxynatur),color:"var(--accent)"},
             {label:"50% "+( sedeData?.nombre||"Sede"),val:fmtS(parteSede),color:"#6366F1"},
           ].map(({label,val,color})=>(
             <div key={label} style={{background:"var(--surface2)",borderRadius:8,padding:"12px 16px"}}>
@@ -5107,6 +5153,7 @@ function Sesiones({perfil}) {
     setModalIniciar(null);
     setCuestionarioPre({});
     setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
+    toast.info("Sesión iniciada");
     load();
   };
 
@@ -5216,7 +5263,7 @@ function Sesiones({perfil}) {
     }), "Sesiones:programar");
 
     setSavingNueva(false);
-    if(error) { alert("Error al programar: " + error.message); return; }
+    if(error) { toast.error("Error al programar la sesión"); return; }
     setModalNueva(false);
     setFormNueva(formInicial);
     setErrNueva({});
@@ -5265,7 +5312,8 @@ function Sesiones({perfil}) {
     }
 
     setSavingCompletar(false);
-    if(error) { alert("Error al completar: " + error.message); return; }
+    if(error) { toast.error("Error al completar la sesión"); return; }
+    toast.success("Sesión completada correctamente");
     setVerSesion(null);
     load();
   };
@@ -5273,6 +5321,7 @@ function Sesiones({perfil}) {
   const cancelar = async (sesion) => {
     if(!window.confirm("¿Cancelar esta sesión?")) return;
     await safeQuery(() => supabase.from("sesiones").update({ estado:"cancelada" }).eq("id", sesion.id), "Sesiones:cancelar");
+    toast.info("Sesión cancelada");
     load();
   };
 
@@ -5346,7 +5395,7 @@ function Sesiones({perfil}) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
           {label:"Total del día",  val:total,      color:"var(--text)"},
-          {label:"En curso",       val:enCurso,    color:"#00A896"},
+          {label:"En curso",       val:enCurso,    color:"var(--accent)"},
           {label:"Completadas",    val:completadas, color:"#10B981"},
           {label:"Pendientes",     val:pendientes, color:"#F59E0B"},
         ].map((k,i)=>(
@@ -5375,7 +5424,7 @@ function Sesiones({perfil}) {
             }}>
               {/* Hora */}
               <div style={{textAlign:"center"}}>
-                <div style={{fontSize:16,fontWeight:700,color:"#00A896",fontFamily:"Syne,sans-serif"}}>{fmtHora(s.hora_inicio)}</div>
+                <div style={{fontSize:16,fontWeight:700,color:"var(--accent)",fontFamily:"Syne,sans-serif"}}>{fmtHora(s.hora_inicio)}</div>
                 <div style={{fontSize:11,color:"var(--text3)"}}>{fmtHora(s.hora_fin)}</div>
               </div>
 
@@ -5409,7 +5458,7 @@ function Sesiones({perfil}) {
                 {s.estado === "programada" && (
                   <>
                     <button onClick={(e)=>{ e.stopPropagation(); setModalChecklist(s); setChecklist({}); }}
-                      style={{background:"#00A89620",border:"0.5px solid #00A89640",color:"#00A896",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                      style={{background:"#00A89620",border:"0.5px solid #00A89640",color:"var(--accent)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                       ▶ Iniciar
                     </button>
                     <button onClick={()=>cancelar(s)}
@@ -5547,7 +5596,7 @@ function Sesiones({perfil}) {
                   onChange={v=>setFormNueva(f=>({...f,duracion_minutos:v}))}/>
               </div>
             </div>
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
+            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setModalNueva(false)}>Cancelar</Btn>
               <Btn onClick={programar} disabled={savingNueva}>{savingNueva?"Guardando...":"Programar"}</Btn>
             </div>
@@ -5582,7 +5631,7 @@ function Sesiones({perfil}) {
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
-                <div style={{fontSize:10,color:"#00A896",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
+                <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
                   Sesión #{verSesion.numero_sesion} · {verSesion.camara_numero ? `Cámara #${verSesion.camara_numero}` : ""}
                 </div>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>{verSesion.paciente}</div>
@@ -5632,7 +5681,7 @@ function Sesiones({perfil}) {
 
                   {/* Sección F — Signos vitales POST */}
                   <div style={{marginBottom:16,border:"0.5px solid #00A89640",borderRadius:10,overflow:"hidden"}}>
-                    <div style={{padding:"8px 14px",background:"#00A89608",fontSize:11,fontWeight:700,color:"#00A896",letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                    <div style={{padding:"8px 14px",background:"#00A89608",fontSize:11,fontWeight:700,color:"var(--accent)",letterSpacing:"0.08em",textTransform:"uppercase"}}>
                       F. Signos vitales post-sesión — Al salir de cámara
                     </div>
                     <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -5778,7 +5827,7 @@ function Sesiones({perfil}) {
                 </>
               )}
             </div>
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
+            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setVerSesion(null)}>Cerrar</Btn>
               {verSesion.estado === "en_curso" && (
                 <Btn onClick={completar} disabled={savingCompletar}>
@@ -5797,7 +5846,7 @@ function Sesiones({perfil}) {
             {/* Header */}
             <div style={{padding:"20px 24px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
-                <div style={{fontSize:11,fontWeight:600,color:"#00A896",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Checklist de cámara</div>
+                <div style={{fontSize:11,fontWeight:600,color:"var(--accent)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Checklist de cámara</div>
                 <div style={{fontSize:18,fontWeight:700,color:"var(--text)",fontFamily:"Syne,sans-serif"}}>
                   {modalChecklist.paciente}
                 </div>
@@ -5858,7 +5907,7 @@ function Sesiones({perfil}) {
                     setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
                   }}
                   disabled={Object.values(checklist).filter(Boolean).length < CHECKLIST_CAMARA.length}
-                  style={{background:"#00A896",color:"white",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,fontWeight:600,cursor:"pointer",
+                  style={{background:"var(--accent)",color:"white",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,fontWeight:600,cursor:"pointer",
                     opacity: Object.values(checklist).filter(Boolean).length < CHECKLIST_CAMARA.length ? 0.5 : 1}}>
                   Continuar →
                 </button>
@@ -5895,7 +5944,7 @@ function Sesiones({perfil}) {
                   return (
                     <div style={{marginTop:8}}>
                       <div style={{background:"var(--border)",borderRadius:4,height:4,width:"100%",overflow:"hidden"}}>
-                        <div style={{background:"#00A896",height:"100%",borderRadius:4,width:`${pct}%`,transition:"width 0.3s"}}/>
+                        <div style={{background:"var(--accent)",height:"100%",borderRadius:4,width:`${pct}%`,transition:"width 0.3s"}}/>
                       </div>
                       <div style={{fontSize:10,color:"var(--text3)",marginTop:3}}>
                         {completadas} de {modalIniciar.sesiones_totales} completadas
@@ -5969,7 +6018,7 @@ function Sesiones({perfil}) {
 
               {/* Sección C — Signos vitales pre */}
               <div>
-                <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
+                <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
                   C. Signos vitales pre-sesión — Antes de ingresar a cámara
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -6075,7 +6124,7 @@ function MisObservaciones({perfil}) {
 
   return (
     <div style={{marginTop:32}}>
-      <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12,paddingTop:20,borderTop:"0.5px solid #E2E8F0"}}>
+      <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12,paddingTop:20,borderTop:"0.5px solid var(--border)"}}>
         Mis observaciones registradas
       </div>
       {obs.map(o=>(
@@ -6210,7 +6259,7 @@ function Alertas({perfil}) {
       "Alertas:responder"
     );
     setSaving(false);
-    if(error) { alert("Error al guardar respuesta"); return; }
+    if(error) { toast.error("Error al guardar respuesta"); return; }
     setVerAlerta(null);
     load();
   };
@@ -6237,7 +6286,7 @@ function Alertas({perfil}) {
       "Alertas:crear"
     );
     setSavingNueva(false);
-    if(error) { alert("Error al crear alerta"); return; }
+    if(error) { toast.error("Error al crear alerta"); return; }
     setModalNueva(false);
     setFormNueva(formInicial);
     setErrNueva({});
@@ -6383,7 +6432,7 @@ function Alertas({perfil}) {
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
               {/* Mensaje original */}
               <div style={{marginBottom:20}}>
-                <div style={{fontSize:11,color:"#00A896",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>
+                <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>
                   Observación registrada
                 </div>
                 <div style={{background:"var(--surface)",borderRadius:10,padding:"14px 16px",fontSize:14,color:"var(--text)",lineHeight:1.6}}>
@@ -6445,7 +6494,7 @@ function Alertas({perfil}) {
             </div>
 
             {/* Footer modal */}
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               <div style={{fontSize:12,color:"var(--text3)"}}>
                 {verAlerta.estado === "resuelta" ? "✓ Alerta resuelta" : "Pendiente de respuesta"}
               </div>
@@ -6638,10 +6687,11 @@ function Prospectos({perfil}) {
       }), "Prospectos:insert"
     );
     setSaving(false);
-    if(error){ setErr({general:"Error al guardar"}); return; }
+    if(error){ setErr({general:"Error al guardar"}); toast.error("Error al guardar el prospecto"); return; }
     setModal(false);
     setForm(formInicial);
     setErr({});
+    toast.success("Prospecto registrado correctamente");
     load();
   };
 
@@ -6735,7 +6785,7 @@ function Prospectos({perfil}) {
     setShowConvertForm(false);
     setModalVer(null);
     load();
-    alert(`${convertForm.nombres} ${convertForm.apellidos} fue vinculado como paciente. Ya podes agendar sus sesiones.`);
+    toast.success(`${convertForm.nombres} ${convertForm.apellidos} vinculado como paciente`);
   };
 
   // Cargar actividades del prospecto
@@ -6791,7 +6841,7 @@ function Prospectos({perfil}) {
   // KPIs
   const kpis = [
     { label:"Total",        val: prospectos.length,                                          color:"#7C6AF7" },
-    { label:"Nuevos",       val: prospectos.filter(p=>p.estado==="nuevo").length,             color:"#00A896" },
+    { label:"Nuevos",       val: prospectos.filter(p=>p.estado==="nuevo").length,             color:"var(--accent)" },
     { label:"En seguimiento", val: prospectos.filter(p=>["contactado","evaluacion_agendada"].includes(p.estado)).length, color:"#F59E0B" },
     { label:"Convertidos",  val: prospectos.filter(p=>p.estado==="convertido").length,        color:"#10B981" },
   ];
@@ -6891,7 +6941,7 @@ function Prospectos({perfil}) {
                     </td>
                     <td style={{padding:"11px 14px"}}>
                       <button onClick={()=>{ setModalVer(p); setEditFecha(p.fecha_cita ? toLocalInput(p.fecha_cita) : ""); cargarActividades(p.id); }}
-                        style={{background:"none",border:"none",color:"#00A896",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                        style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:12,fontWeight:600}}>
                         Ver
                       </button>
                     </td>
@@ -7334,6 +7384,7 @@ export default function App() {
   return (
     <div style={{fontFamily:"'DM Sans',system-ui,sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",width:"100%"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
+      <ToastContainer/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;--text:#0D1829;--text2:#4A5568;--text3:#8A97A8;--accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);--radius-sm:8px;--radius-md:12px;--radius-lg:16px}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}select option{background:var(--surface)}input::placeholder{color:var(--text3)}textarea::placeholder{color:var(--text3)}textarea{box-sizing:border-box}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}`}</style>
