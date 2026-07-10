@@ -55,6 +55,28 @@ const fmtHora = (hhmm) => {
   return `${h12}:${String(m).padStart(2,"0")} ${ampm}`;
 };
 
+
+// ── Custom hooks ──────────────────────────────────────────────
+// Debounce — evita queries en cada keystroke
+const useDebounce = (value, delay = 300) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+};
+
+// Esc — cierra modal al presionar Escape
+const useEscClose = (isOpen, onClose) => {
+  useEffect(() => {
+    if(!isOpen) return;
+    const handler = (e) => { if(e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+};
+
 // ── Helpers para queries de Supabase ──────────────────────────
 async function safeQuery(queryFn, contexto = "query") {
   try {
@@ -4588,7 +4610,9 @@ function Ventas({perfil}) {
 
       {/* Modal editar venta */}
       {modalEditar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
+          onKeyDown={e=>e.key==="Escape"&&setModalEditar(null)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setModalEditar(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:440,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div>
@@ -4642,7 +4666,9 @@ function Ventas({perfil}) {
 
       {/* Modal nueva venta */}
       {modal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
+          onKeyDown={e=>e.key==="Escape"&&setModal(false)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setModal(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:540,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",maxHeight:"92vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"var(--text)"}}>Nueva venta</div>
@@ -5464,6 +5490,47 @@ function Sesiones({perfil}) {
   const enCurso    = sesiones.filter(s => s.estado === "en_curso").length;
   const pendientes = sesiones.filter(s => s.estado === "programada").length;
 
+  const [exportandoSes, setExportandoSes] = useState(false);
+
+  const exportarSesiones = async () => {
+    const lista = filtroEstado === "todos" ? sesiones : sesiones.filter(s => s.estado === filtroEstado);
+    if(!lista || lista.length === 0) { toast.info("No hay sesiones para exportar"); return; }
+    setExportandoSes(true);
+    try {
+      await new Promise((res, rej) => {
+        if(window.XLSX) return res();
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      const XLSX = window.XLSX;
+      const filas = lista.map(s => ({
+        "Fecha":          s.fecha || "",
+        "Hora inicio":    s.hora_inicio ? fmtHora(s.hora_inicio) : "",
+        "Hora fin":       s.hora_fin   ? fmtHora(s.hora_fin)    : "",
+        "Paciente":       s.paciente   || "",
+        "Sesión #":       s.numero_sesion || "",
+        "Cámara":         s.camara_numero ? `Cám #${s.camara_numero}` : "",
+        "Presión (ATA)":  s.presion_aplicada || "",
+        "Duración (min)": s.duracion_minutos || "",
+        "Estado":         s.estado || "",
+        "Sede":           s.sede_nombre || "",
+        "Observaciones":  s.observaciones || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(filas);
+      ws["!cols"] = [{wch:12},{wch:12},{wch:10},{wch:28},{wch:9},{wch:10},{wch:13},{wch:14},{wch:12},{wch:24},{wch:30}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Sesiones");
+      const periodo = modoRango ? `${fechaDesde}_${fechaHasta}` : fecha;
+      XLSX.writeFile(wb, `Oxynatur_Sesiones_${periodo}.xlsx`);
+      toast.success(`${lista.length} sesiones exportadas`);
+    } catch(e) {
+      toast.error("Error al exportar");
+    }
+    setExportandoSes(false);
+  };
+
   const comprasDelPaciente = (paciente_id) =>
     (comprasData || []).filter(c => c.paciente_id === paciente_id && c.sesiones_usadas < c.sesiones_totales);
 
@@ -5475,9 +5542,17 @@ function Sesiones({perfil}) {
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",marginBottom:4}}>Sesiones</h1>
           <p style={{color:"var(--text3)",fontSize:14}}>Agenda de sesiones hiperbáricas</p>
         </div>
-        {(f.esAdmin || f.esMedico || f.esEnfermero) && (
-          <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
-        )}
+        <div style={{display:"flex",gap:8}}>
+          {sesiones.length > 0 && (
+            <Btn variant="ghost" onClick={exportarSesiones} disabled={exportandoSes}
+              style={{fontSize:13}}>
+              {exportandoSes ? "Exportando..." : "↓ Excel"}
+            </Btn>
+          )}
+          {(f.esAdmin || f.esMedico || f.esEnfermero) && (
+            <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
+          )}
+        </div>
       </div>
 
       {/* Toolbar de filtros */}
@@ -5660,7 +5735,9 @@ function Sesiones({perfil}) {
 
       {/* Modal programar nueva sesión */}
       {modalNueva && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}
+          onKeyDown={e=>e.key==="Escape"&&setModalNueva(false)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setModalNueva(false)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Programar Sesión</div>
@@ -6262,7 +6339,9 @@ function Sesiones({perfil}) {
 
       {/* Modal confirmación cancelar sesión */}
       {confirmCancelar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
+          onKeyDown={e=>e.key==="Escape"&&setConfirmCancelar(null)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setConfirmCancelar(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:380,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
             <div style={{width:44,height:44,borderRadius:"50%",background:"#FEE2E2",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
@@ -6704,7 +6783,9 @@ function Alertas({perfil}) {
 
       {/* Modal nueva alerta manual */}
       {modalNueva && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}
+          onKeyDown={e=>e.key==="Escape"&&setModalNueva(false)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setModalNueva(false)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nueva Alerta Clínica</div>
@@ -7146,7 +7227,9 @@ function Prospectos({perfil}) {
 
       {/* Modal Nuevo Prospecto */}
       {modal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
+          onKeyDown={e=>e.key==="Escape"&&setModal(false)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setModal(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:480,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Prospecto</div>
@@ -7213,7 +7296,9 @@ function Prospectos({perfil}) {
 
       {/* Modal Ver Prospecto */}
       {modalVer && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
+          onKeyDown={e=>e.key==="Escape"&&setModalVer(null)} tabIndex={-1}
+          onClick={e=>e.target===e.currentTarget&&setModalVer(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:480,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>{modalVer.nombre}</div>
