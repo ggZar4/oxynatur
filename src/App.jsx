@@ -3625,46 +3625,87 @@ function AgendaMedico({perfil, cambiarVista}) {
                         );
                       })}
 
-                      {/* Sesiones */}
-                      {sesiones.map(s=>{
-                        const col    = ESTADO_COLOR[s.estado]||"var(--border2)";
-                        const min    = toMin(s.hora_inicio);
-                        const top    = min !== null ? toTop(min) : 0;
-                        const height = toHeight(s.duracion_minutos||60);
-                        return (
-                          <div key={s.id}
-                            onClick={()=>{ setFechaSelec(fecha); setVistaMode("dia"); }}
-                            style={{
-                              position:"absolute",
-                              top: Math.max(top,0),
-                              left:2, right:2,
-                              height,
-                              background:`${col}18`,
-                              border:`1px solid ${col}50`,
-                              borderLeft:`3px solid ${col}`,
-                              borderRadius:5,
-                              padding:"3px 5px",
-                              overflow:"hidden",
-                              cursor:"pointer",
-                              zIndex:1,
-                              transition:"filter 0.1s",
-                            }}
-                            onMouseEnter={e=>e.currentTarget.style.filter="brightness(0.93)"}
-                            onMouseLeave={e=>e.currentTarget.style.filter="none"}
-                          >
-                            <div style={{fontSize:9,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.2}}>
-                              {(s.paciente||"").split(" ").slice(-2).join(" ")}
-                            </div>
-                            {height >= 40 && (
-                              <div style={{fontSize:8,color:"var(--text3)",marginTop:1,lineHeight:1.2}}>
-                                {fmtHora(s.hora_inicio)}
-                                {s.camara_numero ? ` · Cam#${s.camara_numero}` : ""}
+                      {/* Sesiones — con detección de solapamientos */}
+                      {(()=>{
+                        // Calcular posición y dimensiones de cada sesión
+                        const items = sesiones.map(s=>({
+                          ...s,
+                          col: ESTADO_COLOR[s.estado]||"var(--border2)",
+                          min: toMin(s.hora_inicio),
+                          top: Math.max(toTop(toMin(s.hora_inicio)||0), 0),
+                          height: toHeight(s.duracion_minutos||60),
+                        }));
+
+                        // Algoritmo de columnas: asignar columna a cada evento
+                        // para evitar solapamiento visual
+                        const cols = []; // cols[i] = minuto fin del último evento en columna i
+                        const assigned = items.map(item=>{
+                          const startMin = item.min||0;
+                          const endMin   = startMin + (item.duracion_minutos||60);
+                          // Buscar columna disponible
+                          let colIdx = cols.findIndex(finCol => finCol <= startMin);
+                          if(colIdx === -1){ colIdx = cols.length; }
+                          cols[colIdx] = endMin;
+                          return { ...item, colIdx, totalCols: 0 }; // totalCols se recalcula abajo
+                        });
+
+                        // Calcular cuántas columnas se usan en cada franja
+                        // para dimensionar el ancho correctamente
+                        const withCols = assigned.map((item, i)=>{
+                          const startMin = item.min||0;
+                          const endMin   = startMin + (item.duracion_minutos||60);
+                          // Contar cuántos eventos se solapan con este
+                          const maxCol = assigned
+                            .filter(other=>{
+                              const oStart = other.min||0;
+                              const oEnd   = oStart + (other.duracion_minutos||60);
+                              return oStart < endMin && oEnd > startMin;
+                            })
+                            .reduce((max, o) => Math.max(max, o.colIdx+1), 1);
+                          return { ...item, totalCols: maxCol };
+                        });
+
+                        const GAP = 2;
+                        return withCols.map(s=>{
+                          const pct     = 100 / s.totalCols;
+                          const leftPct = s.colIdx * pct;
+                          return (
+                            <div key={s.id}
+                              onClick={()=>{ setFechaSelec(fecha); setVistaMode("dia"); }}
+                              style={{
+                                position:"absolute",
+                                top: s.top,
+                                left:`calc(${leftPct}% + ${GAP}px)`,
+                                width:`calc(${pct}% - ${GAP*2}px)`,
+                                height: s.height,
+                                background:`${s.col}18`,
+                                border:`1px solid ${s.col}50`,
+                                borderLeft:`3px solid ${s.col}`,
+                                borderRadius:5,
+                                padding:"3px 5px",
+                                overflow:"hidden",
+                                cursor:"pointer",
+                                zIndex:1,
+                                transition:"filter 0.1s",
+                                boxSizing:"border-box",
+                              }}
+                              onMouseEnter={e=>e.currentTarget.style.filter="brightness(0.93)"}
+                              onMouseLeave={e=>e.currentTarget.style.filter="none"}
+                            >
+                              <div style={{fontSize:9,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.2}}>
+                                {(s.paciente||"").split(" ").slice(-2).join(" ")}
                               </div>
-                            )}
-                            <div style={{position:"absolute",bottom:3,right:4,width:5,height:5,borderRadius:"50%",background:col}}/>
-                          </div>
-                        );
-                      })}
+                              {s.height >= 40 && (
+                                <div style={{fontSize:8,color:"var(--text3)",marginTop:1,lineHeight:1.2}}>
+                                  {fmtHora(s.hora_inicio)}
+                                  {s.camara_numero ? ` · Cam#${s.camara_numero}` : ""}
+                                </div>
+                              )}
+                              <div style={{position:"absolute",bottom:3,right:4,width:5,height:5,borderRadius:"50%",background:s.col}}/>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 );
