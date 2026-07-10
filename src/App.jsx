@@ -5298,6 +5298,10 @@ function Sesiones({perfil}) {
       return q;
     }, [], "Sesiones:camaras"
   );
+  const { data: sedesData } = useSupabaseQuery(
+    () => supabase.from("sedes").select("id,nombre").eq("activa",true).order("nombre"),
+    [], "Sesiones:sedes"
+  );
   const { data: comprasData } = useSupabaseQuery(
     () => supabase.from("compras_paciente")
       .select("id,paciente_id,sesiones_usadas,sesiones_totales,paquetes(nombre)")
@@ -5324,8 +5328,10 @@ function Sesiones({perfil}) {
   useEffect(() => { load(); }, [fecha, modoRango, fechaDesde, fechaHasta]); // eslint-disable-line
 
   // Form nueva sesión
+  const sedeDefecto = perfil?.sede_id || "";
   const formInicial = {
     paciente_id:"", camara_id:"", compra_id:"",
+    sede_id: sedeDefecto,
     fecha: hoy, hora_inicio:"08:00", hora_fin:"09:30",
     presion_aplicada:"2.0", duracion_minutos:"90",
     numero_sesion:"",
@@ -5375,7 +5381,7 @@ function Sesiones({perfil}) {
 
     // Obtener sede del paciente o del perfil
     const pac = pacientesData?.find(p => p.id === formNueva.paciente_id);
-    const sede_id = pac?.sede_principal_id || perfil?.sede_id;
+    const sede_id = formNueva.sede_id || pac?.sede_principal_id || perfil?.sede_id;
 
     const { error } = await safeQuery(() => supabase.from("sesiones").insert({
       paciente_id:       formNueva.paciente_id,
@@ -5812,9 +5818,18 @@ function Sesiones({perfil}) {
                 </div>
               )}
 
+              {/* Select sede — visible solo para admin */}
+              {f.esAdmin && (
+                <Select label="Sede" value={formNueva.sede_id}
+                  onChange={v=>setFormNueva(f=>({...f,sede_id:v,camara_id:""}))}
+                  options={(sedesData||[]).map(s=>({value:s.id,label:s.nombre}))} required/>
+              )}
+
               <Select label="Cámara" value={formNueva.camara_id}
                 onChange={v=>setFormNueva(f=>({...f,camara_id:v}))}
-                options={(camarasData||[]).map(c=>({value:c.id,label:`Cámara #${c.numero} — ${c.modelo}`}))} required/>
+                options={(camarasData||[])
+                  .filter(c => !formNueva.sede_id || c.sede_id === formNueva.sede_id)
+                  .map(c=>({value:c.id,label:`Cámara #${c.numero} — ${c.modelo}`}))} required/>
               {errNueva.camara_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.camara_id}</div>}
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
