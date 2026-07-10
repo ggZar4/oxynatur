@@ -82,7 +82,7 @@ async function safeQuery(queryFn, contexto = "query") {
   try {
     const result = await queryFn();
     if (result?.error) {
-      console.error(`[${contexto}] Error de Supabase:`, result.error);
+      // console.error(`[${contexto}] Error de Supabase:`, result.error);
       return { data: null, error: result.error };
     }
     return { data: result?.data ?? null, error: null };
@@ -120,7 +120,7 @@ const SEDE_COLOR = {
   "Molisalud": "#10B981",
   "Clínica San Miguel Arcángel": "#7C6AF7",
 };
-const getColor = (nombre) => SEDE_COLOR[nombre] || "#00A896";
+const getColor = (nombre) => SEDE_COLOR[nombre] || "var(--accent)";
 
 // ── FASE B: Helper central de roles ──────────────────────────
 // ÚNICA fuente de verdad para permisos en toda la app.
@@ -588,7 +588,7 @@ function DashboardMedico({perfil}) {
   },[]); // eslint-disable-line
 
   const PRIORIDAD_COLOR = {alta:"#F87171",media:"#F59E0B",baja:"var(--text3)"};
-  const ESTADO_COLOR    = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171"};
+  const ESTADO_COLOR    = {programada:"#F59E0B",en_curso:"var(--accent)",completada:"#10B981",cancelada:"#F87171"};
 
   if(loading) return <div style={{padding:32,color:"var(--text3)"}}>Cargando dashboard clínico...</div>;
 
@@ -1110,6 +1110,49 @@ function Pacientes({perfil}) {
     return () => { mounted = false; };
   },[]); // eslint-disable-line
 
+  const [exportandoPac, setExportandoPac] = useState(false);
+
+  const exportarPacientes = async () => {
+    if(!pacs || pacs.length === 0) { toast.info("No hay pacientes para exportar"); return; }
+    setExportandoPac(true);
+    try {
+      await new Promise((res, rej) => {
+        if(window.XLSX) return res();
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      const XLSX = window.XLSX;
+      const filas = pacs.map(p => ({
+        "Apellidos":          p.apellidos || "",
+        "Nombres":            p.nombres   || "",
+        "DNI":                p.dni       || "",
+        "Teléfono":           p.telefono  || "",
+        "Email":              p.email     || "",
+        "Género":             p.genero    || "",
+        "Fecha nacimiento":   p.fecha_nacimiento || "",
+        "Sede":               p.sedes?.nombre || "",
+        "Estado":             p.estado   || "",
+        "Sesiones realizadas":p.sesiones_realizadas || 0,
+        "Total prescritas":   p.total_sesiones_prescritas || 0,
+        "Canal origen":       p.canal_origen || "",
+        "Fecha registro":     p.fecha_registro ? p.fecha_registro.slice(0,10) : "",
+        "Notas admin":        p.notas_admin || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(filas);
+      ws["!cols"] = [{wch:20},{wch:20},{wch:12},{wch:14},{wch:24},{wch:8},{wch:14},{wch:20},{wch:10},{wch:18},{wch:16},{wch:14},{wch:14},{wch:30}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Pacientes");
+      const fecha = new Date().toLocaleDateString("en-CA");
+      XLSX.writeFile(wb, `Oxynatur_Pacientes_${fecha}.xlsx`);
+      toast.success(`${pacs.length} pacientes exportados`);
+    } catch(e) {
+      toast.error("Error al exportar");
+    }
+    setExportandoPac(false);
+  };
+
   const abrirPerfil = async (pac) => {
     setPacSelec(pac);
     setLoadingPerfil(true);
@@ -1118,7 +1161,7 @@ function Pacientes({perfil}) {
       safeQuery(()=>
         supabase.from("pacientes")
           .select("*, sedes!sede_principal_id(nombre)")
-          .eq("id", pac.id).single(),
+          .eq("id", pac.id).maybeSingle(),
         "Perfil:paciente"
       ),
       // Compras/paquetes activos e históricos
@@ -1212,7 +1255,7 @@ function Pacientes({perfil}) {
       sede_principal_id:form.sede_principal_id,
       total_sesiones_prescritas:parseInt(form.total_sesiones_prescritas)||0,
       estado:"activo",
-    }).select().single();
+    }).select().maybeSingle();
     if(!error && pac) {
       await supabase.from("historias_clinicas").insert({
         paciente_id:pac.id, sede_apertura_id:form.sede_principal_id,
@@ -1289,7 +1332,7 @@ function Pacientes({perfil}) {
                 <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
                   <svg width="72" height="72" viewBox="0 0 72 72">
                     <circle cx="36" cy="36" r="30" fill="none" stroke="var(--border)" strokeWidth="8"/>
-                    <circle cx="36" cy="36" r="30" fill="none" stroke="#00A896" strokeWidth="8"
+                    <circle cx="36" cy="36" r="30" fill="none" stroke="var(--accent)" strokeWidth="8"
                       strokeDasharray={`${2*Math.PI*30}`}
                       strokeDashoffset={`${2*Math.PI*30*(1-(pacSelec.sesiones_realizadas||0)/(pacSelec.total_sesiones_prescritas||1))}`}
                       strokeLinecap="round" transform="rotate(-90 36 36)"/>
@@ -1339,7 +1382,7 @@ function Pacientes({perfil}) {
                         </div>
                         {/* Barra de progreso */}
                         <div style={{height:4,background:"var(--border)",borderRadius:2,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#10B981":"#00A896",borderRadius:2,transition:"width .3s"}}/>
+                          <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#10B981":"var(--accent)",borderRadius:2,transition:"width .3s"}}/>
                         </div>
                         <div style={{fontSize:11,color:"var(--text3)",marginTop:3}}>{usadas}/{totales} sesiones usadas ({pct}%)</div>
                       </div>
@@ -1357,7 +1400,7 @@ function Pacientes({perfil}) {
             {ultimasSesiones.length===0
               ? <div style={{padding:"20px",textAlign:"center",color:"var(--text3)",fontSize:13}}>Sin sesiones registradas</div>
               : ultimasSesiones.map((s,i)=>{
-                  const ECOLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
+                  const ECOLOR = {programada:"#F59E0B",en_curso:"var(--accent)",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
                   return (
                     <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:12}}>
                       <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"var(--accent)",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
@@ -1414,7 +1457,14 @@ function Pacientes({perfil}) {
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)"}}>Pacientes</h1>
           <p style={{color:"var(--text3)",fontSize:14,marginTop:3}}>{filtrados.length} pacientes encontrados</p>
         </div>
-        {f.puedeCrearPaciente && <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>}
+        <div style={{display:"flex",gap:8}}>
+          {pacs.length > 0 && (
+            <Btn variant="ghost" onClick={exportarPacientes} disabled={exportandoPac} style={{fontSize:13}}>
+              {exportandoPac ? "Exportando..." : "↓ Excel"}
+            </Btn>
+          )}
+          {f.puedeCrearPaciente && <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>}
+        </div>
       </div>
       <input value={busq} onChange={e=>{setBusq(e.target.value);setPagina(0);}} placeholder="Buscar por nombre o DNI..."
         style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"9px 14px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:16,transition:"border-color .15s"}}/>
@@ -1905,7 +1955,7 @@ function HistoriasClinicas({perfil}) {
           supabase.from("historias_clinicas")
             .select("*, pacientes(id,nombres,apellidos,dni,estado,sesiones_realizadas,total_sesiones_prescritas), sedes!sede_apertura_id(nombre)")
             .eq("paciente_id", pacienteId)
-            .limit(1).single(), "HC:open_from_agenda"
+            .limit(1).maybeSingle(), "HC:open_from_agenda"
         );
         if(hcs && mounted) abrirPaciente(hcs);
       }
@@ -2130,7 +2180,7 @@ function HistoriasClinicas({perfil}) {
           firma_medico:      firmaTexto.trim(),
           medico_id:         perfil.id,
           es_borrador:       false,
-        }).select().single(),
+        }).select().maybeSingle(),
         "HC:firmar:crear"
       );
       if(nuevaEval) {
@@ -2234,7 +2284,7 @@ function HistoriasClinicas({perfil}) {
             <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface)",borderRadius:8}}>
               <input type="checkbox" checked={formHC.apto_hiperbarica!==false}
                 onChange={e=>setFormHC(f=>({...f,apto_hiperbarica:e.target.checked}))}
-                style={{width:16,height:16,accentColor:"#00A896"}}/>
+                style={{width:16,height:16,accentColor:"var(--accent)"}}/>
               <span style={{fontSize:14,color:"var(--text)"}}>Paciente apto para terapia hiperbárica</span>
             </div>
             {/* Screening de contraindicaciones absolutas */}
@@ -2428,7 +2478,7 @@ function HistoriasClinicas({perfil}) {
                       <div key={ev.id} style={{
                         background:"var(--surface)",
                         border:`1px solid ${ev.es_borrador?"#F59E0B40":"var(--border)"}`,
-                        borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"#00A896"}`,
+                        borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"var(--accent)"}`,
                         borderRadius:12,padding:"14px 18px",marginBottom:6,marginLeft:8,
                       }}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
@@ -2569,7 +2619,7 @@ function HistoriasClinicas({perfil}) {
                 </label>
                 <input type="range" min="0" max="10" value={formEval.nivel_dolor}
                   onChange={e=>setFormEval(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
-                  style={{width:"100%",accentColor:"#00A896"}}/>
+                  style={{width:"100%",accentColor:"var(--accent)"}}/>
               </div>
 
               <Select label="Estado general" value={formEval.estado_general}
@@ -2803,9 +2853,9 @@ function HistoriasClinicas({perfil}) {
           {[{id:"todas",nombre:"Todas"},...sedes].map(s=>(
             <button key={s.id} onClick={()=>setSedeTab(s.id)}
               style={{padding:"6px 16px",borderRadius:20,border:"1px solid",fontSize:13,cursor:"pointer",fontFamily:"inherit",
-                borderColor:sedeTab===s.id?"#00A896":"var(--border)",
+                borderColor:sedeTab===s.id?"var(--accent)":"var(--border)",
                 background:sedeTab===s.id?"#F0FDFB":"none",
-                color:sedeTab===s.id?"#00A896":"var(--text3)"}}>
+                color:sedeTab===s.id?"var(--accent)":"var(--text3)"}}>
               {s.nombre}
             </button>
           ))}
@@ -2818,7 +2868,7 @@ function HistoriasClinicas({perfil}) {
           : filtrados.map(hc=>(
             <div key={hc.id} onClick={()=>abrirPaciente(hc)}
               style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"14px 18px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}
-              onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="var(--accent-mid)"}
               onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
               <div>
                 <div style={{fontWeight:600,fontSize:15,color:"var(--text)",marginBottom:4}}>
@@ -3254,7 +3304,7 @@ function Usuarios({perfil:adminPerfil}) {
     load();
   };
 
-  const rolColor = {admin_general:"#00A896",admin_sede:"#7C6AF7",medico:"#F59E0B",enfermero:"#10B981"};
+  const rolColor = {admin_general:"var(--accent)",admin_sede:"#7C6AF7",medico:"#F59E0B",enfermero:"#10B981"};
   const rolLabel = (u) => {
     if(u.rol === "medico" && u.es_especialista) return "Médico Especialista";
     if(u.rol === "medico") return "Médico";
@@ -3427,8 +3477,8 @@ function MiniCal({ fecha, onChange, marcados=[] }) {
           return (
             <button key={d} onClick={()=>onChange(d)}
               style={{
-                background: esSelec ? "#00A896" : esHoy ? "#00A89615" : "none",
-                color:      esSelec ? "#fff" : esHoy ? "#00A896" : "var(--text)",
+                background: esSelec ? "var(--accent)" : esHoy ? "#00A89615" : "none",
+                color:      esSelec ? "#fff" : esHoy ? "var(--accent)" : "var(--text)",
                 border:     esHoy && !esSelec ? "0.5px solid #00A896" : "none",
                 borderRadius:6, padding:"5px 2px", cursor:"pointer",
                 fontFamily:"inherit", fontSize:12, fontWeight: esHoy||esSelec ? 700 : 400,
@@ -3469,7 +3519,7 @@ function AgendaMedico({perfil, cambiarVista}) {
   const [showCalAgenda, setShowCalAgenda] = useState(false);
   const [accionando, setAccionando] = useState(null); // id de sesion en acción
 
-  const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"#00A896",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
+  const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"var(--accent)",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
   const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
 
   // FIX #7 — getSemana memoizada, no recalcula en cada render
@@ -3649,7 +3699,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                       style={{
                         height:32, display:"flex", flexDirection:"column",
                         alignItems:"center", justifyContent:"center",
-                        borderBottom:`2px solid ${tieneEnCurso?"#00A896":esHoy(fecha)?"#00C4B4":"var(--border)"}`,
+                        borderBottom:`2px solid ${tieneEnCurso?"var(--accent)":esHoy(fecha)?"#00C4B4":"var(--border)"}`,
                         background: esHoy(fecha)?"#00C4B410":"var(--surface)",
                         cursor:"pointer", gap:1,
                         position:"sticky", top:0, zIndex:2,
@@ -3660,14 +3710,14 @@ function AgendaMedico({perfil, cambiarVista}) {
                       </div>
                       <div style={{
                         fontSize:15,fontWeight:700,fontFamily:"Syne,sans-serif",lineHeight:1,
-                        color:esHoy(fecha)?"#00A896":"var(--text)",
+                        color:esHoy(fecha)?"var(--accent)":"var(--text)",
                       }}>
                         {new Date(fecha+"T00:00:00").getDate()}
                       </div>
                       {totalDia>0 && (
                         <div style={{
                           fontSize:8,fontWeight:700,lineHeight:1,
-                          color:tieneEnCurso?"#00A896":"var(--text3)",
+                          color:tieneEnCurso?"var(--accent)":"var(--text3)",
                         }}>{totalDia}s</div>
                       )}
                     </div>
@@ -3885,9 +3935,9 @@ function AgendaMedico({perfil, cambiarVista}) {
           {[{id:"todas",nombre:"Todas"},...sedesData].map(s=>(
             <button key={s.id} onClick={()=>setSedeTab(s.id)}
               style={{padding:"5px 14px",borderRadius:20,border:"1px solid",fontSize:12,cursor:"pointer",fontFamily:"inherit",
-                borderColor:sedeTab===s.id?"#00A896":"var(--border)",
+                borderColor:sedeTab===s.id?"var(--accent)":"var(--border)",
                 background:sedeTab===s.id?"#F0FDFB":"none",
-                color:sedeTab===s.id?"#00A896":"var(--text3)"}}>
+                color:sedeTab===s.id?"var(--accent)":"var(--text3)"}}>
               {s.nombre}
             </button>
           ))}
@@ -3996,7 +4046,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                     <button
                       disabled={enAccion}
                       onClick={()=>cambiarEstado(s.id,"en_curso")}
-                      style={{background:enAccion?"var(--border2)":"#00A89618",border:`1px solid ${enAccion?"var(--border)":"#00A89650"}`,color:enAccion?"var(--text3)":"#00A896",fontSize:11,fontWeight:700,cursor:enAccion?"not-allowed":"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"inherit",width:"100%",textAlign:"center",transition:"all 0.15s"}}>
+                      style={{background:enAccion?"var(--border2)":"#00A89618",border:`1px solid ${enAccion?"var(--border)":"#00A89650"}`,color:enAccion?"var(--text3)":"var(--accent)",fontSize:11,fontWeight:700,cursor:enAccion?"not-allowed":"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"inherit",width:"100%",textAlign:"center",transition:"all 0.15s"}}>
                       {enAccion?"..." : "▶ Iniciar"}
                     </button>
                   )}
@@ -4492,9 +4542,9 @@ function Ventas({perfil}) {
                 loadVentas(s.id, 0, ciclo.desde, ciclo.hasta);
               }}
               style={{padding:"6px 14px",borderRadius:20,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",
-                borderColor: filtroSede===s.id ? "#00A896" : "var(--border)",
+                borderColor: filtroSede===s.id ? "var(--accent)" : "var(--border)",
                 background:  filtroSede===s.id ? "#F0FDFB" : "none",
-                color:       filtroSede===s.id ? "#00A896" : "var(--text3)"}}>
+                color:       filtroSede===s.id ? "var(--accent)" : "var(--text3)"}}>
               {s.nombre}
             </button>
           ))}
@@ -4630,7 +4680,7 @@ function Ventas({perfil}) {
                         {v.paquetes?.codigo || "—"}
                         <div style={{fontSize:11,color:"var(--text3)"}}>{v.paquetes?.nombre}</div>
                       </td>
-                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color:conDesc?"#F59E0B":"#00A896"}}>{fmtSol(pag)}</td>
+                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color:conDesc?"#F59E0B":"var(--accent)"}}>{fmtSol(pag)}</td>
                       <td style={{padding:"11px 14px",fontSize:12,color:"var(--text3)"}}>{v.metodo_pago}</td>
                       <td style={{padding:"11px 14px"}}>
                         {v.comprobante_url
@@ -4830,7 +4880,7 @@ function Ventas({perfil}) {
             <Input label="Monto cobrado (S/)" type="number" value={form.monto_pagado}
               onChange={v=>setForm({...form,monto_pagado:v})} placeholder="0.00" required error={err.monto_pagado}/>
             {calculo && form.monto_pagado && Number(form.monto_pagado) !== Number(calculo.precio_final) && (
-              <div style={{padding:"8px 12px",background:Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B20":"#00C4B420",border:`1px solid ${Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B40":"#00C4B440"}`,borderRadius:8,fontSize:12,color:"var(--text)",marginBottom:14}}>
+              <div style={{padding:"8px 12px",background:Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B20":"var(--accent-light)",border:`1px solid ${Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B40":"var(--accent-mid)"}`,borderRadius:8,fontSize:12,color:"var(--text)",marginBottom:14}}>
                 {Number(form.monto_pagado)<Number(calculo.precio_final)
                   ?`Cobrando ${fmtSol(Number(calculo.precio_final)-Number(form.monto_pagado))} menos del sugerido. Anota la razón abajo.`
                   :`Cobrando ${fmtSol(Number(form.monto_pagado)-Number(calculo.precio_final))} más del sugerido.`}
@@ -4873,9 +4923,9 @@ function Ventas({perfil}) {
                   ].map(s=>(
                     <button key={s.value} type="button"
                       onClick={()=>setForm(f=>({...f,segmento:s.value,paquete_id:""}))}
-                      style={{flex:1,padding:"8px 12px",borderRadius:10,border:`1.5px solid ${form.segmento===s.value?"#00A896":"var(--border)"}`,
+                      style={{flex:1,padding:"8px 12px",borderRadius:10,border:`1.5px solid ${form.segmento===s.value?"var(--accent)":"var(--border)"}`,
                         background:form.segmento===s.value?"#00A89610":"var(--surface)",
-                        color:form.segmento===s.value?"#00A896":"var(--text2)",
+                        color:form.segmento===s.value?"var(--accent)":"var(--text2)",
                         cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
                       <div style={{fontSize:13,fontWeight:600}}>{s.label}</div>
                       <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{s.desc}</div>
@@ -5036,7 +5086,7 @@ function DashboardSede({perfil}) {
     [sedeId, periodo.desde, periodo.hasta], "DashboardSede:ventas"
   );
   const { data: sedeData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("nombre").eq("id", sedeId).single(),
+    () => supabase.from("sedes").select("nombre").eq("id", sedeId).maybeSingle(),
     [sedeId], "DashboardSede:sede"
   );
 
@@ -5100,7 +5150,7 @@ function DashboardSede({perfil}) {
     a.click(); URL.revokeObjectURL(url);
   };
 
-  const kpi = (label, val, color="#00A896", sub="") => (
+  const kpi = (label, val, color="var(--accent)", sub="") => (
     <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,padding:"18px 20px",textAlign:"center"}}>
       <div style={{fontSize:28,fontWeight:700,color,lineHeight:1}}>{val ?? "—"}</div>
       {sub && <div style={{fontSize:11,color,marginTop:2}}>{sub}</div>}
@@ -5138,7 +5188,7 @@ function DashboardSede({perfil}) {
 
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
-        {kpi("Sesiones completadas", completadas, "#00A896")}
+        {kpi("Sesiones completadas", completadas, "var(--accent)")}
         {kpi("Pacientes atendidos", pacientesUnicos, "#6366F1")}
         {kpi("Ingreso bruto", fmtS(ingresoBruto), "#059669")}
         {kpi("En curso hoy", enCurso, "#F59E0B")}
@@ -5213,7 +5263,7 @@ function Sesiones({perfil}) {
   const f = getRolFlags(perfil);
 
   const ESTADO_COLOR = {
-    programada:"#F59E0B", en_curso:"#00A896",
+    programada:"#F59E0B", en_curso:"var(--accent)",
     completada:"#10B981", cancelada:"#F87171", no_asistio:"var(--text3)"
   };
   const ESTADO_LABEL = {
@@ -5765,7 +5815,7 @@ function Sesiones({perfil}) {
                 {s.estado === "programada" && (
                   <>
                     <button onClick={(e)=>{ e.stopPropagation(); setModalChecklist(s); setChecklist({}); }}
-                      style={{background:"#00A89620",border:"0.5px solid #00A89640",color:"var(--accent)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                      style={{background:"var(--accent-light)",border:"0.5px solid #00A89640",color:"var(--accent)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                       ▶ Iniciar
                     </button>
                     <button onClick={()=>cancelar(s)}
@@ -6029,7 +6079,7 @@ function Sesiones({perfil}) {
                         </label>
                         <input type="range" min="0" max="10" value={formCompletar.nivel_dolor}
                           onChange={e=>setFormCompletar(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
-                          style={{width:"100%",accentColor:"#00A896"}}/>
+                          style={{width:"100%",accentColor:"var(--accent)"}}/>
                         <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text3)",marginTop:2}}>
                           <span>Sin dolor</span><span>Dolor máximo</span>
                         </div>
@@ -6190,8 +6240,8 @@ function Sesiones({perfil}) {
                       background: checked ? "#ECFDF5" : "var(--surface2)",
                       border: `0.5px solid ${checked ? "#6EE7B7" : "var(--border)"}`,
                       transition:"all 0.15s"}}>
-                    <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${checked?"#00A896":"var(--border)"}`,
-                      background:checked?"#00A896":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                    <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${checked?"var(--accent)":"var(--border)"}`,
+                      background:checked?"var(--accent)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
                       {checked && <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>}
                     </div>
                     <span style={{fontSize:13,color:checked?"#065F46":"var(--text)",fontWeight:checked?500:400}}>
@@ -6398,7 +6448,7 @@ function Sesiones({perfil}) {
               <div style={{display:"flex",gap:8}}>
                 <Btn variant="ghost" onClick={()=>setModalIniciar(null)}>Cancelar</Btn>
                 <Btn onClick={confirmarIniciar} disabled={savingIniciar||Object.keys(cuestionarioPre).length<7}
-                  style={{background: hayAlertaPre?"#F59E0B":"#00A896"}}>
+                  style={{background: hayAlertaPre?"#F59E0B":"var(--accent)"}}>
                   {savingIniciar ? "Iniciando..." : hayAlertaPre ? "⚠ Iniciar con alerta" : "▶ Iniciar sesión"}
                 </Btn>
               </div>
@@ -6692,9 +6742,9 @@ function Alertas({perfil}) {
         ].map(f=>(
           <button key={f.id} onClick={()=>setFiltroEstado(f.id)}
             style={{padding:"6px 16px",borderRadius:20,border:"1px solid",fontSize:13,cursor:"pointer",fontFamily:"inherit",
-              borderColor:filtroEstado===f.id?"#00A896":"var(--border)",
+              borderColor:filtroEstado===f.id?"var(--accent)":"var(--border)",
               background:filtroEstado===f.id?"#F0FDFB":"none",
-              color:filtroEstado===f.id?"#00A896":"var(--text3)"}}>
+              color:filtroEstado===f.id?"var(--accent)":"var(--text3)"}}>
             {f.label}
           </button>
         ))}
@@ -6719,7 +6769,7 @@ function Alertas({perfil}) {
                 cursor:"pointer", transition:"border-color .2s",
                 display:"grid", gridTemplateColumns:"1fr auto", alignItems:"center", gap:16,
               }}
-              onMouseEnter={e=>e.currentTarget.style.borderColor="#00C4B440"}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="var(--accent-mid)"}
               onMouseLeave={e=>e.currentTarget.style.borderColor=alerta.estado==="nueva"?"#F8717140":"var(--border)"}>
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
@@ -6931,7 +6981,7 @@ function Prospectos({perfil}) {
     evaluacion_agendada:"Eval. Agendada", convertido:"Convertido", perdido:"Perdido"
   };
   const ESTADO_COLOR = {
-    nuevo:"#7C6AF7", contactado:"#00A896",
+    nuevo:"#7C6AF7", contactado:"var(--accent)",
     evaluacion_agendada:"#F59E0B", convertido:"#10B981", perdido:"#F87171"
   };
   const CANAL_LABEL = {
@@ -7079,7 +7129,7 @@ function Prospectos({perfil}) {
         sede_principal_id: modalVer.sede_id || null,
         canal_origen:      modalVer.canal || "otro",
         estado:            "activo",
-      }).select().single(), "Prospectos:convertir"
+      }).select().maybeSingle(), "Prospectos:convertir"
     );
 
     let pacienteId = pac?.id;
@@ -7088,7 +7138,7 @@ function Prospectos({perfil}) {
       // Si el error es DNI duplicado, buscar el paciente existente y vincularlo
       if(error?.code === "23505") {
         const { data: pacExistente } = await safeQuery(() =>
-          supabase.from("pacientes").select("id").eq("dni", convertForm.dni.trim()).single(),
+          supabase.from("pacientes").select("id").eq("dni", convertForm.dni.trim()).maybeSingle(),
           "Prospectos:buscarDuplicado"
         );
         if(pacExistente?.id) {
@@ -7221,9 +7271,9 @@ function Prospectos({perfil}) {
         {[{id:"todos",label:"Todos"},...ESTADOS.map(e=>({id:e,label:ESTADO_LABEL[e]}))].map(e=>(
           <button key={e.id} onClick={()=>setFiltroEstado(e.id)}
             style={{padding:"5px 14px",borderRadius:20,border:"0.5px solid",fontSize:12,fontWeight:600,cursor:"pointer",
-              borderColor: filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"#00A896") : "var(--border)",
-              background:  filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"#00A896")+"15" : "none",
-              color:       filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"#00A896") : "var(--text3)"}}>
+              borderColor: filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"var(--accent)") : "var(--border)",
+              background:  filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"var(--accent)")+"15" : "none",
+              color:       filtroEstado===e.id ? (ESTADO_COLOR[e.id]||"var(--accent)") : "var(--text3)"}}>
             {e.label}
           </button>
         ))}
@@ -7441,7 +7491,7 @@ function Prospectos({perfil}) {
                   ) : actividades.length === 0 ? (
                     <div style={{padding:"12px 14px",fontSize:12,color:"var(--text3)"}}>Sin actividad registrada aún</div>
                   ) : actividades.map((act,i) => {
-                    const tipoColor = {cambio_estado:"#00A896",nota:"#6366F1",llamada:"#F59E0B",whatsapp:"#10B981",email:"#3B82F6",sistema:"#9CA3AF"}[act.tipo]||"#9CA3AF";
+                    const tipoColor = {cambio_estado:"var(--accent)",nota:"#6366F1",llamada:"#F59E0B",whatsapp:"#10B981",email:"#3B82F6",sistema:"#9CA3AF"}[act.tipo]||"#9CA3AF";
                     const tipoIcon = {cambio_estado:"↻",nota:"✎",llamada:"☎",whatsapp:"💬",email:"✉",sistema:"⚙"}[act.tipo]||"●";
                     return (
                       <div key={act.id||i} style={{padding:"8px 14px",borderBottom:i<actividades.length-1?"0.5px solid var(--border)":"none",display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -7607,7 +7657,7 @@ export default function App() {
 
     const loadPerfil = async (userId) => {
       try {
-        const {data, error} = await supabase.from("perfiles").select("*").eq("id", userId).single();
+        const {data, error} = await supabase.from("perfiles").select("*").eq("id", userId).maybeSingle();
         if(error) throw error;
         return data;
       } catch(e) {
