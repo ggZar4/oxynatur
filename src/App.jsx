@@ -5656,7 +5656,9 @@ function Sesiones({perfil}) {
                 <div style={{color:"var(--text3)"}}>No hay sesiones{filtroEstado !== "todos" ? ` con estado "${ESTADO_LABEL[filtroEstado]}"` : " para este período"}</div>
               </Card>
             );
-            return sesionesFiltradas.map(s => (
+            return (
+              <div>
+              {sesionesFiltradas.map(s => (
             <div key={s.id} style={{
               background:"var(--surface)", border:"0.5px solid var(--border)",
               borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}`,
@@ -5729,8 +5731,9 @@ function Sesiones({perfil}) {
                 )}
               </div>
             </div>
-          ))
-          );
+          ))}
+              </div>
+            );
         })()}
 
       {/* Modal programar nueva sesión */}
