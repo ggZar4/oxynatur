@@ -1071,6 +1071,8 @@ function Pacientes({perfil}) {
   const [form, setForm]     = useState({nombres:"",apellidos:"",dni:"",telefono:"",email:"",genero:"",fecha_nacimiento:"",sede_principal_id:"",total_sesiones_prescritas:"",diagnostico_hc:""});
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState({});
+  const [pagina, setPagina] = useState(0);
+  const PAC_PAGE = 25; // pacientes por página
 
   // Perfil de paciente seleccionado
   const [pacSelec, setPacSelec]   = useState(null);
@@ -1188,6 +1190,8 @@ function Pacientes({perfil}) {
     const q = busq.toLowerCase();
     return p.nombres?.toLowerCase().includes(q) || p.apellidos?.toLowerCase().includes(q) || p.dni?.includes(q);
   });
+  const totalPaginas = Math.ceil(filtrados.length / PAC_PAGE);
+  const filtradosPag = filtrados.slice(pagina * PAC_PAGE, (pagina + 1) * PAC_PAGE);
 
   const setF = (k,v) => setForm(fm=>({...fm,[k]:v}));
 
@@ -1412,7 +1416,7 @@ function Pacientes({perfil}) {
         </div>
         {f.puedeCrearPaciente && <Btn onClick={()=>setModal(true)}>+ Nuevo Paciente</Btn>}
       </div>
-      <input value={busq} onChange={e=>setBusq(e.target.value)} placeholder="Buscar por nombre o DNI..."
+      <input value={busq} onChange={e=>{setBusq(e.target.value);setPagina(0);}} placeholder="Buscar por nombre o DNI..."
         style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"9px 14px",fontSize:14,fontFamily:"inherit",outline:"none",width:300,marginBottom:16,transition:"border-color .15s"}}/>
       {loading
         ? <div style={{color:"var(--text3)",padding:20}}>Cargando...</div>
@@ -1422,7 +1426,7 @@ function Pacientes({perfil}) {
             <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",padding:"9px 18px",background:"var(--surface2)",borderBottom:"0.5px solid var(--border)",fontSize:10,color:"var(--text3)",fontWeight:600,letterSpacing:"0.07em",textTransform:"uppercase"}}>
               <span>Paciente</span><span>DNI</span><span>Sede</span><span>Sesiones</span><span>Estado</span>
             </div>
-            {filtrados.map((p,rowIdx)=>(
+            {filtradosPag.map((p,rowIdx)=>(
               <div key={p.id} onClick={()=>abrirPerfil(p)}
                 style={{padding:"12px 18px",display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1fr 1fr",alignItems:"center",cursor:"pointer",borderBottom:"0.5px solid var(--border)",background:rowIdx%2===0?"transparent":"var(--surface2)",transition:"background .1s"}}
                 onMouseEnter={e=>e.currentTarget.style.background="var(--accent-light)"}
@@ -1457,6 +1461,32 @@ function Pacientes({perfil}) {
               </div>
             ))}
             {filtrados.length===0 && <div style={{color:"var(--text3)",textAlign:"center",padding:"40px 0",fontSize:14}}>No se encontraron pacientes</div>}
+            {filtrados.length>0 && totalPaginas>1 && (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderTop:"0.5px solid var(--border)",background:"var(--surface2)"}}>
+                <div style={{fontSize:12,color:"var(--text3)"}}>
+                  {pagina*PAC_PAGE+1}–{Math.min((pagina+1)*PAC_PAGE,filtrados.length)} de {filtrados.length} pacientes
+                </div>
+                <div style={{display:"flex",gap:4}}>
+                  <button onClick={()=>setPagina(0)} disabled={pagina===0}
+                    style={{background:"none",border:"0.5px solid var(--border)",color:pagina===0?"var(--text3)":"var(--text2)",padding:"5px 10px",borderRadius:6,cursor:pagina===0?"default":"pointer",fontFamily:"inherit",fontSize:12}}>«</button>
+                  <button onClick={()=>setPagina(p=>Math.max(0,p-1))} disabled={pagina===0}
+                    style={{background:"none",border:"0.5px solid var(--border)",color:pagina===0?"var(--text3)":"var(--text2)",padding:"5px 10px",borderRadius:6,cursor:pagina===0?"default":"pointer",fontFamily:"inherit",fontSize:12}}>‹</button>
+                  {Array.from({length:Math.min(5,totalPaginas)},(_,i)=>{
+                    const pg = Math.max(0,Math.min(totalPaginas-5,pagina-2))+i;
+                    return (
+                      <button key={pg} onClick={()=>setPagina(pg)}
+                        style={{background:pagina===pg?"var(--accent)":"none",border:"0.5px solid var(--border)",color:pagina===pg?"white":"var(--text2)",padding:"5px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:pagina===pg?600:400,minWidth:32}}>
+                        {pg+1}
+                      </button>
+                    );
+                  })}
+                  <button onClick={()=>setPagina(p=>Math.min(totalPaginas-1,p+1))} disabled={pagina===totalPaginas-1}
+                    style={{background:"none",border:"0.5px solid var(--border)",color:pagina===totalPaginas-1?"var(--text3)":"var(--text2)",padding:"5px 10px",borderRadius:6,cursor:pagina===totalPaginas-1?"default":"pointer",fontFamily:"inherit",fontSize:12}}>›</button>
+                  <button onClick={()=>setPagina(totalPaginas-1)} disabled={pagina===totalPaginas-1}
+                    style={{background:"none",border:"0.5px solid var(--border)",color:pagina===totalPaginas-1?"var(--text3)":"var(--text2)",padding:"5px 10px",borderRadius:6,cursor:pagina===totalPaginas-1?"default":"pointer",fontFamily:"inherit",fontSize:12}}>»</button>
+                </div>
+              </div>
+            )}
             </div>
           </>
         )
@@ -4034,6 +4064,8 @@ function Ventas({perfil}) {
   const [filtroHasta, setFiltroHasta] = useState("");
   const [busqVenta, setBusqVenta] = useState("");
   const busqVentaDebounced = useDebounce(busqVenta, 350);
+  const [filtroMetodo, setFiltroMetodo] = useState("todos");
+  const [filtroEstadoV, setFiltroEstadoV] = useState("todos");
   const [busqResultados, setBusqResultados] = useState(null);
   const [loadingBusq, setLoadingBusq] = useState(false);
   const [paginaVentas, setPaginaVentas] = useState(0);
@@ -4489,33 +4521,54 @@ function Ventas({perfil}) {
         </Card>
       </div>
 
-      {/* Filtro por fecha + buscador */}
+      {/* Filtro por fecha + buscador + método pago */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-        <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>Período:</span>
-        <input type="date" value={filtroDesde}
-          onChange={e=>{ setFiltroDesde(e.target.value); loadVentas(undefined,0,e.target.value,filtroHasta); }}
-          style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}/>
-        <span style={{fontSize:12,color:"var(--text3)"}}>→</span>
-        <input type="date" value={filtroHasta}
-          onChange={e=>{ setFiltroHasta(e.target.value); loadVentas(undefined,0,filtroDesde,e.target.value); }}
-          style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}/>
-        <button onClick={()=>{ setFiltroDesde(""); setFiltroHasta(""); loadVentas(undefined,0,"",""); }}
-          style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"none",color:"var(--text3)",fontSize:12,cursor:"pointer"}}>
-          Limpiar
-        </button>
+          <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>Período:</span>
+          <input type="date" value={filtroDesde}
+            onChange={e=>{ setFiltroDesde(e.target.value); loadVentas(undefined,0,e.target.value,filtroHasta); }}
+            style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}/>
+          <span style={{fontSize:12,color:"var(--text3)"}}>→</span>
+          <input type="date" value={filtroHasta}
+            onChange={e=>{ setFiltroHasta(e.target.value); loadVentas(undefined,0,filtroDesde,e.target.value); }}
+            style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit"}}/>
+          <button onClick={()=>{ setFiltroDesde(""); setFiltroHasta(""); loadVentas(undefined,0,"",""); }}
+            style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"none",color:"var(--text3)",fontSize:12,cursor:"pointer"}}>
+            Limpiar
+          </button>
         </div>
-        {/* Buscador */}
-        <input
-          type="text"
-          placeholder="🔍 Buscar paciente o comprobante..."
-          value={busqVenta}
-          onChange={e=>{ const v=e.target.value; setBusqVenta(v); if(!v){ setBusqResultados(null); } else { clearTimeout(window._busqVentaTimer); window._busqVentaTimer=setTimeout(()=>buscarVentas(v),400); } }}
-          style={{padding:"7px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit",minWidth:260,outline:"none"}}
-        />
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <select value={filtroMetodo} onChange={e=>setFiltroMetodo(e.target.value)}
+            style={{padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:12,fontFamily:"inherit",outline:"none"}}>
+            <option value="todos">Todos los métodos</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="yape">Yape</option>
+            <option value="plin">Plin</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="kiwi">Kiwi</option>
+          </select>
+          <select value={filtroEstadoV} onChange={e=>setFiltroEstadoV(e.target.value)}
+            style={{padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:12,fontFamily:"inherit",outline:"none"}}>
+            <option value="todos">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="agotado">Agotado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <input type="text" placeholder="Buscar paciente o comprobante..."
+            value={busqVenta}
+            onChange={e=>{ const v=e.target.value; setBusqVenta(v); if(!v){ setBusqResultados(null); } else { clearTimeout(window._busqVentaTimer); window._busqVentaTimer=setTimeout(()=>buscarVentas(v),400); } }}
+            style={{padding:"7px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,fontFamily:"inherit",minWidth:200,outline:"none"}}/>
+          {(filtroMetodo!=="todos"||filtroEstadoV!=="todos") && (
+            <button onClick={()=>{setFiltroMetodo("todos");setFiltroEstadoV("todos");}}
+              style={{padding:"6px 10px",borderRadius:8,border:"0.5px solid var(--accent-mid)",background:"var(--accent-light)",color:"var(--accent)",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
+              Limpiar filtros
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Tabla */}
+            {/* Tabla */}
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:600,color:"var(--text2)",letterSpacing:"0.02em"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -4554,7 +4607,11 @@ function Ventas({perfil}) {
                 </tr>
               </thead>
               <tbody>
-                {(busqResultados !== null ? busqResultados : ventas).map(v=>{
+                {(busqResultados !== null ? busqResultados : ventas).filter(v=>{
+                    if(filtroMetodo!=="todos" && v.metodo_pago!==filtroMetodo) return false;
+                    if(filtroEstadoV!=="todos" && v.estado!==filtroEstadoV) return false;
+                    return true;
+                  }).map(v=>{
                   const sug = Number(v.precio_sugerido||0);
                   const pag = Number(v.monto_pagado||0);
                   const conDesc = sug > 0 && pag < sug;
