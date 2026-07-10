@@ -4011,6 +4011,7 @@ function Ventas({perfil}) {
   const [filtroDesde, setFiltroDesde] = useState("");
   const [filtroHasta, setFiltroHasta] = useState("");
   const [busqVenta, setBusqVenta] = useState("");
+  const busqVentaDebounced = useDebounce(busqVenta, 350);
   const [busqResultados, setBusqResultados] = useState(null);
   const [loadingBusq, setLoadingBusq] = useState(false);
   const [paginaVentas, setPaginaVentas] = useState(0);
@@ -4101,8 +4102,43 @@ function Ventas({perfil}) {
   const [calculo, setCalculo]   = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [saving, setSaving]     = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(null); // "subiendo" | null
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [err, setErr]           = useState({});
+  const [modalEditar, setModalEditar] = useState(null);
+  const [formEditar, setFormEditar]   = useState({monto_pagado:"", metodo_pago:"efectivo", notas:"", numero_comprobante:""});
+  const [savingEditar, setSavingEditar] = useState(false);
+
+  const abrirEditar = (v) => {
+    setFormEditar({
+      monto_pagado:       String(v.monto_pagado || ""),
+      metodo_pago:        v.metodo_pago || "efectivo",
+      notas:              v.notas || "",
+      numero_comprobante: v.numero_comprobante || "",
+    });
+    setModalEditar(v);
+  };
+
+  const guardarEdicion = async () => {
+    if(!formEditar.monto_pagado || Number(formEditar.monto_pagado) <= 0) {
+      toast.error("El monto debe ser mayor a 0");
+      return;
+    }
+    setSavingEditar(true);
+    const { error } = await safeQuery(
+      () => supabase.from("compras_paciente").update({
+        monto_pagado:       Number(formEditar.monto_pagado),
+        metodo_pago:        formEditar.metodo_pago,
+        notas:              formEditar.notas || null,
+        numero_comprobante: formEditar.numero_comprobante || null,
+      }).eq("id", modalEditar.id),
+      "Ventas:editar"
+    );
+    setSavingEditar(false);
+    if(error) { toast.error("Error al guardar cambios"); return; }
+    toast.success("Venta actualizada correctamente");
+    setModalEditar(null);
+    loadVentas();
+  };
 
   // Cálculo automático de precio al cambiar paquete
   useEffect(()=>{
@@ -4528,10 +4564,17 @@ function Ventas({perfil}) {
                         {v.estado === "cancelado"
                           ? <span style={{fontSize:11,fontWeight:600,color:"#9CA3AF",background:"var(--surface2)",padding:"3px 8px",borderRadius:6}}>Anulada</span>
                           : f.esAdmin && (
-                          <button onClick={()=>anularVenta(v)}
-                            style={{background:"none",border:"none",color:"#EF4444",padding:"4px 2px",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:500,textDecoration:"underline",textDecorationColor:"#FECACA"}}>
-                            Anular
-                          </button>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <button onClick={()=>abrirEditar(v)}
+                              style={{background:"none",border:"none",color:"var(--accent)",padding:"4px 2px",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:500,textDecoration:"underline",textDecorationColor:"var(--accent-mid)"}}>
+                              Editar
+                            </button>
+                            <span style={{color:"var(--border2)"}}>·</span>
+                            <button onClick={()=>anularVenta(v)}
+                              style={{background:"none",border:"none",color:"#EF4444",padding:"4px 2px",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:500,textDecoration:"underline",textDecorationColor:"#FECACA"}}>
+                              Anular
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -4542,6 +4585,60 @@ function Ventas({perfil}) {
           </div>
         )}
       </Card>
+
+      {/* Modal editar venta */}
+      {modalEditar && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:440,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Editar venta</div>
+                <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
+                  {modalEditar.pacientes ? `${modalEditar.pacientes.apellidos}, ${modalEditar.pacientes.nombres}` : ""} · {modalEditar.fecha_compra}
+                </div>
+              </div>
+              <button onClick={()=>setModalEditar(null)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
+            </div>
+
+            <div style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"10px 14px",marginBottom:16,fontSize:12,color:"var(--text2)"}}>
+              <span style={{color:"var(--text3)"}}>Paquete: </span>{modalEditar.paquetes?.nombre || "—"}
+              <span style={{color:"var(--text3)",marginLeft:12}}>Precio sugerido: </span>
+              <span style={{fontWeight:600,color:"var(--text)"}}>{fmtSol(modalEditar.precio_sugerido||0)}</span>
+            </div>
+
+            <Input label="Monto pagado (S/)" value={formEditar.monto_pagado}
+              onChange={v=>setFormEditar(f=>({...f,monto_pagado:v}))} type="number" required/>
+
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Método de pago</label>
+              <select value={formEditar.metodo_pago} onChange={e=>setFormEditar(f=>({...f,metodo_pago:e.target.value}))}
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="yape">Yape</option>
+                <option value="plin">Plin</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="kiwi">Kiwi (cuotas)</option>
+              </select>
+            </div>
+
+            <Input label="N° comprobante" value={formEditar.numero_comprobante}
+              onChange={v=>setFormEditar(f=>({...f,numero_comprobante:v}))} placeholder="B001-0001"/>
+
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Notas</label>
+              <textarea value={formEditar.notas} onChange={e=>setFormEditar(f=>({...f,notas:e.target.value}))}
+                placeholder="Observaciones, acuerdos, etc."
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical",minHeight:70}}/>
+            </div>
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:14,borderTop:"0.5px solid var(--border)"}}>
+              <Btn variant="ghost" onClick={()=>setModalEditar(null)} disabled={savingEditar}>Cancelar</Btn>
+              <Btn onClick={guardarEdicion} disabled={savingEditar}>{savingEditar?"Guardando...":"Guardar cambios"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal nueva venta */}
       {modal && (
@@ -5044,6 +5141,10 @@ function Sesiones({perfil}) {
   // Fecha seleccionada — default hoy
   const hoy = fechaHoyLima();
   const [fecha, setFecha]       = useState(hoy);
+  const [modoRango, setModoRango] = useState(false);
+  const [fechaDesde, setFechaDesde] = useState(hoy);
+  const [fechaHasta, setFechaHasta] = useState(hoy);
+  const [filtroEstado, setFiltroEstado] = useState("todos");
   const [sesiones, setSesiones] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [verSesion, setVerSesion] = useState(null);  // modal detalle/completar
@@ -5127,11 +5228,10 @@ function Sesiones({perfil}) {
     // Validar rangos de signos vitales
     const alertasSignos = validarSignosPre();
     if(alertasSignos.length > 0) {
-      const msg = "ATENCION: Se detectaron valores fuera de rango:\n\n" +
-        alertasSignos.map(a => "• " + a).join("\n") +
-        "\n\nSegún el protocolo, debe llamar al médico on-call antes de iniciar.\n\n¿Continuar de todas formas?";
-      const ok = window.confirm(msg);
-      if(!ok) { setSavingIniciar(false); return; }
+      // Mostrar advertencia via toast pero continuar (el enfermero debe llamar al médico)
+      alertasSignos.forEach(a => toast.error("⚠️ " + a));
+      // Pausa breve para que se lean los toasts
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     const { error } = await safeQuery(()=> supabase.from("sesiones").update({
@@ -5182,7 +5282,12 @@ function Sesiones({perfil}) {
   const load = async () => {
     setLoading(true);
     const { data } = await safeQuery(() => {
-      let q = supabase.from("vista_agenda_hoy").select("*").eq("fecha", fecha).order("hora_inicio");
+      let q = supabase.from("vista_agenda_hoy").select("*").order("fecha").order("hora_inicio");
+      if(modoRango) {
+        q = q.gte("fecha", fechaDesde).lte("fecha", fechaHasta);
+      } else {
+        q = q.eq("fecha", fecha);
+      }
       if(perfil?.sede_id && !f.esAdmin && !f.esMedicoEsp) q = q.eq("sede_id", perfil.sede_id);
       return q;
     }, "Sesiones:load");
@@ -5190,7 +5295,7 @@ function Sesiones({perfil}) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [fecha]); // eslint-disable-line
+  useEffect(() => { load(); }, [fecha, modoRango, fechaDesde, fechaHasta]); // eslint-disable-line
 
   // Form nueva sesión
   const formInicial = {
@@ -5318,10 +5423,15 @@ function Sesiones({perfil}) {
     load();
   };
 
+  const [confirmCancelar, setConfirmCancelar] = useState(null);
   const cancelar = async (sesion) => {
-    if(!window.confirm("¿Cancelar esta sesión?")) return;
-    await safeQuery(() => supabase.from("sesiones").update({ estado:"cancelada" }).eq("id", sesion.id), "Sesiones:cancelar");
+    setConfirmCancelar(sesion);
+  };
+  const ejecutarCancelar = async () => {
+    if(!confirmCancelar) return;
+    await safeQuery(() => supabase.from("sesiones").update({ estado:"cancelada" }).eq("id", confirmCancelar.id), "Sesiones:cancelar");
     toast.info("Sesión cancelada");
+    setConfirmCancelar(null);
     load();
   };
 
@@ -5360,35 +5470,87 @@ function Sesiones({perfil}) {
   return (
     <div>
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
         <div>
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",marginBottom:4}}>Sesiones</h1>
           <p style={{color:"var(--text3)",fontSize:14}}>Agenda de sesiones hiperbáricas</p>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()-1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
-            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:16,lineHeight:1}}>‹</button>
-          <div style={{position:"relative"}}>
-            <button onClick={()=>setShowCal(c=>!c)}
-              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text)",
-                padding:"7px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,
-                display:"flex",alignItems:"center",gap:6}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              {new Date(fecha+"T12:00:00").toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"})}
+        {(f.esAdmin || f.esMedico || f.esEnfermero) && (
+          <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
+        )}
+      </div>
+
+      {/* Toolbar de filtros */}
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:20,flexWrap:"wrap"}}>
+        {/* Toggle día / rango */}
+        <div style={{display:"flex",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:3,gap:2}}>
+          {[{k:false,l:"Día"},{k:true,l:"Rango"}].map(({k,l})=>(
+            <button key={String(k)} onClick={()=>setModoRango(k)}
+              style={{padding:"5px 14px",borderRadius:6,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:500,
+                background:modoRango===k?"var(--accent)":"transparent",
+                color:modoRango===k?"white":"var(--text2)",transition:"all .12s"}}>
+              {l}
             </button>
-            {showCal && (
-              <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,zIndex:100}}
-                onMouseLeave={()=>setShowCal(false)}>
-                <MiniCal fecha={fecha} onChange={d=>{ setFecha(d); setShowCal(false); }}/>
-              </div>
-            )}
-          </div>
-          <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()+1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
-            style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:16,lineHeight:1}}>›</button>
-          {(f.esAdmin || f.esMedico || f.esEnfermero) && (
-            <Btn onClick={()=>setModalNueva(true)}>+ Programar sesión</Btn>
-          )}
+          ))}
         </div>
+
+        {/* Controles de fecha */}
+        {!modoRango ? (
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()-1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 10px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontSize:15,lineHeight:1}}>‹</button>
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowCal(c=>!c)}
+                style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text)",
+                  padding:"6px 12px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,
+                  display:"flex",alignItems:"center",gap:6}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                {new Date(fecha+"T12:00:00").toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"})}
+              </button>
+              {showCal && (
+                <div style={{position:"absolute",top:"calc(100% + 8px)",left:0,zIndex:100}}
+                  onMouseLeave={()=>setShowCal(false)}>
+                  <MiniCal fecha={fecha} onChange={d=>{ setFecha(d); setShowCal(false); }}/>
+                </div>
+              )}
+            </div>
+            <button onClick={()=>{ const d=new Date(fecha+"T12:00:00"); d.setDate(d.getDate()+1); setFecha(d.toLocaleDateString("en-CA",{timeZone:"America/Lima"})); }}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 10px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontSize:15,lineHeight:1}}>›</button>
+            <button onClick={()=>setFecha(hoy)}
+              style={{background:"var(--accent-light)",border:"0.5px solid var(--accent-mid)",color:"var(--accent)",padding:"6px 10px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:500}}>
+              Hoy
+            </button>
+          </div>
+        ) : (
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <input type="date" value={fechaDesde} onChange={e=>setFechaDesde(e.target.value)}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"6px 10px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+            <span style={{color:"var(--text3)",fontSize:12}}>hasta</span>
+            <input type="date" value={fechaHasta} onChange={e=>setFechaHasta(e.target.value)}
+              style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"6px 10px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+            {/* Shortcuts */}
+            {[
+              {l:"Esta semana", fn:()=>{ const d=new Date(); const mon=new Date(d); mon.setDate(d.getDate()-d.getDay()+1); const sun=new Date(mon); sun.setDate(mon.getDate()+6); setFechaDesde(mon.toLocaleDateString("en-CA")); setFechaHasta(sun.toLocaleDateString("en-CA")); }},
+              {l:"Este mes",    fn:()=>{ const d=new Date(); setFechaDesde(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`); setFechaHasta(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${new Date(d.getFullYear(),d.getMonth()+1,0).getDate()}`); }},
+            ].map(({l,fn})=>(
+              <button key={l} onClick={fn}
+                style={{background:"var(--surface2)",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"6px 10px",borderRadius:"var(--radius-sm)",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:500}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Filtro por estado */}
+        <select value={filtroEstado} onChange={e=>setFiltroEstado(e.target.value)}
+          style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"6px 10px",fontSize:12,fontFamily:"inherit",outline:"none",marginLeft:"auto"}}>
+          <option value="todos">Todos los estados</option>
+          <option value="programada">Programada</option>
+          <option value="en_curso">En curso</option>
+          <option value="completada">Completada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="no_asistio">No asistió</option>
+        </select>
       </div>
 
       {/* KPIs */}
@@ -5408,13 +5570,18 @@ function Sesiones({perfil}) {
 
       {/* Lista sesiones */}
       {loading
-        ? <div style={{color:"var(--text3)",padding:20}}>Cargando agenda...</div>
-        : sesiones.length === 0
-          ? <Card style={{textAlign:"center",padding:"50px"}}>
-              <div style={{fontSize:36,opacity:.3,marginBottom:12}}>⚡</div>
-              <div style={{color:"var(--text3)"}}>No hay sesiones para esta fecha</div>
-            </Card>
-          : sesiones.map(s => (
+        ? <div style={{color:"var(--text3)",padding:20}}>Cargando...</div>
+        : (()=>{
+            const sesionesFiltradas = filtroEstado === "todos"
+              ? sesiones
+              : sesiones.filter(s => s.estado === filtroEstado);
+            if(sesionesFiltradas.length === 0) return (
+              <Card style={{textAlign:"center",padding:"50px"}}>
+                <div style={{fontSize:36,opacity:.3,marginBottom:12}}>⚡</div>
+                <div style={{color:"var(--text3)"}}>No hay sesiones{filtroEstado !== "todos" ? ` con estado "${ESTADO_LABEL[filtroEstado]}"` : " para este período"}</div>
+              </Card>
+            );
+            return sesionesFiltradas.map(s => (
             <div key={s.id} style={{
               background:"var(--surface)", border:"0.5px solid var(--border)",
               borderLeft:`3px solid ${ESTADO_COLOR[s.estado]||"var(--border2)"}`,
@@ -5488,7 +5655,8 @@ function Sesiones({perfil}) {
               </div>
             </div>
           ))
-      }
+          )))();
+        })()}
 
       {/* Modal programar nueva sesión */}
       {modalNueva && (
@@ -6090,6 +6258,29 @@ function Sesiones({perfil}) {
       {/* ── MIS OBSERVACIONES — solo enfermero ── */}
       {f.esEnfermero && (
         <MisObservaciones perfil={perfil}/>
+      )}
+
+      {/* Modal confirmación cancelar sesión */}
+      {confirmCancelar && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}>
+          <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:380,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div style={{width:44,height:44,borderRadius:"50%",background:"#FEE2E2",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            </div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:6}}>¿Cancelar esta sesión?</div>
+            <div style={{fontSize:13,color:"var(--text3)",marginBottom:6}}>{confirmCancelar.paciente}</div>
+            <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>
+              {confirmCancelar.fecha} · {fmtHora(confirmCancelar.hora_inicio)} · {confirmCancelar.sede_nombre}
+            </div>
+            <div style={{fontSize:12,color:"#DC2626",background:"#FEE2E2",borderRadius:"var(--radius-sm)",padding:"8px 12px",marginBottom:20}}>
+              Esta acción no se puede deshacer.
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setConfirmCancelar(null)}>Volver</Btn>
+              <Btn variant="danger" onClick={ejecutarCancelar}>Sí, cancelar sesión</Btn>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
