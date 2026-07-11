@@ -194,6 +194,23 @@ const Spinner = () => (
   </div>
 );
 
+
+// Genera opciones de hora en formato 12h AM/PM — slots de 30 min
+const HORA_OPTIONS = (() => {
+  const opts = [];
+  for(let h = 6; h <= 21; h++) {
+    for(let m of [0, 30]) {
+      if(h === 21 && m === 30) break;
+      const val  = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+      const ampm = h < 12 ? "am" : "pm";
+      const h12  = h % 12 || 12;
+      const label = `${h12}:${String(m).padStart(2,"0")} ${ampm}`;
+      opts.push({value: val, label});
+    }
+  }
+  return opts;
+})();
+
 // ── Toast notification system ──────────────────────────────────────────────
 let __toastFn = null;
 const toast = {
@@ -2112,7 +2129,7 @@ function HistoriasClinicas({perfil}) {
         embarazo:            formEval.embarazo,
         fiebre_activa:       formEval.fiebre_activa,
         presion_indicada:    parseFloat(formEval.presion_indicada)||2.0,
-        duracion_minutos:    [60,90,120].includes(parseInt(formEval.duracion_minutos)) ? parseInt(formEval.duracion_minutos) : 90,
+        duracion_minutos:    [60,90,120].includes(parseInt(formEval.duracion_minutos)) ? parseInt(formEval.duracion_minutos) : 60,
         incidencias:         formEval.incidencias||'',
         observaciones:       formEval.observaciones||'',
         evolucion:           formEval.evolucion||'',
@@ -5439,8 +5456,8 @@ function Sesiones({perfil}) {
   const formInicial = {
     paciente_id:"", camara_id:"", compra_id:"",
     sede_id: sedeDefecto,
-    fecha: hoy, hora_inicio:"08:00", hora_fin:"09:30",
-    presion_aplicada:"2.0", duracion_minutos:"90",
+    fecha: hoy, hora_inicio:"08:00", hora_fin:"09:00",
+    presion_aplicada:"2.0", duracion_minutos:"60",
     numero_sesion:"",
   };
   const [formNueva, setFormNueva] = useState(formInicial);
@@ -5499,7 +5516,7 @@ function Sesiones({perfil}) {
       hora_inicio:       formNueva.hora_inicio,
       hora_fin:          formNueva.hora_fin,
       presion_aplicada:  parseFloat(formNueva.presion_aplicada) || 2.0,
-      duracion_minutos:  parseInt(formNueva.duracion_minutos) || 90,
+      duracion_minutos:  parseInt(formNueva.duracion_minutos) || 60,
       numero_sesion:     (() => { const c = comprasData?.find(x=>x.id===formNueva.compra_id) || comprasDelPaciente(formNueva.paciente_id)[0]; return c ? c.sesiones_usadas+1 : 1; })(),
       estado:            "programada",
       enfermero_id:      f.esEnfermero ? perfil.id : null,
@@ -5831,7 +5848,7 @@ function Sesiones({perfil}) {
                   </button>
                 )}
                 {s.estado === "cancelada" && (f.esAdmin || f.esEnfermero || f.esMedico) && (
-                  <button onClick={()=>{ setModalReprog(s); setFormReprog({fecha:fecha,hora_inicio:s.hora_inicio?.slice(0,5)||"08:00",hora_fin:s.hora_fin?.slice(0,5)||"09:30"}); }}
+                  <button onClick={()=>{ setModalReprog(s); setFormReprog({fecha:fecha,hora_inicio:s.hora_inicio?.slice(0,5)||"08:00",hora_fin:s.hora_fin?.slice(0,5)||"09:00"}); }}
                     style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                     📅 Reprogramar
                   </button>
@@ -5956,10 +5973,21 @@ function Sesiones({perfil}) {
                     }
                   </div>
                 </div>
-                <Input label="Hora inicio" type="time" value={formNueva.hora_inicio}
-                  onChange={v=>setFormNueva(f=>({...f,hora_inicio:v}))} required error={errNueva.hora_inicio}/>
-                <Input label="Hora fin estimada" type="time" value={formNueva.hora_fin}
-                  onChange={v=>setFormNueva(f=>({...f,hora_fin:v}))}/>
+                <div style={{marginBottom:14}}>
+                  <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora inicio <span style={{color:"#F87171"}}>*</span></label>
+                  <select value={formNueva.hora_inicio} onChange={e=>setFormNueva(f=>({...f,hora_inicio:e.target.value}))}
+                    style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${errNueva.hora_inicio?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                    {HORA_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  {errNueva.hora_inicio && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{errNueva.hora_inicio}</div>}
+                </div>
+                <div style={{marginBottom:14}}>
+                  <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora fin estimada</label>
+                  <select value={formNueva.hora_fin} onChange={e=>setFormNueva(f=>({...f,hora_fin:e.target.value}))}
+                    style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                    {HORA_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
                 <Input label="Presión (ATA)" type="number" value={formNueva.presion_aplicada}
                   onChange={v=>setFormNueva(f=>({...f,presion_aplicada:v}))}/>
                 <Input label="Duración (min)" type="number" value={formNueva.duracion_minutos}
@@ -5982,8 +6010,20 @@ function Sesiones({perfil}) {
             <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>{modalReprog.paciente} · Sesión #{modalReprog.numero_sesion}</div>
             <Input label="Nueva fecha" type="date" value={formReprog.fecha} onChange={v=>setFormReprog(f=>({...f,fecha:v}))} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <Input label="Hora inicio" type="time" value={formReprog.hora_inicio} onChange={v=>setFormReprog(f=>({...f,hora_inicio:v}))} required/>
-              <Input label="Hora fin estimada" type="time" value={formReprog.hora_fin} onChange={v=>setFormReprog(f=>({...f,hora_fin:v}))}/>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora inicio <span style={{color:"#F87171"}}>*</span></label>
+                <select value={formReprog.hora_inicio} onChange={e=>setFormReprog(f=>({...f,hora_inicio:e.target.value}))}
+                  style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                  {HORA_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora fin estimada</label>
+                <select value={formReprog.hora_fin} onChange={e=>setFormReprog(f=>({...f,hora_fin:e.target.value}))}
+                  style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                  {HORA_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
               <Btn variant="ghost" onClick={()=>setModalReprog(null)}>Cancelar</Btn>
