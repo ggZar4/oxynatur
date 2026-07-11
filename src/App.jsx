@@ -5406,7 +5406,7 @@ function Sesiones({perfil}) {
     }, [], "Sesiones:camaras"
   );
   const { data: sedesData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("id,nombre").eq("activa",true).order("nombre"),
+    () => supabase.from("sedes").select("id,nombre").eq("estado","activo").order("nombre"),
     [], "Sesiones:sedes"
   );
   const { data: comprasData } = useSupabaseQuery(
@@ -6601,7 +6601,7 @@ function Alertas({perfil}) {
     [], "Alertas:pacientes"
   );
   const { data: sedesData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("id,nombre").eq("estado","activa"),
+    () => supabase.from("sedes").select("id,nombre").eq("estado","activo"),
     [], "Alertas:sedes"
   );
 
