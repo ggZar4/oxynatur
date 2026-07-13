@@ -2787,7 +2787,8 @@ function HistoriasClinicas({perfil}) {
 
       {/* Modal ver evaluación firmada */}
       {modalEval && !modalEval.es_borrador && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}
+          onKeyDown={e=>e.key==="Escape"&&setModalEval(null)} tabIndex={-1}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div>
@@ -2795,7 +2796,224 @@ function HistoriasClinicas({perfil}) {
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
                 <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>{modalEval.fecha} · {fmtHora(modalEval.hora)} · {modalEval.sedes?.nombre}</div>
               </div>
-              <button onClick={()=>setModalEval(null)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+              <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                <button onClick={async()=>{
+                  // Exportar evaluación a PDF
+                  await new Promise((res,rej)=>{
+                    if(window.jspdf) return res();
+                    const s=document.createElement("script");
+                    s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+                    s.onload=res; s.onerror=rej;
+                    document.head.appendChild(s);
+                  });
+                  const {jsPDF}=window.jspdf;
+                  const norm=(str)=>String(str==null?"":str)
+                    .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
+                    .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
+                    .replace(/ñ/g,"n").replace(/Ñ/g,"N");
+                  const doc=new jsPDF();
+                  const pac=pacSelec.pacientes;
+                  const ev=modalEval;
+                  const PAGE_W=210, PAGE_H=297, MARGIN=14;
+                  const CONTENT_W=PAGE_W-MARGIN*2;
+                  let y=0;
+
+                  // Header
+                  doc.setFillColor(0,75,140);
+                  doc.rect(0,0,PAGE_W,28,"F");
+                  try{doc.addImage("/logo.jpg","JPEG",MARGIN,4,18,18);}catch(e){}
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(11);
+                  doc.setTextColor(255,255,255);
+                  doc.text("EVALUACION MEDICA - OXIGENOTERAPIA HIPERBARICA",38,11);
+                  doc.setFont("helvetica","normal");
+                  doc.setFontSize(8);
+                  doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781  |  Oxynatur",38,17);
+                  doc.text(norm(ev.sedes?.nombre||""),38,22);
+                  doc.setDrawColor(0,168,150);
+                  doc.setLineWidth(1);
+                  doc.line(0,28,PAGE_W,28);
+                  doc.setLineWidth(0.2);
+                  y=36;
+
+                  // Datos paciente
+                  doc.setFillColor(240,245,255);
+                  doc.rect(MARGIN,y-3,CONTENT_W,22,"F");
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(11);
+                  doc.setTextColor(0,75,140);
+                  doc.text(`${norm(pac?.apellidos||"")} ${norm(pac?.nombres||"")}`,MARGIN+3,y+4);
+                  doc.setFont("helvetica","normal");
+                  doc.setFontSize(8.5);
+                  doc.setTextColor(60,60,60);
+                  doc.text(`DNI: ${pac?.dni||"-"}   |   Sesion N°: ${ev.numero_sesion||"-"}   |   Fecha: ${ev.fecha||"-"}   |   Hora: ${fmtHora(ev.hora)}`,MARGIN+3,y+10);
+                  doc.text(`Presion aplicada: ${ev.presion_indicada||"-"} ATA   |   Duracion: ${ev.duracion_minutos||"-"} min   |   Camara: ${ev.camara_id?ev.camara_id.slice(-4):"-"}`,MARGIN+3,y+16);
+                  y+=28;
+
+                  // Signos vitales
+                  doc.setFillColor(0,168,150);
+                  doc.rect(MARGIN,y-3,CONTENT_W,8,"F");
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(8.5);
+                  doc.setTextColor(255,255,255);
+                  doc.text("SIGNOS VITALES",MARGIN+3,y+2);
+                  y+=10;
+                  const sv=[
+                    ["Presion arterial",ev.presion_arterial],["FC",`${ev.frecuencia_cardiaca||"-"} bpm`],
+                    ["SatO2",`${ev.saturacion_o2||"-"}%`],["Temperatura",`${ev.temperatura||"-"} °C`],
+                    ["Peso",`${ev.peso||"-"} kg`],["Nivel dolor",`${ev.nivel_dolor||0}/10`],
+                  ];
+                  doc.setTextColor(40,40,40);
+                  sv.forEach(([k,v],i)=>{
+                    const col=i%2===0?MARGIN:MARGIN+CONTENT_W/2;
+                    if(i%2===0&&i>0) y+=7;
+                    doc.setFont("helvetica","bold");
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(100,100,100);
+                    doc.text(norm(k).toUpperCase()+":",col,y);
+                    doc.setFont("helvetica","normal");
+                    doc.setFontSize(9);
+                    doc.setTextColor(30,30,30);
+                    doc.text(norm(String(v||"-")),col+32,y);
+                  });
+                  y+=12;
+
+                  // Contraindicaciones del día
+                  doc.setFillColor(245,158,11);
+                  doc.rect(MARGIN,y-3,CONTENT_W,8,"F");
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(8.5);
+                  doc.setTextColor(255,255,255);
+                  doc.text("SCREENING DE CONTRAINDICACIONES",MARGIN+3,y+2);
+                  y+=10;
+                  const contra=[
+                    ["Otitis",ev.otitis],["Claustrofobia",ev.claustrofobia],
+                    ["Embarazo",ev.embarazo],["Fiebre activa",ev.fiebre_activa],
+                  ];
+                  contra.forEach(([k,v],i)=>{
+                    const col=i%2===0?MARGIN:MARGIN+CONTENT_W/2;
+                    if(i%2===0&&i>0) y+=7;
+                    doc.setFont("helvetica","bold");
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(100,100,100);
+                    doc.text(norm(k).toUpperCase()+":",col,y);
+                    doc.setFont("helvetica","normal");
+                    doc.setFontSize(9);
+                    const val=String(v||"No");
+                    doc.setTextColor(val==="Si"||val==="Sí"?180:30,30,30);
+                    doc.text(norm(val),col+32,y);
+                  });
+                  y+=12;
+
+                  // Estado general y tolerancia
+                  doc.setFillColor(124,106,247);
+                  doc.rect(MARGIN,y-3,CONTENT_W,8,"F");
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(8.5);
+                  doc.setTextColor(255,255,255);
+                  doc.text("EVALUACION CLINICA",MARGIN+3,y+2);
+                  y+=10;
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(7.5);
+                  doc.setTextColor(100,100,100);
+                  doc.text("ESTADO GENERAL:",MARGIN,y);
+                  doc.setFont("helvetica","normal");
+                  doc.setFontSize(9);
+                  doc.setTextColor(30,30,30);
+                  doc.text(norm(ev.estado_general||"-"),MARGIN+36,y);
+                  y+=7;
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(7.5);
+                  doc.setTextColor(100,100,100);
+                  doc.text("TOLERANCIA:",MARGIN,y);
+                  doc.setFont("helvetica","normal");
+                  doc.setFontSize(9);
+                  doc.setTextColor(30,30,30);
+                  doc.text(norm(ev.tolerancia||"-"),MARGIN+36,y);
+                  y+=10;
+
+                  // Evolución médica
+                  if(ev.evolucion){
+                    doc.setFillColor(16,185,129);
+                    doc.rect(MARGIN,y-3,CONTENT_W,8,"F");
+                    doc.setFont("helvetica","bold");
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(255,255,255);
+                    doc.text("EVOLUCION MEDICA",MARGIN+3,y+2);
+                    y+=10;
+                    doc.setFont("helvetica","normal");
+                    doc.setFontSize(9);
+                    doc.setTextColor(30,30,30);
+                    const lines=doc.splitTextToSize(norm(ev.evolucion),CONTENT_W);
+                    doc.text(lines,MARGIN,y);
+                    y+=lines.length*5+8;
+                  }
+
+                  // Incidencias y observaciones
+                  if(ev.incidencias||ev.observaciones){
+                    doc.setFillColor(248,113,113);
+                    doc.rect(MARGIN,y-3,CONTENT_W,8,"F");
+                    doc.setFont("helvetica","bold");
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(255,255,255);
+                    doc.text("INCIDENCIAS Y OBSERVACIONES",MARGIN+3,y+2);
+                    y+=10;
+                    if(ev.incidencias){
+                      doc.setFont("helvetica","bold");
+                      doc.setFontSize(8);
+                      doc.setTextColor(80,80,80);
+                      doc.text("Incidencias:",MARGIN,y);
+                      doc.setFont("helvetica","normal");
+                      doc.setFontSize(9);
+                      doc.setTextColor(30,30,30);
+                      const linesI=doc.splitTextToSize(norm(ev.incidencias),CONTENT_W);
+                      doc.text(linesI,MARGIN,y+5);
+                      y+=linesI.length*5+10;
+                    }
+                    if(ev.observaciones){
+                      doc.setFont("helvetica","bold");
+                      doc.setFontSize(8);
+                      doc.setTextColor(80,80,80);
+                      doc.text("Observaciones:",MARGIN,y);
+                      doc.setFont("helvetica","normal");
+                      doc.setFontSize(9);
+                      doc.setTextColor(30,30,30);
+                      const linesO=doc.splitTextToSize(norm(ev.observaciones),CONTENT_W);
+                      doc.text(linesO,MARGIN,y+5);
+                      y+=linesO.length*5+10;
+                    }
+                  }
+
+                  // Firma médico
+                  y=Math.max(y,240);
+                  doc.setDrawColor(200,200,200);
+                  doc.line(MARGIN,y,MARGIN+80,y);
+                  doc.setFont("helvetica","bold");
+                  doc.setFontSize(8.5);
+                  doc.setTextColor(30,30,30);
+                  doc.text(norm(ev.firma_medico||"Médico evaluador"),MARGIN,y+5);
+                  doc.setFont("helvetica","normal");
+                  doc.setFontSize(7.5);
+                  doc.setTextColor(100,100,100);
+                  doc.text("Medico evaluador - CMP vigente",MARGIN,y+10);
+
+                  // Footer
+                  doc.setDrawColor(200,200,200);
+                  doc.line(MARGIN,PAGE_H-14,PAGE_W-MARGIN,PAGE_H-14);
+                  doc.setFontSize(7);
+                  doc.setFont("helvetica","normal");
+                  doc.setTextColor(120,120,120);
+                  doc.text("Asesor Medico Cientifico: Dr. Raul Aguado Quevedo  |  CMP 028600  |  RNE 022132",MARGIN,PAGE_H-9);
+                  doc.text(`Emitido: ${new Date().toLocaleDateString("es-PE")} ${new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}`,PAGE_W-MARGIN,PAGE_H-9,{align:"right"});
+
+                  doc.save(`Evaluacion_${norm(pac?.apellidos||"pac")}_Sesion${ev.numero_sesion||""}_${ev.fecha||""}.pdf`);
+                  toast.success("PDF generado correctamente");
+                }}
+                  style={{background:"var(--accent)",color:"white",border:"none",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                  ↓ PDF
+                </button>
+                <button onClick={()=>setModalEval(null)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+              </div>
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
               {[
