@@ -5327,17 +5327,30 @@ function Sesiones({perfil}) {
   const [savingIniciar, setSavingIniciar] = useState(false);
   const [errIniciar, setErrIniciar] = useState("");
 
+  // absoluta:true → bloquea el inicio hasta override médico
   const CUESTIONARIO_PRE = [
-    {key:"resfriado",        label:"¿Está resfriado o con congestión nasal?",                  accion:"Suspender. Llamar médico.", invertido:false},
-    {key:"dolor_oidos",      label:"¿Tiene dolor de oídos o sinusal en este momento?",          accion:"Suspender. Llamar médico.", invertido:false},
-    {key:"fiebre",           label:"¿Tiene fiebre hoy?",                                        accion:"Suspender. Llamar médico.", invertido:false},
-    {key:"alcohol",          label:"¿Consumió alcohol en las últimas 12 horas?",                accion:"Suspender. Llamar médico.", invertido:false},
-    {key:"medicamento_nuevo",label:"¿Tomó algún medicamento nuevo desde la última sesión?",     accion:"Llamar médico antes de iniciar.", invertido:false},
-    {key:"sintoma_nuevo",    label:"¿Tiene algún síntoma nuevo o cambio en su estado?",         accion:"Llamar médico antes de iniciar.", invertido:false},
-    {key:"comio",            label:"¿Comió al menos 2 horas antes de la sesión?",              accion:"Informar al médico (hipoglucemia).", invertido:true},
+    {key:"fiebre",           label:"¿Tiene fiebre hoy (≥38°C)?",                               accion:"SUSPENDER — Contraindicación absoluta.", invertido:false, absoluta:true},
+    {key:"dolor_oidos",      label:"¿Tiene dolor de oídos o sinusal en este momento?",          accion:"SUSPENDER — Riesgo de barotrauma. Llamar médico.", invertido:false, absoluta:true},
+    {key:"resfriado",        label:"¿Está resfriado o con congestión nasal severa?",            accion:"Suspender. Llamar médico.", invertido:false, absoluta:false},
+    {key:"alcohol",          label:"¿Consumió alcohol en las últimas 12 horas?",                accion:"SUSPENDER — Riesgo de toxicidad. Llamar médico.", invertido:false, absoluta:true},
+    {key:"doxorubicina",     label:"¿Está en quimioterapia con Doxorubicina o Bleomicina?",    accion:"SUSPENDER — Contraindicación absoluta. Llamar al Dr. Aguado.", invertido:false, absoluta:true},
+    {key:"medicamento_nuevo",label:"¿Tomó algún medicamento nuevo desde la última sesión?",     accion:"Llamar médico antes de iniciar.", invertido:false, absoluta:false},
+    {key:"sintoma_nuevo",    label:"¿Tiene algún síntoma nuevo o cambio en su estado?",         accion:"Llamar médico antes de iniciar.", invertido:false, absoluta:false},
+    {key:"comio",            label:"¿Comió al menos 2 horas antes de la sesión?",              accion:"Informar al médico (riesgo hipoglucemia).", invertido:true, absoluta:false},
   ];
 
   const hayAlertaPre = CUESTIONARIO_PRE.some(q=>{
+    const resp = cuestionarioPre[q.key];
+    return q.invertido ? resp===false : resp===true;
+  });
+  // Contraindicación absoluta — bloquea inicio
+  const hayContraAbsoluta = CUESTIONARIO_PRE.some(q=>{
+    if(!q.absoluta) return false;
+    const resp = cuestionarioPre[q.key];
+    return q.invertido ? resp===false : resp===true;
+  });
+  const preguntaAbsoluta = CUESTIONARIO_PRE.find(q=>{
+    if(!q.absoluta) return false;
     const resp = cuestionarioPre[q.key];
     return q.invertido ? resp===false : resp===true;
   });
@@ -5371,16 +5384,24 @@ function Sesiones({perfil}) {
     return alertas;
   };
 
+  const [overrideAbsoluta, setOverrideAbsoluta] = useState(false);
+
   const confirmarIniciar = async () => {
+    // Bloquear si hay contraindicación absoluta sin override médico
+    if(hayContraAbsoluta && !overrideAbsoluta) {
+      toast.error("⛔ Contraindicación absoluta detectada. Se requiere autorización médica para continuar.");
+      setErrIniciar(`SUSPENDER: ${preguntaAbsoluta?.accion || "Contraindicación absoluta. Llamar al médico."}`);
+      setSavingIniciar(false);
+      return;
+    }
+
     setSavingIniciar(true);
     setErrIniciar("");
 
     // Validar rangos de signos vitales
     const alertasSignos = validarSignosPre();
     if(alertasSignos.length > 0) {
-      // Mostrar advertencia via toast pero continuar (el enfermero debe llamar al médico)
       alertasSignos.forEach(a => toast.error("⚠️ " + a));
-      // Pausa breve para que se lean los toasts
       await new Promise(r => setTimeout(r, 1000));
     }
 
@@ -5394,6 +5415,8 @@ function Sesiones({perfil}) {
       temperatura:         signosPre.temperatura ? Number(signosPre.temperatura) : null,
       peso:                signosPre.peso ? Number(signosPre.peso) : null,
       nivel_dolor:         Number(signosPre.nivel_dolor)||0,
+      autorizado_por:      perfil?.nombre || perfil?.email || null,
+      override_medico:     overrideAbsoluta || null,
     }).eq("id", modalIniciar.id), "Sesiones:iniciar");
     setSavingIniciar(false);
     if(error) {
@@ -5402,6 +5425,7 @@ function Sesiones({perfil}) {
     }
     setModalIniciar(null);
     setCuestionarioPre({});
+    setOverrideAbsoluta(false);
     setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
     toast.info("Sesión iniciada");
     load();
@@ -6384,11 +6408,12 @@ function Sesiones({perfil}) {
                 {CUESTIONARIO_PRE.map((q,i)=>{
                   const resp = cuestionarioPre[q.key];
                   const esAlerta = q.invertido ? resp===false : resp===true;
+                  const esAbsoluta = q.absoluta && esAlerta;
                   return (
                     <div key={q.key} style={{
                       marginBottom:8,padding:"10px 12px",borderRadius:8,
-                      background: esAlerta ? "#F8717108" : "var(--surface2)",
-                      border: `0.5px solid ${esAlerta?"#F8717140":"var(--border)"}`,
+                      background: esAbsoluta ? "#FEE2E2" : esAlerta ? "#F8717108" : "var(--surface2)",
+                      border: `0.5px solid ${esAbsoluta?"#FECACA":esAlerta?"#F8717140":"var(--border)"}`,
                     }}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
                         <div style={{display:"flex",gap:12,flexShrink:0}}>
@@ -6402,12 +6427,15 @@ function Sesiones({perfil}) {
                             </label>
                           ))}
                         </div>
-                        <span style={{fontSize:13,color:"var(--text)",flex:1}}>{q.label}</span>
+                        <span style={{fontSize:13,color:"var(--text)",flex:1}}>
+                          {q.absoluta && <span style={{fontSize:10,fontWeight:700,color:"#DC2626",background:"#FEE2E2",padding:"1px 5px",borderRadius:4,marginRight:6}}>ABSOLUTA</span>}
+                          {q.label}
+                        </span>
                         {i+1 === CUESTIONARIO_PRE.length && <span style={{fontSize:10,color:"var(--text3)"}}>(Sí = normal)</span>}
                       </div>
                       {esAlerta && (
-                        <div style={{marginTop:6,fontSize:11,color:"#F87171",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
-                          ⚠ {q.accion}
+                        <div style={{marginTop:6,fontSize:11,color: esAbsoluta ? "#DC2626" : "#F87171",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                          {esAbsoluta ? "⛔" : "⚠"} {q.accion}
                         </div>
                       )}
                     </div>
@@ -6483,11 +6511,40 @@ function Sesiones({perfil}) {
             )}
             <div style={{padding:"12px 20px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
               <div style={{fontSize:11,color:"var(--text3)"}}>
-                {Object.keys(cuestionarioPre).length}/7 preguntas respondidas
+                {Object.keys(cuestionarioPre).length}/8 preguntas respondidas
+                {hayContraAbsoluta && (
+                  <div style={{marginTop:12,background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:8,padding:"10px 14px"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#DC2626",marginBottom:4}}>
+                      ⛔ CONTRAINDICACIÓN ABSOLUTA DETECTADA
+                    </div>
+                    <div style={{fontSize:12,color:"#991B1B",marginBottom:8}}>
+                      {preguntaAbsoluta?.accion}
+                    </div>
+                    {!overrideAbsoluta ? (
+                      <div>
+                        <div style={{fontSize:11,color:"#7F1D1D",marginBottom:8}}>
+                          La sesión está BLOQUEADA. Solo un médico puede autorizar el inicio documentando la justificación clínica.
+                        </div>
+                        <button onClick={()=>setOverrideAbsoluta(true)}
+                          style={{background:"#DC2626",color:"white",border:"none",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                          Autorizar como médico responsable
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{display:"flex",alignItems:"center",gap:8,background:"#FEF3C7",borderRadius:6,padding:"6px 10px"}}>
+                        <span style={{fontSize:12,color:"#92400E",fontWeight:600}}>⚠️ Override médico activo — proceder con máxima precaución</span>
+                        <button onClick={()=>setOverrideAbsoluta(false)}
+                          style={{background:"none",border:"none",color:"#92400E",cursor:"pointer",fontSize:11,textDecoration:"underline"}}>
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div style={{display:"flex",gap:8}}>
                 <Btn variant="ghost" onClick={()=>setModalIniciar(null)}>Cancelar</Btn>
-                <Btn onClick={confirmarIniciar} disabled={savingIniciar||Object.keys(cuestionarioPre).length<7}
+                <Btn onClick={confirmarIniciar} disabled={savingIniciar||Object.keys(cuestionarioPre).length<8}
                   style={{background: hayAlertaPre?"#F59E0B":"var(--accent)"}}>
                   {savingIniciar ? "Iniciando..." : hayAlertaPre ? "⚠ Iniciar con alerta" : "▶ Iniciar sesión"}
                 </Btn>
