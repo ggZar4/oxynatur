@@ -1677,20 +1677,20 @@ function HistoriasClinicas({perfil}) {
     let pageNum = 1;
 
     const addHeader = () => {
-      // Fondo header blanco
-      doc.setFillColor(255, 255, 255);
-      doc.rect(0, 0, PAGE_W, 26, "F");
+      // Fondo azul oscuro header
+      doc.setFillColor(0, 75, 140);
+      doc.rect(0, 0, PAGE_W, 28, "F");
       // Logo
-      try { doc.addImage(LOGO_B64, "JPEG", MARGIN, 2, 20, 20); } catch(e) {}
+      try { doc.addImage(LOGO_B64, "JPEG", MARGIN, 4, 18, 18); } catch(e) {}
       // Titulo
       doc.setFont("helvetica","bold");
       doc.setFontSize(10);
-      doc.setTextColor(0, 75, 140);
-      doc.text("HISTORIA CLINICA - OXIGENOTERAPIA HIPERBARICA", 38, 9);
+      doc.setTextColor(255, 255, 255);
+      doc.text("HISTORIA CLINICA - OXIGENOTERAPIA HIPERBARICA", 36, 10);
       doc.setFont("helvetica","normal");
       doc.setFontSize(7.5);
-      doc.setTextColor(80,80,80);
-      doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781", 38, 14.5);
+      doc.setTextColor(200, 230, 255);
+      doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781", 36, 16);
       // Sede info con RENIPRESS
       const sedeNombre = (pacSelec.sedes?.nombre || "").toLowerCase();
       let sedeInfo = "";
@@ -1708,30 +1708,32 @@ function HistoriasClinicas({perfil}) {
         sedeInfo = norm(pacSelec.sedes?.nombre || "");
         renipress = "";
       }
-      doc.text(sedeInfo, 38, 16);
-      if(renipress) {
-        doc.setFontSize(7);
-        doc.setTextColor(0,120,100);
-        doc.text(renipress, 38, 21);
-        doc.setTextColor(80,80,80);
-        doc.setFontSize(7.5);
-      }
-      // Linea separadora
+      doc.setFontSize(7);
+      doc.setTextColor(180, 220, 200);
+      doc.text(`${sedeInfo}   |   ${renipress}`, 36, 22);
+      // Linea separadora verde
       doc.setDrawColor(0, 168, 150);
-      doc.setLineWidth(0.8);
-      doc.line(0, 27, PAGE_W, 27);
+      doc.setLineWidth(1.2);
+      doc.line(0, 28, PAGE_W, 28);
       doc.setLineWidth(0.2);
-      y = 33;
+      y = 34;
     };
 
     const addFooter = () => {
-      doc.setDrawColor(200,200,200);
-      doc.line(MARGIN, PAGE_H-14, PAGE_W-MARGIN, PAGE_H-14);
-      doc.setFontSize(7.5);
+      doc.setFillColor(245, 248, 255);
+      doc.rect(0, PAGE_H-16, PAGE_W, 16, "F");
+      doc.setDrawColor(0, 168, 150);
+      doc.setLineWidth(0.5);
+      doc.line(0, PAGE_H-16, PAGE_W, PAGE_H-16);
+      doc.setLineWidth(0.2);
+      doc.setFontSize(7);
       doc.setFont("helvetica","normal");
-      doc.setTextColor(120,120,120);
-      doc.text("Director Medico: Dr. Raul Aguado  |  CMP 028600  |  RNE 022132", MARGIN, PAGE_H-9);
-      doc.text(`Pagina ${pageNum}  |  Emitido: ${new Date().toLocaleDateString("es-PE")} ${new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}`, PAGE_W-MARGIN, PAGE_H-9, {align:"right"});
+      doc.setTextColor(80,80,80);
+      doc.text("Asesor Medico Cientifico: Dr. Raul Aguado Quevedo  |  CMP 028600  |  RNE 022132", MARGIN, PAGE_H-9);
+      doc.text(`Pag. ${pageNum}  |  Emitido: ${new Date().toLocaleDateString("es-PE")} ${new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}`, PAGE_W-MARGIN, PAGE_H-9, {align:"right"});
+      doc.setFontSize(6.5);
+      doc.setTextColor(150,150,150);
+      doc.text("Documento confidencial — Protegido por Ley N° 29733 de Proteccion de Datos Personales", PAGE_W/2, PAGE_H-4, {align:"center"});
     };
 
     const checkPage = (needed=20) => {
@@ -1773,19 +1775,36 @@ function HistoriasClinicas({perfil}) {
 
     // Datos del paciente
     sectionTitle("Datos del Paciente");
-    doc.setFillColor(245,248,255);
-    doc.rect(MARGIN, y-2, CONTENT_W, 28, "F");
-    doc.setFontSize(11);
+    doc.setFillColor(240, 246, 255);
+    doc.rect(MARGIN, y-3, CONTENT_W, 36, "F");
+    doc.setDrawColor(0, 75, 140);
+    doc.setLineWidth(0.3);
+    doc.rect(MARGIN, y-3, CONTENT_W, 36, "S");
+    doc.setLineWidth(0.2);
+    // Nombre completo
+    doc.setFontSize(12);
     doc.setFont("helvetica","bold");
     doc.setTextColor(0,75,140);
-    doc.text(`${norm(pac?.apellidos||"")}  ${norm(pac?.nombres||"")}`, MARGIN+4, y+5);
-    doc.setFontSize(8.5);
+    doc.text(`${norm(pac?.apellidos||"")} ${norm(pac?.nombres||"")}`, MARGIN+4, y+5);
+    // Fila 1: DNI, Fecha nac, Género
+    doc.setFontSize(8);
     doc.setFont("helvetica","normal");
     doc.setTextColor(60,60,60);
-    doc.text(`DNI: ${pac?.dni||"-"}   |   Sede: ${norm(pacSelec.sedes?.nombre||"-")}   |   N° HC: ${norm(hc?.numero_hc||"-")}`, MARGIN+4, y+12);
-    doc.text(`Sesiones: ${pac?.sesiones_realizadas||0} realizadas  /  ${pac?.total_sesiones_prescritas||0} prescritas   |   Apto HBOT: ${hc?.apto_hiperbarica!==false?"SI":"NO"}`, MARGIN+4, y+19);
-    doc.text(`Fecha de emision: ${new Date().toLocaleDateString("es-PE")}`, MARGIN+4, y+25);
-    nl(32);
+    const edad = pac?.fecha_nacimiento
+      ? Math.floor((new Date()-new Date(pac.fecha_nacimiento))/31557600000)+"a"
+      : "";
+    doc.text(`DNI: ${pac?.dni||"-"}   |   Nac: ${pac?.fecha_nacimiento||"-"} ${edad?`(${edad})`:""}   |   Genero: ${pac?.genero||"-"}`, MARGIN+4, y+12);
+    // Fila 2: Sede, N° HC, fecha apertura
+    doc.text(`Sede: ${norm(pacSelec.sedes?.nombre||"-")}   |   N° HC: ${norm(hc?.numero_hc||"-")}   |   Apertura: ${hc?.fecha_apertura?new Date(hc.fecha_apertura).toLocaleDateString("es-PE"):new Date().toLocaleDateString("es-PE")}`, MARGIN+4, y+19);
+    // Fila 3: Sesiones, apto
+    doc.text(`Sesiones: ${pac?.sesiones_realizadas||0} realizadas / ${pac?.total_sesiones_prescritas||0} prescritas   |   Apto HBOT: ${hc?.apto_hiperbarica!==false?"SI":"NO"}`, MARGIN+4, y+26);
+    // Fila 4: contacto
+    if(pac?.telefono || pac?.email) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(100,100,100);
+      doc.text(`Tel: ${pac?.telefono||"-"}   |   Email: ${pac?.email||"-"}`, MARGIN+4, y+32);
+    }
+    nl(42);
 
     // HC Maestra
     sectionTitle("Historia Clinica Maestra - Antecedentes");
