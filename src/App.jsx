@@ -1680,7 +1680,9 @@ function HistoriasClinicas({perfil}) {
       // Fondo azul oscuro header
       doc.setFillColor(0, 75, 140);
       doc.rect(0, 0, PAGE_W, 28, "F");
-      // Logo
+      // Logo — fondo blanco circular para contraste sobre azul
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(MARGIN-1, 3, 21, 22, 3, 3, "F");
       try { doc.addImage(LOGO_B64, "JPEG", MARGIN, 4, 18, 18); } catch(e) {}
       // Titulo
       doc.setFont("helvetica","bold");
@@ -1859,60 +1861,63 @@ function HistoriasClinicas({perfil}) {
       }
       nl(11);
 
-      // PRE-SESION
-      checkPage(12);
-      doc.setFillColor(235,235,255);
-      doc.rect(MARGIN+2, y-2, (CONTENT_W/2)-3, 10, "F");
+      // PRE / POST en dos columnas lado a lado
+      checkPage(18);
+      const colW = (CONTENT_W/2) - 3;
+      const colR = MARGIN + CONTENT_W/2 + 1;
+      // PRE — columna izquierda
+      doc.setFillColor(235,240,255);
+      doc.rect(MARGIN+2, y-2, colW, 16, "F");
       doc.setFont("helvetica","bold");
       doc.setFontSize(7);
       doc.setTextColor(60,60,180);
       doc.text("PRE-SESION", MARGIN+4, y+2);
       doc.setFont("helvetica","normal");
-      doc.setTextColor(50,50,50);
-      const preData = [
-        ev.presion_arterial_pre ? `PA: ${ev.presion_arterial_pre}` : null,
-        ev.frecuencia_cardiaca ? `FC: ${ev.frecuencia_cardiaca}bpm` : null,
-        ev.saturacion_o2_pre ? `SatO2: ${ev.saturacion_o2_pre}%` : null,
-        ev.temperatura ? `T: ${ev.temperatura}C` : null,
-        ev.peso ? `Peso: ${ev.peso}kg` : null,
-      ].filter(Boolean).join("   ");
       doc.setFontSize(7.5);
-      doc.text(preData || "Sin datos PRE", MARGIN+4, y+7);
-      nl(13);
-
-      // POST-SESION
-      checkPage(12);
-      doc.setFillColor(225,245,240);
-      doc.rect(MARGIN+2, y-2, (CONTENT_W/2)-3, 10, "F");
+      doc.setTextColor(50,50,50);
+      const preLines = [
+        ev.presion_arterial_pre ? `PA: ${ev.presion_arterial_pre}` : null,
+        ev.frecuencia_cardiaca ? `FC: ${ev.frecuencia_cardiaca} bpm` : null,
+        ev.saturacion_o2_pre ? `SatO2: ${ev.saturacion_o2_pre}%` : null,
+        ev.temperatura ? `Temp: ${ev.temperatura}°C` : null,
+        ev.peso ? `Peso: ${ev.peso} kg` : null,
+      ].filter(Boolean);
+      preLines.forEach((line, li) => doc.text(line, MARGIN+4, y+7+(li*4)));
+      // POST — columna derecha
+      doc.setFillColor(220,245,238);
+      doc.rect(colR, y-2, colW, 16, "F");
       doc.setFont("helvetica","bold");
       doc.setFontSize(7);
-      doc.setTextColor(0,120,100);
-      doc.text("POST-SESION", MARGIN+4, y+2);
+      doc.setTextColor(0,120,80);
+      doc.text("POST-SESION", colR+2, y+2);
       doc.setFont("helvetica","normal");
+      doc.setFontSize(7.5);
       doc.setTextColor(50,50,50);
-      const postData = [
+      const postLines = [
         ev.presion_arterial ? `PA: ${ev.presion_arterial}` : null,
-        ev.frecuencia_cardiaca_post ? `FC: ${ev.frecuencia_cardiaca_post}bpm` : null,
+        ev.frecuencia_cardiaca_post ? `FC: ${ev.frecuencia_cardiaca_post} bpm` : null,
         ev.saturacion_o2 ? `SatO2: ${ev.saturacion_o2}%` : null,
         ev.nivel_dolor!=null ? `Dolor: ${ev.nivel_dolor}/10` : null,
         ev.estado_general ? `Estado: ${norm(ev.estado_general)}` : null,
         ev.tolerancia ? `Tolerancia: ${norm(ev.tolerancia)}` : null,
-      ].filter(Boolean).join("   ");
-      doc.setFontSize(7.5);
-      doc.text(postData || "Sin datos POST", MARGIN+4, y+7);
-      nl(13);
+      ].filter(Boolean);
+      postLines.forEach((line, li) => doc.text(line, colR+2, y+7+(li*4)));
+      nl(20);
 
-      // Parametros sesion
+      // Parámetros de sesión
       checkPage(8);
+      doc.setFillColor(245,245,255);
+      doc.rect(MARGIN+2, y-2, CONTENT_W-4, 8, "F");
       doc.setFontSize(7.5);
-      doc.setFont("helvetica","normal");
-      doc.setTextColor(80,80,80);
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(80,60,160);
       const params = [
-        ev.presion_indicada ? `Presion: ${ev.presion_indicada}ATA` : null,
-        ev.duracion_minutos ? `Duracion: ${ev.duracion_minutos}min` : null,
+        ev.presion_indicada ? `Presion: ${ev.presion_indicada} ATA` : null,
+        ev.duracion_minutos ? `Duracion: ${ev.duracion_minutos} min` : null,
+        ev.camara_id ? `Camara: ${ev.camara_id.slice(-4)}` : null,
       ].filter(Boolean).join("   |   ");
-      doc.text(params, MARGIN+4, y);
-      nl(6);
+      doc.text(params || "-", MARGIN+5, y+3);
+      nl(10);
 
       // Cuestionario resumen (solo los Si)
       const cpre = ev.cuestionario_pre || {};
@@ -1934,8 +1939,8 @@ function HistoriasClinicas({perfil}) {
         nl(6);
       }
 
-      // Observaciones
-      if(ev.observaciones) {
+      // Observaciones — solo si hay contenido real
+      if(ev.observaciones && ev.observaciones.trim() && ev.observaciones.trim().toUpperCase() !== "NINGUNO" && ev.observaciones.trim() !== "-") {
         checkPage(10);
         doc.setFontSize(7.5);
         doc.setFont("helvetica","italic");
@@ -1956,20 +1961,28 @@ function HistoriasClinicas({perfil}) {
         nl(5 * evolLines.length + 2);
       }
 
-      // Firma
-      checkPage(8);
+      // Firma médico
+      checkPage(12);
       if(ev.firma_medico) {
+        doc.setFillColor(220,245,235);
+        doc.rect(MARGIN+2, y-2, CONTENT_W-4, 9, "F");
         doc.setFontSize(7.5);
         doc.setFont("helvetica","bold");
         doc.setTextColor(0,120,80);
-        doc.text(`Supervisado por: ${norm(ev.firma_medico)}`, MARGIN+4, y);
+        doc.text(`✓ Evaluado y firmado por: ${norm(ev.firma_medico)}`, MARGIN+5, y+3);
       } else {
+        doc.setFillColor(255,248,225);
+        doc.rect(MARGIN+2, y-2, CONTENT_W-4, 9, "F");
+        doc.setDrawColor(220,150,0);
+        doc.setLineWidth(0.3);
+        doc.rect(MARGIN+2, y-2, CONTENT_W-4, 9, "S");
+        doc.setLineWidth(0.2);
         doc.setFontSize(7.5);
-        doc.setFont("helvetica","italic");
-        doc.setTextColor(180,120,0);
-        doc.text("Pendiente firma medica", MARGIN+4, y);
+        doc.setFont("helvetica","bold");
+        doc.setTextColor(180,100,0);
+        doc.text("⚠ BORRADOR — Pendiente de firma medica. No tiene validez legal.", MARGIN+5, y+3);
       }
-      nl(6);
+      nl(12);
 
       // Separador
       doc.setDrawColor(200,200,200);
