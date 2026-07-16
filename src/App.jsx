@@ -1671,8 +1671,6 @@ function HistoriasClinicas({perfil}) {
     setGuardandoConsentimiento(false);
     if(error) { toast.error("Error al guardar"); return; }
     toast.success("Consentimiento registrado correctamente");
-    // Generar PDF
-    await exportarPDFConsentimiento(formConsentimiento);
     setModalConsentimiento(false);
     // Recargar datos del paciente
     const { data } = await safeQuery(() =>
@@ -1681,154 +1679,6 @@ function HistoriasClinicas({perfil}) {
         .eq("paciente_id", pac.id).maybeSingle(), "HC:recargar"
     );
     if(data) setPacSelec(data);
-  };
-
-  const exportarPDFConsentimiento = async (form) => {
-    await new Promise((res,rej)=>{
-      if(window.jspdf) return res();
-      const s=document.createElement("script");
-      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      s.onload=res; s.onerror=rej;
-      document.head.appendChild(s);
-    });
-    const {jsPDF}=window.jspdf;
-    const norm=(str)=>String(str==null?"":str)
-      .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
-      .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
-      .replace(/ñ/g,"n").replace(/Ñ/g,"N");
-    const doc=new jsPDF();
-    const pac=pacSelec.pacientes;
-    const PAGE_W=210, PAGE_H=297, MARGIN=18, CW=PAGE_W-MARGIN*2;
-    let y=0;
-
-    // Header azul
-    doc.setFillColor(0,75,140);
-    doc.rect(0,0,PAGE_W,28,"F");
-    try{doc.addImage("/logo.jpg","JPEG",MARGIN-2,4,18,18);}catch(e){}
-    doc.setFillColor(255,255,255);
-    doc.roundedRect(MARGIN-3,3,21,22,3,3,"F");
-    try{doc.addImage("/logo.jpg","JPEG",MARGIN-2,4,18,18);}catch(e){}
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(11);
-    doc.setTextColor(255,255,255);
-    doc.text("CONSENTIMIENTO INFORMADO", 40, 11);
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(200,230,255);
-    doc.text("Oxigenoterapia Hiperbarica (OHB)  |  Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781", 40, 17);
-    const sedeN=(pacSelec.sedes?.nombre||"").toLowerCase();
-    const sedeInfo=sedeN.includes("molisalud")||sedeN.includes("molina")
-      ?"Molisalud: Av. Javier Prado 5998, La Molina  |  RENIPRESS: 00037878"
-      :sedeN.includes("miguel")||sedeN.includes("arcangel")
-      ?"Clinica San Miguel Arcangel: Jr. Las Gardenias 754, SJL  |  RENIPRESS: 00009104"
-      :sedeN.includes("vitalis")?"Angel Vitalis: San Martin de Porres  |  RENIPRESS: [en tramite]"
-      :norm(pacSelec.sedes?.nombre||"");
-    doc.setFontSize(7);
-    doc.setTextColor(180,220,200);
-    doc.text(sedeInfo, 40, 23);
-    doc.setDrawColor(0,168,150);
-    doc.setLineWidth(1.2);
-    doc.line(0,28,PAGE_W,28);
-    doc.setLineWidth(0.2);
-    y=36;
-
-    // Datos del paciente
-    doc.setFillColor(240,246,255);
-    doc.rect(MARGIN,y-3,CW,26,"F");
-    doc.setDrawColor(0,75,140);
-    doc.setLineWidth(0.3);
-    doc.rect(MARGIN,y-3,CW,26,"S");
-    doc.setLineWidth(0.2);
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(10);
-    doc.setTextColor(0,75,140);
-    doc.text(`${norm(pac?.apellidos||"")} ${norm(pac?.nombres||"")}`, MARGIN+3, y+4);
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(8);
-    doc.setTextColor(60,60,60);
-    doc.text(`DNI: ${pac?.dni||"-"}   |   Fecha: ${new Date().toLocaleDateString("es-PE")}   |   N° HC: ${norm(pacSelec?.numero_hc||"-")}`, MARGIN+3, y+11);
-    doc.text(`Tel: ${pac?.telefono||"-"}   |   Email: ${pac?.email||"-"}`, MARGIN+3, y+18);
-    y+=32;
-
-    // Cuerpo del consentimiento
-    const parrafos = [
-      {titulo:"1. DESCRIPCION DEL PROCEDIMIENTO", texto:"La Oxigenoterapia Hiperbarica (OHB) consiste en la administracion de oxigeno puro al 100% a una presion superior a la atmosferica (entre 1.4 y 3.0 ATA) dentro de una camara hiperbarica. El tratamiento tiene una duracion estandar de 60 minutos por sesion y se realiza en un ambiente controlado bajo supervision del personal certificado de Oxynatur."},
-      {titulo:"2. BENEFICIOS ESPERADOS", texto:"La OHB puede contribuir a la cicatrizacion de heridas cronicas, reduccion de infecciones, mejora de la oxigenacion tisular, tratamiento de necrosis avascular, recuperacion post-quirurgica, y otras indicaciones clinicas determinadas por el medico tratante. Los resultados pueden variar segun la condicion clinica de cada paciente."},
-      {titulo:"3. RIESGOS Y EFECTOS ADVERSOS", texto:"Los riesgos asociados a la OHB incluyen: barotrauma de oidos o senos paranasales (presion dolorosa), claustrofobia, fatiga temporal, nauseas, y en casos excepcionales convulsiones por toxicidad al oxigeno. El personal operativo esta capacitado para manejar estas situaciones segun el protocolo de emergencias de Oxynatur v2.0."},
-      {titulo:"4. CONTRAINDICACIONES DECLARADAS", texto:"Declaro haber sido informado/a sobre las contraindicaciones absolutas (neumotorax no tratado, quimioterapia con Doxorubicina o Bleomicina, fiebre activa mayor de 38 grados, entre otras) y confirmo no presentar ninguna de ellas al momento de firmar este documento. Me comprometo a informar al personal antes de cada sesion si desarrollo alguna contraindicacion."},
-      {titulo:"5. EVALUACION MEDICA PREVIA OBLIGATORIA", texto:"Declaro haber sido evaluado/a por el medico responsable, quien determino mi aptitud clinica para recibir tratamiento de OHB. Entiendo que esta evaluacion medica previa es obligatoria antes de iniciar cualquier sesion y que el personal podra suspender la sesion si detecta condiciones que contraindiquen el procedimiento."},
-      {titulo:"6. DERECHO A RETIRO", texto:"Entiendo que puedo retirar este consentimiento en cualquier momento, sin necesidad de justificacion y sin que ello afecte mi atencion medica. Puedo interrumpir la sesion en cualquier momento comunicandolo al operador mediante las senales establecidas."},
-      {titulo:"7. AUTORIZACION", texto:"Habiendo recibido informacion clara y suficiente sobre el procedimiento, sus beneficios, riesgos y alternativas, y habiendo tenido la oportunidad de formular preguntas, AUTORIZO voluntariamente la realizacion del tratamiento de Oxigenoterapia Hiperbarica en las instalaciones de Oxynatur."},
-    ];
-
-    for(const p of parrafos) {
-      if(y+30 > PAGE_H-40) {
-        doc.setFillColor(245,248,255);
-        doc.rect(0,PAGE_H-16,PAGE_W,16,"F");
-        doc.setDrawColor(0,168,150);
-        doc.setLineWidth(0.5);
-        doc.line(0,PAGE_H-16,PAGE_W,PAGE_H-16);
-        doc.setLineWidth(0.2);
-        doc.setFontSize(7);
-        doc.setFont("helvetica","normal");
-        doc.setTextColor(80,80,80);
-        doc.text("Servicio de Medicina Hiperbarica - Oxynatur  |  Consorcio Estilo Medico S.A.C.", MARGIN, PAGE_H-9);
-        doc.text(`Documento confidencial - Ley N° 29733`, PAGE_W-MARGIN, PAGE_H-9, {align:"right"});
-        doc.addPage();
-        y=20;
-      }
-      doc.setFont("helvetica","bold");
-      doc.setFontSize(8);
-      doc.setTextColor(0,75,140);
-      doc.text(p.titulo, MARGIN, y);
-      y+=5;
-      doc.setFont("helvetica","normal");
-      doc.setFontSize(8);
-      doc.setTextColor(50,50,50);
-      const lines=doc.splitTextToSize(p.texto, CW);
-      doc.text(lines, MARGIN, y);
-      y+=lines.length*4.5+6;
-    }
-
-    // Firmas
-    if(y+50 > PAGE_H-40) {
-      doc.addPage();
-      y=20;
-    }
-    y+=8;
-    doc.setDrawColor(150,150,150);
-    doc.setLineWidth(0.3);
-    // Paciente
-    doc.line(MARGIN, y+20, MARGIN+75, y+20);
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(60,60,60);
-    doc.text("Firma del Paciente o Representante Legal", MARGIN, y+25);
-    doc.text(`Nombre: ${norm(pac?.nombres||"")} ${norm(pac?.apellidos||"")}`, MARGIN, y+30);
-    doc.text(`DNI: ${pac?.dni||"-"}`, MARGIN, y+35);
-    doc.text(`Fecha: ___/___/______`, MARGIN, y+40);
-    // Medico
-    doc.line(PAGE_W/2+5, y+20, PAGE_W-MARGIN, y+20);
-    doc.text("Firma del Medico/Personal que informo", PAGE_W/2+5, y+25);
-    doc.text(`Nombre: ${norm(form?.medico_nombre||"")}`, PAGE_W/2+5, y+30);
-    doc.text(`CMP: ${norm(form?.medico_cmp||"-")}`, PAGE_W/2+5, y+35);
-    doc.text(`Fecha: ${new Date(form?.fecha+"T12:00:00").toLocaleDateString("es-PE")}`, PAGE_W/2+5, y+40);
-
-    // Footer
-    doc.setFillColor(245,248,255);
-    doc.rect(0,PAGE_H-16,PAGE_W,16,"F");
-    doc.setDrawColor(0,168,150);
-    doc.setLineWidth(0.5);
-    doc.line(0,PAGE_H-16,PAGE_W,PAGE_H-16);
-    doc.setLineWidth(0.2);
-    doc.setFontSize(7);
-    doc.setFont("helvetica","normal");
-    doc.setTextColor(80,80,80);
-    doc.text("Servicio de Medicina Hiperbarica - Oxynatur  |  Consorcio Estilo Medico S.A.C.", MARGIN, PAGE_H-9);
-    doc.text("Documento confidencial - Ley N° 29733 de Proteccion de Datos Personales", PAGE_W-MARGIN, PAGE_H-9, {align:"right"});
-
-    doc.save(`Consentimiento_${norm(pac?.apellidos||"pac")}_${norm(pac?.nombres||"")}_${new Date().toISOString().slice(0,10)}.pdf`);
-    toast.success("PDF de consentimiento generado");
   };
 
   const exportarPDF = async () => {
@@ -2492,9 +2342,6 @@ function HistoriasClinicas({perfil}) {
                 Pendiente consentimiento
               </button>
           }
-          <Btn variant="ghost" onClick={()=>setModalConsentimiento(true)} style={{fontSize:12}}>
-            Consentimiento PDF
-          </Btn>
           <Btn variant="ghost" onClick={exportarPDF} style={{fontSize:12}}>
             HC PDF
           </Btn>
@@ -3324,7 +3171,7 @@ function HistoriasClinicas({perfil}) {
 
             {/* Info del documento */}
             <div style={{background:"var(--surface2)",borderRadius:"var(--radius-sm)",padding:"10px 14px",marginBottom:16,fontSize:12,color:"var(--text2)",lineHeight:1.6}}>
-              El PDF incluye: descripcion del procedimiento, beneficios, riesgos, contraindicaciones declaradas, evaluacion medica previa obligatoria y autorizacion del paciente. Debe imprimirse y firmarse fisicamente por el paciente y el medico.
+              El consentimiento informado se firma fisicamente en papel antes de la primera sesion. Registra aqui quien informo al paciente y la fecha en que se obtuvo la firma.
             </div>
 
             {/* Formulario */}
@@ -3348,11 +3195,8 @@ function HistoriasClinicas({perfil}) {
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:14,borderTop:"0.5px solid var(--border)"}}>
               <Btn variant="ghost" onClick={()=>setModalConsentimiento(false)}>Cancelar</Btn>
-              <Btn variant="ghost" onClick={()=>exportarPDFConsentimiento(formConsentimiento)} disabled={!formConsentimiento.medico_nombre}>
-                Solo generar PDF
-              </Btn>
               <Btn onClick={guardarConsentimiento} disabled={guardandoConsentimiento||!formConsentimiento.medico_nombre}>
-                {guardandoConsentimiento?"Guardando...":"Registrar y generar PDF"}
+                {guardandoConsentimiento?"Guardando...":"Registrar consentimiento"}
               </Btn>
             </div>
           </div>
