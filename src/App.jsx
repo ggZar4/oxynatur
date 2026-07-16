@@ -3330,11 +3330,11 @@ function HistoriasClinicas({perfil}) {
             {/* Formulario */}
             <Input label="Médico o personal que informa" value={formConsentimiento.medico_nombre}
               onChange={v=>setFormConsentimiento(f=>({...f,medico_nombre:v}))}
-              placeholder="Dr. Raúl Aguado / Nombre del operador" required/>
+              placeholder="Nombre del médico o personal que informa" required/>
 
             <Input label="CMP del médico (si aplica)" value={formConsentimiento.medico_cmp}
               onChange={v=>setFormConsentimiento(f=>({...f,medico_cmp:v}))}
-              placeholder="CMP 028600"/>
+              placeholder="Ej: CMP 012345"/>
 
             <Input label="Fecha de firma" value={formConsentimiento.fecha} type="date"
               onChange={v=>setFormConsentimiento(f=>({...f,fecha:v}))} required/>
