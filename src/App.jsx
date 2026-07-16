@@ -5694,6 +5694,7 @@ function Sesiones({perfil}) {
   const [modalIniciar, setModalIniciar]   = useState(null);
   const [cuestionarioPre, setCuestionarioPre] = useState({});
   const [signosPre, setSignosPre]         = useState({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
+  const [medicoEvaluadorId, setMedicoEvaluadorId] = useState("");
   const [savingIniciar, setSavingIniciar] = useState(false);
   const [errIniciar, setErrIniciar] = useState("");
 
@@ -5757,6 +5758,13 @@ function Sesiones({perfil}) {
   const [overrideAbsoluta, setOverrideAbsoluta] = useState(false);
 
   const confirmarIniciar = async () => {
+    // Bloquear si no se seleccionó médico evaluador
+    if(!medicoEvaluadorId) {
+      toast.error("Debes seleccionar el médico evaluador del día antes de iniciar");
+      setSavingIniciar(false);
+      return;
+    }
+
     // Bloquear si hay contraindicación absoluta sin override médico
     if(hayContraAbsoluta && !overrideAbsoluta) {
       toast.error("⛔ Contraindicación absoluta detectada. Se requiere autorización médica para continuar.");
@@ -5787,6 +5795,10 @@ function Sesiones({perfil}) {
       nivel_dolor:         Number(signosPre.nivel_dolor)||0,
       autorizado_por:      perfil?.nombre || perfil?.email || null,
       override_medico:     overrideAbsoluta || null,
+      medico_evaluador_id:     medicoEvaluadorId || null,
+      medico_evaluador_nombre: medicoEvaluadorId
+        ? (medicosData||[]).find(m=>m.id===medicoEvaluadorId)?.nombre || null
+        : null,
     }).eq("id", modalIniciar.id), "Sesiones:iniciar");
     setSavingIniciar(false);
     if(error) {
@@ -5796,6 +5808,7 @@ function Sesiones({perfil}) {
     setModalIniciar(null);
     setCuestionarioPre({});
     setOverrideAbsoluta(false);
+    setMedicoEvaluadorId("");
     setSignosPre({presion_arterial_pre:"",saturacion_o2_pre:"",frecuencia_cardiaca:"",temperatura:"",peso:"",nivel_dolor:0});
     toast.info("Sesión iniciada");
     load();
@@ -5825,6 +5838,20 @@ function Sesiones({perfil}) {
       .select("id,paciente_id,sesiones_usadas,sesiones_totales,paquetes(nombre)")
       .eq("estado","activo"),
     [], "Sesiones:compras"
+  );
+
+  // Médicos disponibles en la sede para seleccionar como evaluador
+  const { data: medicosData } = useSupabaseQuery(
+    () => {
+      let q = supabase.from("perfiles")
+        .select("id,nombre,email")
+        .in("rol", ["medico","medico_especialista","admin_general"])
+        .eq("activo", true)
+        .order("nombre");
+      if(perfil?.sede_id) q = q.or(`sede_id.eq.${perfil.sede_id},rol.eq.medico_especialista`);
+      return q;
+    },
+    [], "Sesiones:medicos"
   );
 
   const load = async () => {
@@ -6765,6 +6792,25 @@ function Sesiones({perfil}) {
             </div>
 
             <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+
+              {/* Sección A — Médico evaluador del día (OBLIGATORIO) */}
+              <div style={{marginBottom:20,background:"var(--surface2)",borderRadius:"var(--radius-sm)",padding:"12px 14px",border:`0.5px solid ${medicoEvaluadorId?"var(--accent-mid)":"#F87171"}`}}>
+                <div style={{fontSize:11,color:medicoEvaluadorId?"var(--accent)":"#DC2626",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>
+                  A. Médico evaluador del día {!medicoEvaluadorId && "— REQUERIDO"}
+                </div>
+                <select value={medicoEvaluadorId} onChange={e=>setMedicoEvaluadorId(e.target.value)}
+                  style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${medicoEvaluadorId?"var(--border)":"#F87171"}`,borderRadius:"var(--radius-sm)",color:medicoEvaluadorId?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                  <option value="">— Seleccionar médico evaluador —</option>
+                  {(medicosData||[]).map(m=>(
+                    <option key={m.id} value={m.id}>{m.nombre}</option>
+                  ))}
+                </select>
+                {!medicoEvaluadorId && (
+                  <div style={{fontSize:11,color:"#DC2626",marginTop:6}}>
+                    Debes seleccionar el médico que evaluó al paciente hoy antes de iniciar la sesión.
+                  </div>
+                )}
+              </div>
 
               {/* Sección B — Cuestionario pre-sesión */}
               <div style={{marginBottom:20}}>
