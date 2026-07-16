@@ -1772,7 +1772,7 @@ function HistoriasClinicas({perfil}) {
         doc.setFontSize(7);
         doc.setFont("helvetica","normal");
         doc.setTextColor(80,80,80);
-        doc.text("Asesor Medico Cientifico: Dr. Raul Aguado Quevedo  |  CMP 028600  |  RNE 022132", MARGIN, PAGE_H-9);
+        doc.text("Servicio de Medicina Hiperbarica - Oxynatur  |  Consorcio Estilo Medico S.A.C.", MARGIN, PAGE_H-9);
         doc.text(`Documento confidencial - Ley N° 29733`, PAGE_W-MARGIN, PAGE_H-9, {align:"right"});
         doc.addPage();
         y=20;
@@ -1824,7 +1824,7 @@ function HistoriasClinicas({perfil}) {
     doc.setFontSize(7);
     doc.setFont("helvetica","normal");
     doc.setTextColor(80,80,80);
-    doc.text("Asesor Medico Cientifico: Dr. Raul Aguado Quevedo  |  CMP 028600  |  RNE 022132", MARGIN, PAGE_H-9);
+    doc.text("Servicio de Medicina Hiperbarica - Oxynatur  |  Consorcio Estilo Medico S.A.C.", MARGIN, PAGE_H-9);
     doc.text("Documento confidencial - Ley N° 29733 de Proteccion de Datos Personales", PAGE_W-MARGIN, PAGE_H-9, {align:"right"});
 
     doc.save(`Consentimiento_${norm(pac?.apellidos||"pac")}_${norm(pac?.nombres||"")}_${new Date().toISOString().slice(0,10)}.pdf`);
