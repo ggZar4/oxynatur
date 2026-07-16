@@ -211,6 +211,36 @@ const HORA_OPTIONS = (() => {
   return opts;
 })();
 
+
+// ── Catálogo CIE-10 para Oxigenoterapia Hiperbárica ─────────────
+const CIE10_OHB = [
+  { codigo:"E11.5",  desc:"Diabetes mellitus tipo 2 con complicaciones circulatorias periféricas (pie diabético)" },
+  { codigo:"E10.5",  desc:"Diabetes mellitus tipo 1 con complicaciones circulatorias periféricas" },
+  { codigo:"L97",    desc:"Úlcera crónica de miembro inferior no clasificada en otra parte" },
+  { codigo:"M87.0",  desc:"Necrosis avascular idiopática del hueso (osteonecrosis)" },
+  { codigo:"M87.2",  desc:"Osteonecrosis debida a hemoglobinopatía" },
+  { codigo:"M87.9",  desc:"Osteonecrosis no especificada" },
+  { codigo:"M86.6",  desc:"Osteomielitis crónica multifocal" },
+  { codigo:"M86.9",  desc:"Osteomielitis no especificada" },
+  { codigo:"T79.6",  desc:"Isquemia traumática del músculo / síndrome compartimental" },
+  { codigo:"T33",    desc:"Congelación superficial" },
+  { codigo:"T67.0",  desc:"Golpe de calor e insolación" },
+  { codigo:"T58",    desc:"Intoxicación por monóxido de carbono" },
+  { codigo:"T70.3",  desc:"Enfermedad por descompresión (enfermedad de los cajones)" },
+  { codigo:"T79.0",  desc:"Embolia gaseosa arterial" },
+  { codigo:"M96.8",  desc:"Osteoradionecrosis (necrosis ósea post-radioterapia)" },
+  { codigo:"L98.4",  desc:"Úlcera crónica de piel no clasificada en otra parte" },
+  { codigo:"T87.5",  desc:"Necrosis de injerto o colgajo comprometido" },
+  { codigo:"G35",    desc:"Esclerosis múltiple" },
+  { codigo:"I64",    desc:"Accidente cerebrovascular no especificado como hemorrágico o isquémico (secuelas)" },
+  { codigo:"F07.81", desc:"Síndrome post-COVID / Long COVID — deterioro cognitivo" },
+  { codigo:"H93.1",  desc:"Tinnitus / acúfenos" },
+  { codigo:"H91.2",  desc:"Sordera súbita idiopática" },
+  { codigo:"M79.3",  desc:"Paniculitis / fibromialgia" },
+  { codigo:"Z51.8",  desc:"Recuperación post-quirúrgica / tratamiento complementario" },
+  { codigo:"OTRO",   desc:"Otro diagnóstico (especificar)" },
+];
+
 // ── Toast notification system ──────────────────────────────────────────────
 let __toastFn = null;
 const toast = {
@@ -1580,10 +1610,28 @@ function Pacientes({perfil}) {
                 options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
               <Input label="Sesiones Prescritas" value={form.total_sesiones_prescritas} onChange={v=>setF("total_sesiones_prescritas",v)} type="number"/>
               <div style={{marginBottom:14}}>
-                <label style={{fontSize:12,color:err.diagnostico_hc?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Diagnóstico Principal <span style={{color:"#F87171"}}>*</span></label>
-                <textarea value={form.diagnostico_hc} onChange={e=>setF("diagnostico_hc",e.target.value)} rows={3}
-                  placeholder="Diagnóstico para la historia clínica..."
-                  style={{width:"100%",background:"var(--surface2)",border:`1px solid ${err.diagnostico_hc?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                <label style={{fontSize:12,color:err.diagnostico_hc?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                  Diagnóstico Principal (CIE-10) <span style={{color:"#F87171"}}>*</span>
+                </label>
+                <select
+                  value={CIE10_OHB.some(c=>c.desc===form.diagnostico_hc||`${c.codigo} — ${c.desc}`===form.diagnostico_hc) ? form.diagnostico_hc : (form.diagnostico_hc?"OTRO":"")}
+                  onChange={e=>{
+                    if(e.target.value==="OTRO") { setF("diagnostico_hc",""); }
+                    else if(e.target.value) { setF("diagnostico_hc", e.target.value); }
+                    else { setF("diagnostico_hc",""); }
+                  }}
+                  style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.diagnostico_hc?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:form.diagnostico_hc?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",marginBottom:8}}>
+                  <option value="">— Seleccionar diagnóstico CIE-10 —</option>
+                  {CIE10_OHB.map(c=>(
+                    <option key={c.codigo} value={c.codigo==="OTRO"?"OTRO":`${c.codigo} — ${c.desc}`}>
+                      {c.codigo==="OTRO"?c.desc:`${c.codigo} — ${c.desc}`}
+                    </option>
+                  ))}
+                </select>
+                {/* Campo texto libre — siempre visible para detallar o especificar */}
+                <textarea value={form.diagnostico_hc} onChange={e=>setF("diagnostico_hc",e.target.value)} rows={2}
+                  placeholder="Especificar diagnóstico o detalles adicionales..."
+                  style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.diagnostico_hc?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                 {err.diagnostico_hc && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.diagnostico_hc}</div>}
               </div>
             </div>
@@ -2376,19 +2424,35 @@ function HistoriasClinicas({perfil}) {
           <div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
               {[
-                ["Diagnóstico principal","diagnostico_principal"],
                 ["Antecedentes personales","antecedentes_personales"],
                 ["Antecedentes familiares","antecedentes_familiares"],
                 ["Alergias","alergias"],
                 ["Medicamentos habituales","medicamentos_habituales"],
                 ["Contraindicaciones","contraindicaciones"],
               ].map(([label,key])=>(
-                <div key={key} style={{gridColumn:["diagnostico_principal","contraindicaciones"].includes(key)?"1/-1":undefined}}>
+                <div key={key} style={{gridColumn:["contraindicaciones"].includes(key)?"1/-1":undefined}}>
                   <label style={{fontSize:11,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</label>
                   <textarea value={formHC[key]||""} onChange={e=>setFormHC(f=>({...f,[key]:e.target.value}))}
                     rows={2} style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                 </div>
               ))}
+
+              {/* Diagnóstico principal con CIE-10 — fuera del map genérico */}
+              <div style={{gridColumn:"1/-1"}}>
+                <label style={{fontSize:11,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>Diagnóstico principal (CIE-10)</label>
+                <select
+                  onChange={e=>{ if(e.target.value&&e.target.value!=="OTRO") setFormHC(f=>({...f,diagnostico_principal:e.target.value})); }}
+                  defaultValue=""
+                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text3)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",marginBottom:6}}>
+                  <option value="">— Seleccionar CIE-10 o escribir abajo —</option>
+                  {CIE10_OHB.filter(c=>c.codigo!=="OTRO").map(c=>(
+                    <option key={c.codigo} value={`${c.codigo} — ${c.desc}`}>{c.codigo} — {c.desc}</option>
+                  ))}
+                </select>
+                <textarea value={formHC.diagnostico_principal||""} onChange={e=>setFormHC(f=>({...f,diagnostico_principal:e.target.value}))}
+                  rows={2} placeholder="Selecciona arriba o escribe el diagnóstico..."
+                  style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+              </div>
             </div>
             <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"var(--surface)",borderRadius:8}}>
               <input type="checkbox" checked={formHC.apto_hiperbarica!==false}
