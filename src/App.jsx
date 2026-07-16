@@ -1691,18 +1691,37 @@ function HistoriasClinicas({perfil}) {
       doc.setFontSize(7.5);
       doc.setTextColor(80,80,80);
       doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781", 38, 14.5);
-      // Sede info
+      // Sede info con RENIPRESS
       const sedeNombre = (pacSelec.sedes?.nombre || "").toLowerCase();
-      const sedeInfo = sedeNombre.includes("molisalud") || sedeNombre.includes("molina")
-        ? "Molisalud: Av. Javier Prado 5998, La Molina  |  Tel: 987203017"
-        : "Clinica San Miguel Arcangel: Jr. Las Gardenias 754, SJL  |  Tel: (01)387-5457";
-      doc.text(sedeInfo, 38, 19.5);
+      let sedeInfo = "";
+      let renipress = "";
+      if(sedeNombre.includes("molisalud") || sedeNombre.includes("molina")) {
+        sedeInfo = "Molisalud: Av. Javier Prado 5998, La Molina  |  Tel: 987203017";
+        renipress = "RENIPRESS: 00037878";
+      } else if(sedeNombre.includes("miguel") || sedeNombre.includes("sma") || sedeNombre.includes("arcangel")) {
+        sedeInfo = "Clinica San Miguel Arcangel: Jr. Las Gardenias 754, SJL  |  Tel: (01)387-5457";
+        renipress = "RENIPRESS: 00009104";
+      } else if(sedeNombre.includes("vitalis") || sedeNombre.includes("angel")) {
+        sedeInfo = "Angel Vitalis: San Martin de Porres";
+        renipress = "RENIPRESS: [en tramite]";
+      } else {
+        sedeInfo = norm(pacSelec.sedes?.nombre || "");
+        renipress = "";
+      }
+      doc.text(sedeInfo, 38, 16);
+      if(renipress) {
+        doc.setFontSize(7);
+        doc.setTextColor(0,120,100);
+        doc.text(renipress, 38, 21);
+        doc.setTextColor(80,80,80);
+        doc.setFontSize(7.5);
+      }
       // Linea separadora
       doc.setDrawColor(0, 168, 150);
       doc.setLineWidth(0.8);
-      doc.line(0, 26, PAGE_W, 26);
+      doc.line(0, 27, PAGE_W, 27);
       doc.setLineWidth(0.2);
-      y = 32;
+      y = 33;
     };
 
     const addFooter = () => {
@@ -1763,7 +1782,7 @@ function HistoriasClinicas({perfil}) {
     doc.setFontSize(8.5);
     doc.setFont("helvetica","normal");
     doc.setTextColor(60,60,60);
-    doc.text(`DNI: ${pac?.dni||"-"}   |   Sede: ${norm(pacSelec.sedes?.nombre||"-")}   |   N° HC: ${norm(hc?.numero_hc||pacSelec.id?.slice(-6)||"-")}`, MARGIN+4, y+12);
+    doc.text(`DNI: ${pac?.dni||"-"}   |   Sede: ${norm(pacSelec.sedes?.nombre||"-")}   |   N° HC: ${norm(hc?.numero_hc||"-")}`, MARGIN+4, y+12);
     doc.text(`Sesiones: ${pac?.sesiones_realizadas||0} realizadas  /  ${pac?.total_sesiones_prescritas||0} prescritas   |   Apto HBOT: ${hc?.apto_hiperbarica!==false?"SI":"NO"}`, MARGIN+4, y+19);
     doc.text(`Fecha de emision: ${new Date().toLocaleDateString("es-PE")}`, MARGIN+4, y+25);
     nl(32);
@@ -1879,12 +1898,13 @@ function HistoriasClinicas({perfil}) {
       // Cuestionario resumen (solo los Si)
       const cpre = ev.cuestionario_pre || {};
       const alertasCpre = [
-        cpre.resfriado && "Resfriado",
-        cpre.dolor_oidos && "Dolor oidos",
-        cpre.fiebre && "Fiebre",
-        cpre.alcohol && "Alcohol",
-        cpre.medicamento_nuevo && "Medicamento nuevo",
-        cpre.sintoma_nuevo && "Sintoma nuevo",
+        cpre.fiebre && "⛔ Fiebre activa",
+        cpre.dolor_oidos && "⛔ Dolor de oidos",
+        cpre.alcohol && "⛔ Alcohol",
+        cpre.doxorubicina && "⛔ Quimioterapia (Doxorubicina/Bleomicina)",
+        cpre.resfriado && "⚠ Resfriado/congestion",
+        cpre.medicamento_nuevo && "⚠ Medicamento nuevo",
+        cpre.sintoma_nuevo && "⚠ Sintoma nuevo",
       ].filter(Boolean);
       if(alertasCpre.length > 0) {
         checkPage(8);
@@ -2262,8 +2282,8 @@ function HistoriasClinicas({perfil}) {
           <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}>
             Historia Clínica Maestra
             {hcMaestra?.numero_hc && (
-              <span style={{fontSize:10,color:"var(--text3)",fontWeight:500,background:"var(--surface2)",padding:"1px 8px",borderRadius:99,border:"0.5px solid var(--border)"}}>
-                HC-{String(hcMaestra.numero_hc).padStart(3,"0")}
+              <span style={{fontSize:10,color:"var(--accent)",fontWeight:700,background:"var(--accent-light)",padding:"2px 10px",borderRadius:99,border:"0.5px solid var(--accent-mid)",letterSpacing:"0.08em"}}>
+                {hcMaestra.numero_hc}
               </span>
             )}
           </div>
