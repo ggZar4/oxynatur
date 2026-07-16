@@ -82,7 +82,7 @@ async function safeQuery(queryFn, contexto = "query") {
   try {
     const result = await queryFn();
     if (result?.error) {
-      // console.error(`[${contexto}] Error de Supabase:`, result.error);
+      // // console.error(`[${contexto}] Error:`, result.error); // silenciado en prod
       return { data: null, error: result.error };
     }
     return { data: result?.data ?? null, error: null };
@@ -1723,7 +1723,7 @@ function HistoriasClinicas({perfil}) {
     // Recargar datos del paciente
     const { data } = await safeQuery(() =>
       supabase.from("historias_clinicas")
-        .select("*, pacientes(id,nombres,apellidos,dni,fecha_nacimiento,genero,telefono,email,sesiones_realizadas,total_sesiones_prescritas,consentimiento_firmado,consentimiento_fecha,consentimiento_informado_por), sedes!sede_apertura_id(nombre)")
+        .select("*, pacientes(id,nombres,apellidos,dni,fecha_nacimiento,genero,telefono,email,sesiones_realizadas,total_sesiones_prescritas,consentimiento_firmado,consentimiento_fecha,consentimiento_informado_por), sedes!sede_apertura_id(nombre,renipress)")
         .eq("paciente_id", pac.id).maybeSingle(), "HC:recargar"
     );
     if(data) setPacSelec(data);
@@ -1774,19 +1774,17 @@ function HistoriasClinicas({perfil}) {
       // Sede info con RENIPRESS
       const sedeNombre = (pacSelec.sedes?.nombre || "").toLowerCase();
       let sedeInfo = "";
-      let renipress = "";
+      // RENIPRESS desde BD — no hardcodeado
+      const renipressVal = pacSelec.sedes?.renipress;
+      let renipress = renipressVal ? `RENIPRESS: ${renipressVal}` : "RENIPRESS: [en tramite]";
       if(sedeNombre.includes("molisalud") || sedeNombre.includes("molina")) {
         sedeInfo = "Molisalud: Av. Javier Prado 5998, La Molina  |  Tel: 987203017";
-        renipress = "RENIPRESS: 00037878";
       } else if(sedeNombre.includes("miguel") || sedeNombre.includes("sma") || sedeNombre.includes("arcangel")) {
         sedeInfo = "Clinica San Miguel Arcangel: Jr. Las Gardenias 754, SJL  |  Tel: (01)387-5457";
-        renipress = "RENIPRESS: 00009104";
       } else if(sedeNombre.includes("vitalis") || sedeNombre.includes("angel")) {
         sedeInfo = "Angel Vitalis: San Martin de Porres";
-        renipress = "RENIPRESS: [en tramite]";
       } else {
         sedeInfo = norm(pacSelec.sedes?.nombre || "");
-        renipress = "";
       }
       doc.setFontSize(7);
       doc.setTextColor(180, 220, 200);
@@ -4783,6 +4781,8 @@ function Ventas({perfil}) {
       promo_aplicada:     calculo?.promo_aplicada || null,
       descuento_pct:      calculo?.descuento_pct ? Number(calculo.descuento_pct) : 0,
       metodo_pago:        form.metodo_pago,
+      kiwi_comision:      form.metodo_pago==="kiwi" ? Math.round(Number(form.monto_pagado)*0.05*100)/100 : null,
+      monto_neto_recibido: form.metodo_pago==="kiwi" ? Math.round(Number(form.monto_pagado)*0.95*100)/100 : Number(form.monto_pagado),
       sesiones_totales:   calculo?.sesiones_incluidas || paquete?.cantidad_sesiones || 1,
       sesiones_usadas:    0,
       fecha_vencimiento:  fechaVencimiento,
