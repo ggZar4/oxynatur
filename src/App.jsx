@@ -1861,38 +1861,14 @@ function HistoriasClinicas({perfil}) {
       }
       nl(11);
 
-      // PRE / POST en dos columnas lado a lado
-      checkPage(18);
-      const colW = (CONTENT_W/2) - 3;
-      const colR = MARGIN + CONTENT_W/2 + 1;
-      // PRE — columna izquierda
-      doc.setFillColor(235,240,255);
-      doc.rect(MARGIN+2, y-2, colW, 16, "F");
-      doc.setFont("helvetica","bold");
-      doc.setFontSize(7);
-      doc.setTextColor(60,60,180);
-      doc.text("PRE-SESION", MARGIN+4, y+2);
-      doc.setFont("helvetica","normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(50,50,50);
+      // PRE / POST en dos columnas — altura dinamica
       const preLines = [
         ev.presion_arterial_pre ? `PA: ${ev.presion_arterial_pre}` : null,
         ev.frecuencia_cardiaca ? `FC: ${ev.frecuencia_cardiaca} bpm` : null,
         ev.saturacion_o2_pre ? `SatO2: ${ev.saturacion_o2_pre}%` : null,
-        ev.temperatura ? `Temp: ${ev.temperatura}°C` : null,
+        ev.temperatura ? `Temp: ${ev.temperatura} C` : null,
         ev.peso ? `Peso: ${ev.peso} kg` : null,
       ].filter(Boolean);
-      preLines.forEach((line, li) => doc.text(line, MARGIN+4, y+7+(li*4)));
-      // POST — columna derecha
-      doc.setFillColor(220,245,238);
-      doc.rect(colR, y-2, colW, 16, "F");
-      doc.setFont("helvetica","bold");
-      doc.setFontSize(7);
-      doc.setTextColor(0,120,80);
-      doc.text("POST-SESION", colR+2, y+2);
-      doc.setFont("helvetica","normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(50,50,50);
       const postLines = [
         ev.presion_arterial ? `PA: ${ev.presion_arterial}` : null,
         ev.frecuencia_cardiaca_post ? `FC: ${ev.frecuencia_cardiaca_post} bpm` : null,
@@ -1901,8 +1877,34 @@ function HistoriasClinicas({perfil}) {
         ev.estado_general ? `Estado: ${norm(ev.estado_general)}` : null,
         ev.tolerancia ? `Tolerancia: ${norm(ev.tolerancia)}` : null,
       ].filter(Boolean);
-      postLines.forEach((line, li) => doc.text(line, colR+2, y+7+(li*4)));
-      nl(20);
+      const maxLines = Math.max(preLines.length, postLines.length, 2);
+      const boxH = 8 + maxLines * 4.5;
+      checkPage(boxH + 4);
+      const colW = (CONTENT_W/2) - 3;
+      const colR = MARGIN + CONTENT_W/2 + 1;
+      // PRE — izquierda
+      doc.setFillColor(235,240,255);
+      doc.rect(MARGIN+2, y-2, colW, boxH, "F");
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(7);
+      doc.setTextColor(60,60,180);
+      doc.text("PRE-SESION", MARGIN+4, y+2);
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(50,50,50);
+      preLines.forEach((line, li) => doc.text(line, MARGIN+4, y+7+(li*4.5)));
+      // POST — derecha
+      doc.setFillColor(220,245,238);
+      doc.rect(colR, y-2, colW, boxH, "F");
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(7);
+      doc.setTextColor(0,120,80);
+      doc.text("POST-SESION", colR+2, y+2);
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(50,50,50);
+      postLines.forEach((line, li) => doc.text(line, colR+2, y+7+(li*4.5)));
+      nl(boxH + 4);
 
       // Parámetros de sesión
       checkPage(8);
@@ -1969,7 +1971,7 @@ function HistoriasClinicas({perfil}) {
         doc.setFontSize(7.5);
         doc.setFont("helvetica","bold");
         doc.setTextColor(0,120,80);
-        doc.text(`✓ Evaluado y firmado por: ${norm(ev.firma_medico)}`, MARGIN+5, y+3);
+        doc.text(`Evaluado y firmado por: ${norm(ev.firma_medico)}`, MARGIN+5, y+3);
       } else {
         doc.setFillColor(255,248,225);
         doc.rect(MARGIN+2, y-2, CONTENT_W-4, 9, "F");
@@ -1980,7 +1982,7 @@ function HistoriasClinicas({perfil}) {
         doc.setFontSize(7.5);
         doc.setFont("helvetica","bold");
         doc.setTextColor(180,100,0);
-        doc.text("⚠ BORRADOR — Pendiente de firma medica. No tiene validez legal.", MARGIN+5, y+3);
+        doc.text("BORRADOR - Pendiente de firma medica. No tiene validez legal.", MARGIN+5, y+3);
       }
       nl(12);
 
