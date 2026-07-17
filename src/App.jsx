@@ -5906,16 +5906,11 @@ function Sesiones({perfil}) {
 
   // Médicos disponibles en la sede para seleccionar como evaluador
   const { data: medicosData } = useSupabaseQuery(
-    () => {
-      let q = supabase.from("perfiles")
-        .select("id,nombre,email,rol")
-        .in("rol", ["medico","medico_especialista","admin_general"])
-        .eq("activo", true)
-        .order("nombre");
-      // Mostrar médicos de la sede + médicos sin sede (supervisión multi-sede)
-      if(perfil?.sede_id) q = q.or(`sede_id.eq.${perfil.sede_id},sede_id.is.null`);
-      return q;
-    },
+    () => supabase.from("perfiles")
+      .select("id,nombre,rol")
+      .in("rol", ["medico","medico_especialista"])
+      .eq("activo", true)
+      .order("nombre"),
     [], "Sesiones:medicos"
   );
 
