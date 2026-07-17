@@ -5908,11 +5908,12 @@ function Sesiones({perfil}) {
   const { data: medicosData } = useSupabaseQuery(
     () => {
       let q = supabase.from("perfiles")
-        .select("id,nombre,email")
+        .select("id,nombre,email,rol")
         .in("rol", ["medico","medico_especialista","admin_general"])
         .eq("activo", true)
         .order("nombre");
-      if(perfil?.sede_id) q = q.or(`sede_id.eq.${perfil.sede_id},rol.eq.medico_especialista`);
+      // Mostrar médicos de la sede + médicos sin sede (supervisión multi-sede)
+      if(perfil?.sede_id) q = q.or(`sede_id.eq.${perfil.sede_id},sede_id.is.null`);
       return q;
     },
     [], "Sesiones:medicos"
