@@ -431,6 +431,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
     { id:"prospectos", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/><line x1="19" y1="8" x2="23" y2="8"/><line x1="21" y1="6" x2="21" y2="10"/></svg>), label:"Prospectos", visible: f.puedeVerProspectos },
     { id:"dashboard_sede", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>), label:"Mi Sede",             visible: f.puedeVerDashboardSede },
     { id:"agenda",    icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>), label:"Agenda",            visible: true },
+    { id:"oxigeno",   icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>), label:"Control O₂",       visible: f.esAdmin },
   ].filter(item => item.visible);
 
   return (
@@ -8337,6 +8338,280 @@ export default function App() {
 
   const f = getRolFlags(perfil);
 
+
+// ══════════════════════════════════════════════════════════════════
+// CONTROL O₂ — Registro de balones hiperbáricos
+// ══════════════════════════════════════════════════════════════════
+function ControlOxigeno({ perfil }) {
+  const f = getFlags(perfil);
+  const [balones, setBalones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [modalAgotar, setModalAgotar] = useState(null);
+  const [form, setForm] = useState({ sede_id:"", numero_serie:"", fecha_ingreso: new Date().toISOString().slice(0,10) });
+  const [saving, setSaving] = useState(false);
+  const [filtroSede, setFiltroSede] = useState(perfil?.sede_id || "");
+  const [filtroPeriodo, setFiltroPeriodo] = useState({ desde:"", hasta:"" });
+
+  const { data: sedesData } = useSupabaseQuery(
+    () => supabase.from("sedes").select("id,nombre").eq("estado","activo").order("nombre"),
+    [], "Oxigeno:sedes"
+  );
+
+  const load = async () => {
+    setLoading(true);
+    let q = supabase.from("inventario_oxigeno")
+      .select("*, sedes(nombre), perfiles!registrado_por(nombre)")
+      .order("fecha_ingreso", { ascending: false });
+    if(filtroSede) q = q.eq("sede_id", filtroSede);
+    if(filtroPeriodo.desde) q = q.gte("fecha_ingreso", filtroPeriodo.desde);
+    if(filtroPeriodo.hasta) q = q.lte("fecha_ingreso", filtroPeriodo.hasta);
+    const { data } = await safeQuery(() => q, "Oxigeno:load");
+    setBalones(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [filtroSede, filtroPeriodo.desde, filtroPeriodo.hasta]);
+
+  // Registrar nuevo balón
+  const registrarBalon = async () => {
+    if(!form.sede_id) { toast.error("Selecciona la sede"); return; }
+    if(!form.numero_serie.trim()) { toast.error("Ingresa el número de serie"); return; }
+    setSaving(true);
+    const { error } = await safeQuery(() =>
+      supabase.from("inventario_oxigeno").insert({
+        sede_id: form.sede_id,
+        numero_serie: form.numero_serie.trim().toUpperCase(),
+        fecha_ingreso: form.fecha_ingreso,
+        estado: "activo",
+        registrado_por: perfil?.id,
+      }), "Oxigeno:insert"
+    );
+    setSaving(false);
+    if(error) { toast.error("Error al registrar balón"); return; }
+    toast.success("Balón registrado correctamente");
+    setModalNuevo(false);
+    setForm({ sede_id: perfil?.sede_id||"", numero_serie:"", fecha_ingreso: new Date().toISOString().slice(0,10) });
+    load();
+  };
+
+  // Marcar balón como agotado
+  const agotarBalon = async (balon) => {
+    const { error } = await safeQuery(() =>
+      supabase.from("inventario_oxigeno").update({
+        estado: "agotado",
+        fecha_agotado: new Date().toISOString().slice(0,10),
+      }).eq("id", balon.id), "Oxigeno:agotar"
+    );
+    if(error) { toast.error("Error al actualizar balón"); return; }
+    toast.success("Balón marcado como agotado");
+    setModalAgotar(null);
+    load();
+  };
+
+  // Calcular reporte del período visible
+  const balonesActivos = balones.filter(b => b.estado === "activo").length;
+  const balonesAgotados = balones.filter(b => b.estado === "agotado").length;
+  const totalBalones = balones.length;
+
+  // Pacientes atendidos en el período (query separada)
+  const [pacientesCount, setPacientesCount] = useState(null);
+  const [sesionesCount, setSesionesCount] = useState(null);
+
+  useEffect(() => {
+    if(!filtroPeriodo.desde || !filtroPeriodo.hasta) { setPacientesCount(null); setSesionesCount(null); return; }
+    (async () => {
+      let q = supabase.from("sesiones")
+        .select("paciente_id, estado")
+        .eq("estado", "completada")
+        .gte("fecha", filtroPeriodo.desde)
+        .lte("fecha", filtroPeriodo.hasta);
+      if(filtroSede) q = q.eq("sede_id", filtroSede);
+      const { data } = await safeQuery(() => q, "Oxigeno:sesiones");
+      if(data) {
+        setSesionesCount(data.length);
+        const unicos = new Set(data.map(s => s.paciente_id));
+        setPacientesCount(unicos.size);
+      }
+    })();
+  }, [filtroSede, filtroPeriodo.desde, filtroPeriodo.hasta]);
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)"}}>Control de Oxígeno</h1>
+          <p style={{color:"var(--text3)",fontSize:14,marginTop:3}}>Registro de balones de O₂ medicinal por sede</p>
+        </div>
+        <Btn onClick={()=>{ setForm({sede_id:filtroSede||perfil?.sede_id||"", numero_serie:"", fecha_ingreso:new Date().toISOString().slice(0,10)}); setModalNuevo(true); }}>
+          + Registrar balón
+        </Btn>
+      </div>
+
+      {/* Filtros */}
+      <Card style={{marginBottom:20,padding:"14px 18px"}}>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+          <div style={{flex:1,minWidth:160}}>
+            <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em"}}>Sede</label>
+            <select value={filtroSede} onChange={e=>setFiltroSede(e.target.value)}
+              style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}>
+              <option value="">Todas las sedes</option>
+              {(sedesData||[]).map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
+          <div style={{flex:1,minWidth:140}}>
+            <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em"}}>Desde</label>
+            <input type="date" value={filtroPeriodo.desde} onChange={e=>setFiltroPeriodo(p=>({...p,desde:e.target.value}))}
+              style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+          </div>
+          <div style={{flex:1,minWidth:140}}>
+            <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em"}}>Hasta</label>
+            <input type="date" value={filtroPeriodo.hasta} onChange={e=>setFiltroPeriodo(p=>({...p,hasta:e.target.value}))}
+              style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+          </div>
+          {(filtroPeriodo.desde||filtroPeriodo.hasta||filtroSede) && (
+            <Btn variant="ghost" onClick={()=>{ setFiltroSede(perfil?.sede_id||""); setFiltroPeriodo({desde:"",hasta:""}); }}>
+              Limpiar
+            </Btn>
+          )}
+        </div>
+      </Card>
+
+      {/* Resumen del período */}
+      {(filtroPeriodo.desde && filtroPeriodo.hasta) && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+          {[
+            { label:"Balones ingresados", value: totalBalones, color:"#7C6AF7" },
+            { label:"Balones activos", value: balonesActivos, color:"#10B981" },
+            { label:"Balones agotados", value: balonesAgotados, color:"var(--text3)" },
+            { label:"Sesiones completadas", value: sesionesCount ?? "—", color:"var(--accent)" },
+          ].map(stat=>(
+            <Card key={stat.label} style={{padding:"14px 16px",textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:700,color:stat.color,fontFamily:"Syne,sans-serif"}}>{stat.value}</div>
+              <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{stat.label}</div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Pacientes únicos */}
+      {pacientesCount !== null && (
+        <Card style={{marginBottom:20,padding:"12px 18px",background:"var(--accent-light)",border:"0.5px solid var(--accent-mid)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:24,fontWeight:700,color:"var(--accent)",fontFamily:"Syne,sans-serif"}}>{pacientesCount}</div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--accent)"}}>Pacientes únicos atendidos en el período</div>
+              <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{sesionesCount} sesiones completadas · {filtroSede?(sedesData||[]).find(s=>s.id===filtroSede)?.nombre||"":"Todas las sedes"}</div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Tabla de balones */}
+      <Card>
+        {loading ? (
+          <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
+        ) : balones.length === 0 ? (
+          <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>
+            No hay balones registrados {filtroSede?"en esta sede":""}.
+          </div>
+        ) : (
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{borderBottom:"0.5px solid var(--border)"}}>
+                {["N° Serie","Sede","Ingreso","Agotado","Estado","Registrado por",""].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {balones.map((b,i)=>(
+                <tr key={b.id} style={{borderBottom:"0.5px solid var(--border)",background:i%2===0?"transparent":"var(--surface2)"}}>
+                  <td style={{padding:"10px 14px",fontSize:13,fontWeight:600,color:"var(--text)",fontFamily:"monospace"}}>{b.numero_serie}</td>
+                  <td style={{padding:"10px 14px",fontSize:13,color:"var(--text2)"}}>{b.sedes?.nombre||"—"}</td>
+                  <td style={{padding:"10px 14px",fontSize:13,color:"var(--text2)"}}>{b.fecha_ingreso}</td>
+                  <td style={{padding:"10px 14px",fontSize:13,color:"var(--text2)"}}>{b.fecha_agotado||"—"}</td>
+                  <td style={{padding:"10px 14px"}}>
+                    <span style={{
+                      background: b.estado==="activo"?"#D1FAE5":"var(--surface2)",
+                      color: b.estado==="activo"?"#065F46":"var(--text3)",
+                      padding:"2px 10px",borderRadius:99,fontSize:11,fontWeight:600
+                    }}>{b.estado==="activo"?"🟢 Activo":"⚫ Agotado"}</span>
+                  </td>
+                  <td style={{padding:"10px 14px",fontSize:12,color:"var(--text3)"}}>{b.perfiles?.nombre||"—"}</td>
+                  <td style={{padding:"10px 14px"}}>
+                    {b.estado==="activo" && (
+                      <button onClick={()=>setModalAgotar(b)}
+                        style={{background:"#FEF3C7",color:"#92400E",border:"0.5px solid #FCD34D",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600}}>
+                        Marcar agotado
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Modal nuevo balón */}
+      {modalNuevo && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
+          onClick={e=>e.target===e.currentTarget&&setModalNuevo(false)}>
+          <div style={{background:"var(--surface)",borderRadius:14,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>Registrar balón de O₂</div>
+            <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Ingresa los datos del balón al conectarlo</div>
+
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Sede <span style={{color:"#F87171"}}>*</span></label>
+              <select value={form.sede_id} onChange={e=>setForm(f=>({...f,sede_id:e.target.value}))}
+                style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                <option value="">— Seleccionar sede —</option>
+                {(sedesData||[]).map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+
+            <Input label="N° Serie del balón *" value={form.numero_serie}
+              onChange={v=>setForm(f=>({...f,numero_serie:v}))}
+              placeholder="Ej: B-2026-001"/>
+
+            <Input label="Fecha de ingreso" value={form.fecha_ingreso} type="date"
+              onChange={v=>setForm(f=>({...f,fecha_ingreso:v}))}/>
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:14,borderTop:"0.5px solid var(--border)",marginTop:8}}>
+              <Btn variant="ghost" onClick={()=>setModalNuevo(false)}>Cancelar</Btn>
+              <Btn onClick={registrarBalon} disabled={saving}>{saving?"Guardando...":"Registrar balón"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar agotado */}
+      {modalAgotar && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
+          onClick={e=>e.target===e.currentTarget&&setModalAgotar(null)}>
+          <div style={{background:"var(--surface)",borderRadius:14,maxWidth:380,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:8}}>¿Marcar balón como agotado?</div>
+            <div style={{fontSize:13,color:"var(--text2)",marginBottom:6}}>
+              Balón N° serie: <strong style={{fontFamily:"monospace"}}>{modalAgotar.numero_serie}</strong>
+            </div>
+            <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>
+              Se registrará la fecha de agotado como hoy: {new Date().toLocaleDateString("es-PE")}
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Btn variant="ghost" onClick={()=>setModalAgotar(null)}>Cancelar</Btn>
+              <Btn onClick={()=>agotarBalon(modalAgotar)} style={{background:"#F59E0B",border:"none"}}>
+                Confirmar agotado
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
   const renderVista = () => {
     switch(vista){
       case "dashboard": return f.puedeVerDashboard  ? <DashboardAdmin perfil={perfil}/>        : null;
@@ -8351,6 +8626,7 @@ export default function App() {
       case "prospectos": return f.puedeVerProspectos  ? <Prospectos perfil={perfil}/>  : null;
       case "agenda":    return                         <AgendaMedico perfil={perfil} cambiarVista={cambiarVista}/>;
       case "dashboard_sede": return f.puedeVerDashboardSede ? <DashboardSede perfil={perfil}/> : null;
+      case "oxigeno":    return f.esAdmin              ? <ControlOxigeno perfil={perfil}/> : null;
       default:          return f.puedeVerDashboard   ? <DashboardAdmin/>              : <Pacientes perfil={perfil}/>;
     }
   };
