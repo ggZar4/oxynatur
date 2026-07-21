@@ -8354,14 +8354,14 @@ function ControlOxigeno({ perfil }) {
   const [filtroPeriodo, setFiltroPeriodo] = useState({ desde:"", hasta:"" });
 
   const { data: sedesData } = useSupabaseQuery(
-    () => supabase.from("sedes").select("id,nombre").eq("estado","activo").order("nombre"),
+    () => supabase.from("sedes").select("id,nombre").order("nombre"),
     [], "Oxigeno:sedes"
   );
 
   const load = async () => {
     setLoading(true);
     let q = supabase.from("inventario_oxigeno")
-      .select("*, sedes(nombre), perfiles!registrado_por(nombre)")
+      .select("*, sedes(nombre)")
       .order("fecha_ingreso", { ascending: false });
     if(filtroSede) q = q.eq("sede_id", filtroSede);
     if(filtroPeriodo.desde) q = q.gte("fecha_ingreso", filtroPeriodo.desde);
@@ -8409,7 +8409,13 @@ function ControlOxigeno({ perfil }) {
     load();
   };
 
-  // Calcular reporte del período visible
+  // ── MÉTRICAS SEPARADAS ────────────────────────────────────
+  // STOCK: balones actualmente activos (independiente del período)
+  const [stockActivo, setStockActivo] = useState(null);
+  // CONSUMO: balones agotados EN el período (por fecha_agotado)
+  const [balonesAgotadosPeriodo, setBalonesAgotadosPeriodo] = useState(null);
+
+  // Métricas de la tabla visible (por fecha_ingreso)
   const balonesActivos = balones.filter(b => b.estado === "activo").length;
   const balonesAgotados = balones.filter(b => b.estado === "agotado").length;
   const totalBalones = balones.length;
@@ -8418,23 +8424,51 @@ function ControlOxigeno({ perfil }) {
   const [pacientesCount, setPacientesCount] = useState(null);
   const [sesionesCount, setSesionesCount] = useState(null);
 
+  // Stock activo actual — siempre, independiente del período
   useEffect(() => {
-    if(!filtroPeriodo.desde || !filtroPeriodo.hasta) { setPacientesCount(null); setSesionesCount(null); return; }
     (async () => {
-      let q = supabase.from("sesiones")
+      let q = supabase.from("inventario_oxigeno").select("id").eq("estado","activo");
+      if(filtroSede) q = q.eq("sede_id", filtroSede);
+      const { data } = await safeQuery(() => q, "Oxigeno:stock");
+      if(data) setStockActivo(data.length);
+    })();
+  }, [filtroSede, balones]);
+
+  useEffect(() => {
+    if(!filtroPeriodo.desde || !filtroPeriodo.hasta) {
+      setPacientesCount(null); setSesionesCount(null); setBalonesAgotadosPeriodo(null);
+      return;
+    }
+    (async () => {
+      // Sesiones completadas del período
+      let qSes = supabase.from("sesiones")
         .select("paciente_id, estado")
         .eq("estado", "completada")
         .gte("fecha", filtroPeriodo.desde)
         .lte("fecha", filtroPeriodo.hasta);
-      if(filtroSede) q = q.eq("sede_id", filtroSede);
-      const { data } = await safeQuery(() => q, "Oxigeno:sesiones");
-      if(data) {
-        setSesionesCount(data.length);
-        const unicos = new Set(data.map(s => s.paciente_id));
-        setPacientesCount(unicos.size);
+      if(filtroSede) qSes = qSes.eq("sede_id", filtroSede);
+      const { data: sesData } = await safeQuery(() => qSes, "Oxigeno:sesiones");
+      if(sesData) {
+        setSesionesCount(sesData.length);
+        setPacientesCount(new Set(sesData.map(s => s.paciente_id)).size);
       }
+
+      // CONSUMO REAL: balones agotados en el período (por fecha_agotado)
+      let qCons = supabase.from("inventario_oxigeno")
+        .select("id")
+        .eq("estado","agotado")
+        .gte("fecha_agotado", filtroPeriodo.desde)
+        .lte("fecha_agotado", filtroPeriodo.hasta);
+      if(filtroSede) qCons = qCons.eq("sede_id", filtroSede);
+      const { data: consData } = await safeQuery(() => qCons, "Oxigeno:consumo");
+      if(consData) setBalonesAgotadosPeriodo(consData.length);
     })();
   }, [filtroSede, filtroPeriodo.desde, filtroPeriodo.hasta]);
+
+  // Rendimiento — sesiones por balón consumido
+  const rendimiento = (balonesAgotadosPeriodo && sesionesCount && balonesAgotadosPeriodo > 0)
+    ? (sesionesCount / balonesAgotadosPeriodo).toFixed(1)
+    : null;
 
   return (
     <div>
@@ -8478,34 +8512,52 @@ function ControlOxigeno({ perfil }) {
         </div>
       </Card>
 
-      {/* Resumen del período */}
-      {(filtroPeriodo.desde && filtroPeriodo.hasta) && (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      {/* STOCK ACTUAL — siempre visible */}
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Stock actual</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
           {[
-            { label:"Balones ingresados", value: totalBalones, color:"#7C6AF7" },
-            { label:"Balones activos", value: balonesActivos, color:"#10B981" },
-            { label:"Balones agotados", value: balonesAgotados, color:"var(--text3)" },
-            { label:"Sesiones completadas", value: sesionesCount ?? "—", color:"var(--accent)" },
+            { label:"Balones activos ahora", value: stockActivo ?? "—", color:"#10B981", sub:"En uso o disponibles" },
+            { label:"Total registrados", value: totalBalones, color:"#7C6AF7", sub:filtroPeriodo.desde?"En el filtro actual":"Histórico" },
+            { label:"Agotados (tabla)", value: balonesAgotados, color:"var(--text3)", sub:"En el filtro actual" },
           ].map(stat=>(
-            <Card key={stat.label} style={{padding:"14px 16px",textAlign:"center"}}>
+            <Card key={stat.label} style={{padding:"14px 16px"}}>
               <div style={{fontSize:28,fontWeight:700,color:stat.color,fontFamily:"Syne,sans-serif"}}>{stat.value}</div>
-              <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{stat.label}</div>
+              <div style={{fontSize:12,color:"var(--text2)",marginTop:4,fontWeight:600}}>{stat.label}</div>
+              <div style={{fontSize:10,color:"var(--text3)",marginTop:2}}>{stat.sub}</div>
             </Card>
           ))}
         </div>
-      )}
+      </div>
 
-      {/* Pacientes únicos */}
-      {pacientesCount !== null && (
-        <Card style={{marginBottom:20,padding:"12px 18px",background:"var(--accent-light)",border:"0.5px solid var(--accent-mid)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{fontSize:24,fontWeight:700,color:"var(--accent)",fontFamily:"Syne,sans-serif"}}>{pacientesCount}</div>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:"var(--accent)"}}>Pacientes únicos atendidos en el período</div>
-              <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{sesionesCount} sesiones completadas · {filtroSede?(sedesData||[]).find(s=>s.id===filtroSede)?.nombre||"":"Todas las sedes"}</div>
-            </div>
+      {/* CONSUMO DEL PERÍODO — solo con rango de fechas */}
+      {(filtroPeriodo.desde && filtroPeriodo.hasta) && (
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:11,color:"var(--accent)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>
+            Consumo del período · {filtroPeriodo.desde} al {filtroPeriodo.hasta}
           </div>
-        </Card>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
+            {[
+              { label:"Balones consumidos", value: balonesAgotadosPeriodo ?? "—", color:"#F59E0B", sub:"Agotados en el período" },
+              { label:"Sesiones completadas", value: sesionesCount ?? "—", color:"var(--accent)", sub:"Realizadas en el período" },
+              { label:"Pacientes únicos", value: pacientesCount ?? "—", color:"#7C6AF7", sub:"Atendidos en el período" },
+              { label:"Rendimiento", value: rendimiento ?? "—", color:"#10B981", sub:"Sesiones por balón" },
+            ].map(stat=>(
+              <Card key={stat.label} style={{padding:"14px 16px"}}>
+                <div style={{fontSize:28,fontWeight:700,color:stat.color,fontFamily:"Syne,sans-serif"}}>{stat.value}</div>
+                <div style={{fontSize:12,color:"var(--text2)",marginTop:4,fontWeight:600}}>{stat.label}</div>
+                <div style={{fontSize:10,color:"var(--text3)",marginTop:2}}>{stat.sub}</div>
+              </Card>
+            ))}
+          </div>
+          {rendimiento && Number(rendimiento) < 2.5 && (
+            <Card style={{marginTop:12,padding:"10px 16px",background:"#FEF3C7",border:"0.5px solid #FCD34D"}}>
+              <div style={{fontSize:12,color:"#92400E",fontWeight:600}}>
+                Rendimiento bajo ({rendimiento} sesiones/balón). Lo normal es ~3. Verifica posibles fugas o cierres incorrectos.
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Tabla de balones */}
@@ -8520,7 +8572,7 @@ function ControlOxigeno({ perfil }) {
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
               <tr style={{borderBottom:"0.5px solid var(--border)"}}>
-                {["N° Serie","Sede","Ingreso","Agotado","Estado","Registrado por",""].map(h=>(
+                {["N° Serie","Sede","Ingreso","Agotado","Estado",""].map(h=>(
                   <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>{h}</th>
                 ))}
               </tr>
@@ -8539,7 +8591,6 @@ function ControlOxigeno({ perfil }) {
                       padding:"2px 10px",borderRadius:99,fontSize:11,fontWeight:600
                     }}>{b.estado==="activo"?"🟢 Activo":"⚫ Agotado"}</span>
                   </td>
-                  <td style={{padding:"10px 14px",fontSize:12,color:"var(--text3)"}}>{b.perfiles?.nombre||"—"}</td>
                   <td style={{padding:"10px 14px"}}>
                     {b.estado==="activo" && (
                       <button onClick={()=>setModalAgotar(b)}
