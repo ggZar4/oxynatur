@@ -8343,7 +8343,7 @@ export default function App() {
 // CONTROL O₂ — Registro de balones hiperbáricos
 // ══════════════════════════════════════════════════════════════════
 function ControlOxigeno({ perfil }) {
-  const f = getFlags(perfil);
+  const esAdmin = perfil?.rol === "admin_general";
   const [balones, setBalones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalNuevo, setModalNuevo] = useState(false);
