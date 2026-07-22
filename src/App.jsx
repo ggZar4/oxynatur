@@ -4650,11 +4650,15 @@ function Ventas({perfil}) {
     monto_pagado:"", metodo_pago:"efectivo", notas:"", segmento: "regular",
     numero_comprobante:"", fotoFile: null, fotoPreview: null,
     fecha_compra: new Date().toISOString().slice(0,10),
+    sesiones_convenio: "",  // solo para paquetes de convenio
   };
   const [modal, setModal]       = useState(false);
   const [form, setForm]         = useState(formInicial);
   const [calculo, setCalculo]   = useState(null);
   const [calculando, setCalculando] = useState(false);
+  // Detectar paquete de convenio (cantidad y precio editables)
+  const paqueteSel = paquetesData?.find(p => p.id === form.paquete_id);
+  const esConvenio = paqueteSel?.codigo === "CONVENIO";
   const [saving, setSaving]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [err, setErr]           = useState({});
@@ -4711,7 +4715,9 @@ function Ventas({perfil}) {
       if(!mounted) return;
       const desglose = Array.isArray(data) && data[0] ? data[0] : null;
       setCalculo(desglose);
-      if(desglose) setForm(f=>({...f, monto_pagado: String(desglose.precio_final)}));
+      // En convenio el precio lo define el usuario, no autocompletar
+      const pkgConv = paquetesData?.find(p=>p.id===form.paquete_id)?.codigo === "CONVENIO";
+      if(desglose && !pkgConv) setForm(f=>({...f, monto_pagado: String(desglose.precio_final)}));
       setCalculando(false);
     })();
     return ()=>{ mounted = false; };
@@ -4731,6 +4737,8 @@ function Ventas({perfil}) {
     if(!form.paciente_id)          e.paciente_id        = "Selecciona un paciente";
     if(!form.sede_id)               e.sede_id            = "Selecciona la sede";
     if(!form.paquete_id)            e.paquete_id         = "Selecciona un paquete";
+    if(esConvenio && (!form.sesiones_convenio || Number(form.sesiones_convenio) < 1))
+      e.sesiones_convenio = "Indica cuántas sesiones incluye el convenio";
     if(!form.numero_comprobante.trim()) e.numero_comprobante = "El número de comprobante es obligatorio";
     if(!form.monto_pagado || isNaN(Number(form.monto_pagado)) || Number(form.monto_pagado) <= 0)
       e.monto_pagado = "Monto inválido";
@@ -4784,7 +4792,9 @@ function Ventas({perfil}) {
       metodo_pago:        form.metodo_pago,
       kiwi_comision:      form.metodo_pago==="kiwi" ? Math.round(Number(form.monto_pagado)*0.05*100)/100 : null,
       monto_neto_recibido: form.metodo_pago==="kiwi" ? Math.round(Number(form.monto_pagado)*0.95*100)/100 : Number(form.monto_pagado),
-      sesiones_totales:   calculo?.sesiones_incluidas || paquete?.cantidad_sesiones || 1,
+      sesiones_totales:   (paquete?.codigo === "CONVENIO" && form.sesiones_convenio)
+                            ? Number(form.sesiones_convenio)
+                            : (calculo?.sesiones_incluidas || paquete?.cantidad_sesiones || 1),
       sesiones_usadas:    0,
       fecha_vencimiento:  fechaVencimiento,
       estado:             "activo",
@@ -5311,8 +5321,21 @@ function Ventas({perfil}) {
                 })} required/>
             {err.paquete_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
 
-            {calculando && <div style={{padding:14,background:"var(--bg)",borderRadius:10,fontSize:13,color:"var(--text3)",marginBottom:14}}>Calculando precio...</div>}
-            {calculo && !calculando && (
+            {/* Campo especial para paquetes de convenio — sesiones variables */}
+            {esConvenio && (
+              <div style={{padding:14,background:"#7C6AF710",border:"0.5px solid #7C6AF740",borderRadius:10,marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#7C6AF7",marginBottom:8}}>Convenio Institucional</div>
+                <div style={{fontSize:11,color:"var(--text3)",marginBottom:10}}>
+                  Define cuántas sesiones incluye este convenio y el monto que se cobra. Ambos son editables.
+                </div>
+                <Input label="N° de sesiones del convenio *" type="number" value={form.sesiones_convenio}
+                  onChange={v=>setForm({...form,sesiones_convenio:v})} placeholder="Ej: 30"
+                  error={err.sesiones_convenio}/>
+              </div>
+            )}
+
+            {!esConvenio && calculando && <div style={{padding:14,background:"var(--bg)",borderRadius:10,fontSize:13,color:"var(--text3)",marginBottom:14}}>Calculando precio...</div>}
+            {!esConvenio && calculo && !calculando && (
               <div style={{padding:14,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:10,marginBottom:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--text2)",marginBottom:6}}>
                   <span>Precio base</span><span>{fmtSol(calculo.precio_base)}</span>
@@ -5329,9 +5352,9 @@ function Ventas({perfil}) {
               </div>
             )}
 
-            <Input label="Monto cobrado (S/)" type="number" value={form.monto_pagado}
+            <Input label={esConvenio ? "Monto del convenio (S/)" : "Monto cobrado (S/)"} type="number" value={form.monto_pagado}
               onChange={v=>setForm({...form,monto_pagado:v})} placeholder="0.00" required error={err.monto_pagado}/>
-            {calculo && form.monto_pagado && Number(form.monto_pagado) !== Number(calculo.precio_final) && (
+            {!esConvenio && calculo && form.monto_pagado && Number(form.monto_pagado) !== Number(calculo.precio_final) && (
               <div style={{padding:"8px 12px",background:Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B20":"var(--accent-light)",border:`1px solid ${Number(form.monto_pagado)<Number(calculo.precio_final)?"#F59E0B40":"var(--accent-mid)"}`,borderRadius:8,fontSize:12,color:"var(--text)",marginBottom:14}}>
                 {Number(form.monto_pagado)<Number(calculo.precio_final)
                   ?`Cobrando ${fmtSol(Number(calculo.precio_final)-Number(form.monto_pagado))} menos del sugerido. Anota la razón abajo.`
