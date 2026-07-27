@@ -432,6 +432,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
     { id:"dashboard_sede", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>), label:"Mi Sede",             visible: f.puedeVerDashboardSede },
     { id:"agenda",    icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>), label:"Agenda",            visible: true },
     { id:"oxigeno",   icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>), label:"Control O₂",       visible: f.esAdmin },
+    { id:"convenios", icon:(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg>), label:"Convenios",         visible: f.esAdmin },
   ].filter(item => item.visible);
 
   return (
@@ -4651,6 +4652,8 @@ function Ventas({perfil}) {
     numero_comprobante:"", fotoFile: null, fotoPreview: null,
     fecha_compra: new Date().toISOString().slice(0,10),
     sesiones_convenio: "",  // solo para paquetes de convenio
+    convenio_id: "",        // empresa del convenio
+    numero_autorizacion: "", // N° orden de la empresa
   };
   const [modal, setModal]       = useState(false);
   const [form, setForm]         = useState(formInicial);
@@ -4659,6 +4662,11 @@ function Ventas({perfil}) {
   // Detectar paquete de convenio (cantidad y precio editables)
   const paqueteSel = paquetesData?.find(p => p.id === form.paquete_id);
   const esConvenio = paqueteSel?.codigo === "CONVENIO";
+  // Convenios activos para vincular
+  const { data: conveniosData } = useSupabaseQuery(
+    () => supabase.from("convenios_empresa").select("id,razon_social,tarifa_sesion").eq("activo",true).order("razon_social"),
+    [], "Ventas:convenios"
+  );
   const [saving, setSaving]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [err, setErr]           = useState({});
@@ -4739,6 +4747,8 @@ function Ventas({perfil}) {
     if(!form.paquete_id)            e.paquete_id         = "Selecciona un paquete";
     if(esConvenio && (!form.sesiones_convenio || Number(form.sesiones_convenio) < 1))
       e.sesiones_convenio = "Indica cuántas sesiones incluye el convenio";
+    if(esConvenio && !form.convenio_id)
+      e.convenio_id = "Selecciona la empresa del convenio";
     if(!form.numero_comprobante.trim()) e.numero_comprobante = "El número de comprobante es obligatorio";
     if(!form.monto_pagado || isNaN(Number(form.monto_pagado)) || Number(form.monto_pagado) <= 0)
       e.monto_pagado = "Monto inválido";
@@ -4795,6 +4805,9 @@ function Ventas({perfil}) {
       sesiones_totales:   (paquete?.codigo === "CONVENIO" && form.sesiones_convenio)
                             ? Number(form.sesiones_convenio)
                             : (calculo?.sesiones_incluidas || paquete?.cantidad_sesiones || 1),
+      convenio_id:        esConvenio && form.convenio_id ? form.convenio_id : null,
+      numero_autorizacion: esConvenio && form.numero_autorizacion ? form.numero_autorizacion.trim() : null,
+      estado_pago:        esConvenio ? "pendiente" : "pagado",
       sesiones_usadas:    0,
       fecha_vencimiento:  fechaVencimiento,
       estado:             "activo",
@@ -5325,12 +5338,37 @@ function Ventas({perfil}) {
             {esConvenio && (
               <div style={{padding:14,background:"#7C6AF710",border:"0.5px solid #7C6AF740",borderRadius:10,marginBottom:14}}>
                 <div style={{fontSize:12,fontWeight:700,color:"#7C6AF7",marginBottom:8}}>Convenio Institucional</div>
-                <div style={{fontSize:11,color:"var(--text3)",marginBottom:10}}>
-                  Define cuántas sesiones incluye este convenio y el monto que se cobra. Ambos son editables.
+                <div style={{fontSize:11,color:"var(--text3)",marginBottom:12}}>
+                  Vincula la empresa, define las sesiones autorizadas y el monto. El pago quedará como pendiente.
                 </div>
-                <Input label="N° de sesiones del convenio *" type="number" value={form.sesiones_convenio}
-                  onChange={v=>setForm({...form,sesiones_convenio:v})} placeholder="Ej: 30"
+                {/* Selector de empresa */}
+                <div style={{marginBottom:12}}>
+                  <label style={{fontSize:12,color:err.convenio_id?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Empresa del convenio *</label>
+                  <select value={form.convenio_id} onChange={e=>{
+                    const emp = conveniosData?.find(c=>c.id===e.target.value);
+                    setForm(f=>({...f, convenio_id:e.target.value,
+                      monto_pagado: (emp && f.sesiones_convenio) ? String(emp.tarifa_sesion * Number(f.sesiones_convenio)) : f.monto_pagado }));
+                  }}
+                    style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.convenio_id?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                    <option value="">— Seleccionar empresa —</option>
+                    {(conveniosData||[]).map(c=><option key={c.id} value={c.id}>{c.razon_social} (S/{c.tarifa_sesion}/ses)</option>)}
+                  </select>
+                  {err.convenio_id && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.convenio_id}</div>}
+                </div>
+                <Input label="N° de sesiones autorizadas *" type="number" value={form.sesiones_convenio}
+                  onChange={v=>{
+                    const emp = conveniosData?.find(c=>c.id===form.convenio_id);
+                    setForm(f=>({...f, sesiones_convenio:v,
+                      monto_pagado: (emp && v) ? String(emp.tarifa_sesion * Number(v)) : f.monto_pagado }));
+                  }} placeholder="Ej: 5"
                   error={err.sesiones_convenio}/>
+                <Input label="N° de autorización / orden (opcional)" value={form.numero_autorizacion}
+                  onChange={v=>setForm({...form,numero_autorizacion:v})} placeholder="N° de orden de la empresa"/>
+                {form.convenio_id && form.sesiones_convenio && (
+                  <div style={{fontSize:12,color:"#7C6AF7",marginTop:4}}>
+                    Monto calculado: {form.sesiones_convenio} sesiones × S/{conveniosData?.find(c=>c.id===form.convenio_id)?.tarifa_sesion||0} = <strong>S/{(conveniosData?.find(c=>c.id===form.convenio_id)?.tarifa_sesion||0)*Number(form.sesiones_convenio)}</strong>
+                  </div>
+                )}
               </div>
             )}
 
@@ -8365,6 +8403,299 @@ export default function App() {
 // ══════════════════════════════════════════════════════════════════
 // CONTROL O₂ — Registro de balones hiperbáricos
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// CONVENIOS — Empresas, pacientes corporativos y cuentas por cobrar
+// ══════════════════════════════════════════════════════════════════
+function Convenios({ perfil }) {
+  const [empresas, setEmpresas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [empresaSel, setEmpresaSel] = useState(null);
+  const [comprasEmpresa, setComprasEmpresa] = useState([]);
+  const [modalNueva, setModalNueva] = useState(false);
+  const [modalEditar, setModalEditar] = useState(null);
+  const [form, setForm] = useState({ razon_social:"", ruc:"", contacto_nombre:"", contacto_email:"", contacto_telefono:"", tarifa_sesion:"", notas:"" });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await safeQuery(() =>
+      supabase.from("convenios_empresa").select("*").eq("activo", true).order("razon_social"),
+      "Convenios:load"
+    );
+    setEmpresas(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // Cargar compras de una empresa con datos del paciente
+  const cargarComprasEmpresa = async (empresa) => {
+    setEmpresaSel(empresa);
+    const { data } = await safeQuery(() =>
+      supabase.from("compras_paciente")
+        .select("*, pacientes(id,nombres,apellidos,dni), paquetes(nombre)")
+        .eq("convenio_id", empresa.id)
+        .order("created_at", { ascending: false }),
+      "Convenios:compras"
+    );
+    setComprasEmpresa(data || []);
+  };
+
+  // Guardar empresa nueva o editada
+  const guardarEmpresa = async () => {
+    if(!form.razon_social.trim()) { toast.error("Ingresa la razón social"); return; }
+    if(!form.tarifa_sesion || Number(form.tarifa_sesion) <= 0) { toast.error("Ingresa la tarifa por sesión"); return; }
+    setSaving(true);
+    const payload = {
+      razon_social: form.razon_social.trim(),
+      ruc: form.ruc.trim() || null,
+      contacto_nombre: form.contacto_nombre.trim() || null,
+      contacto_email: form.contacto_email.trim() || null,
+      contacto_telefono: form.contacto_telefono.trim() || null,
+      tarifa_sesion: Number(form.tarifa_sesion),
+      notas: form.notas.trim() || null,
+    };
+    let error;
+    if(modalEditar) {
+      ({ error } = await safeQuery(() => supabase.from("convenios_empresa").update(payload).eq("id", modalEditar.id), "Convenios:update"));
+    } else {
+      ({ error } = await safeQuery(() => supabase.from("convenios_empresa").insert(payload), "Convenios:insert"));
+    }
+    setSaving(false);
+    if(error) { toast.error("Error al guardar"); return; }
+    toast.success(modalEditar ? "Convenio actualizado" : "Convenio registrado");
+    setModalNueva(false); setModalEditar(null);
+    setForm({ razon_social:"", ruc:"", contacto_nombre:"", contacto_email:"", contacto_telefono:"", tarifa_sesion:"", notas:"" });
+    load();
+  };
+
+  const abrirEditar = (emp) => {
+    setForm({
+      razon_social: emp.razon_social||"", ruc: emp.ruc||"", contacto_nombre: emp.contacto_nombre||"",
+      contacto_email: emp.contacto_email||"", contacto_telefono: emp.contacto_telefono||"",
+      tarifa_sesion: String(emp.tarifa_sesion||""), notas: emp.notas||"",
+    });
+    setModalEditar(emp);
+  };
+
+  // Cambiar estado de pago de una compra
+  const cambiarEstadoPago = async (compra, nuevoEstado) => {
+    const payload = { estado_pago: nuevoEstado };
+    if(nuevoEstado === "facturado") payload.fecha_facturacion = new Date().toISOString().slice(0,10);
+    const { error } = await safeQuery(() =>
+      supabase.from("compras_paciente").update(payload).eq("id", compra.id), "Convenios:estadoPago"
+    );
+    if(error) { toast.error("Error al actualizar"); return; }
+    toast.success(`Marcado como ${nuevoEstado}`);
+    cargarComprasEmpresa(empresaSel);
+  };
+
+  // Calcular cuenta por cobrar de una empresa
+  const [cuentasPorCobrar, setCuentasPorCobrar] = useState({});
+  useEffect(() => {
+    if(empresas.length === 0) return;
+    (async () => {
+      const { data } = await safeQuery(() =>
+        supabase.from("compras_paciente")
+          .select("convenio_id, monto_pagado, estado_pago, sesiones_totales, sesiones_usadas")
+          .not("convenio_id", "is", null),
+        "Convenios:cxc"
+      );
+      if(data) {
+        const acc = {};
+        data.forEach(c => {
+          if(!acc[c.convenio_id]) acc[c.convenio_id] = { pendiente:0, facturado:0, pagado:0, pacientes:0, sesiones:0 };
+          const monto = Number(c.monto_pagado)||0;
+          acc[c.convenio_id][c.estado_pago] = (acc[c.convenio_id][c.estado_pago]||0) + monto;
+          acc[c.convenio_id].pacientes += 1;
+          acc[c.convenio_id].sesiones += Number(c.sesiones_usadas)||0;
+        });
+        setCuentasPorCobrar(acc);
+      }
+    })();
+  }, [empresas, comprasEmpresa]);
+
+  const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  // ── VISTA DETALLE DE EMPRESA ──
+  if(empresaSel) {
+    const cxc = cuentasPorCobrar[empresaSel.id] || { pendiente:0, facturado:0, pagado:0 };
+    return (
+      <div>
+        <button onClick={()=>{ setEmpresaSel(null); setComprasEmpresa([]); }}
+          style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:16,display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+          ← Volver a convenios
+        </button>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
+          <div>
+            <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)"}}>{empresaSel.razon_social}</h1>
+            <p style={{color:"var(--text3)",fontSize:13,marginTop:3}}>
+              {empresaSel.ruc ? `RUC ${empresaSel.ruc} · ` : ""}Tarifa: {fmtSol(empresaSel.tarifa_sesion)}/sesión
+              {empresaSel.contacto_email ? ` · ${empresaSel.contacto_email}` : ""}
+            </p>
+          </div>
+          <Btn variant="ghost" onClick={()=>abrirEditar(empresaSel)}>Editar convenio</Btn>
+        </div>
+
+        {/* Resumen cuenta por cobrar */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
+          {[
+            { label:"Pendiente de facturar", value: cxc.pendiente, color:"#F59E0B" },
+            { label:"Facturado sin cobrar", value: cxc.facturado, color:"#7C6AF7" },
+            { label:"Cobrado", value: cxc.pagado, color:"#10B981" },
+          ].map(s=>(
+            <Card key={s.label} style={{padding:"16px 18px"}}>
+              <div style={{fontSize:24,fontWeight:700,color:s.color,fontFamily:"Syne,sans-serif"}}>{fmtSol(s.value)}</div>
+              <div style={{fontSize:12,color:"var(--text3)",marginTop:4}}>{s.label}</div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Tabla de pacientes/compras */}
+        <Card>
+          <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:13,fontWeight:600,color:"var(--text)"}}>
+            Pacientes del convenio ({comprasEmpresa.length})
+          </div>
+          {comprasEmpresa.length === 0 ? (
+            <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>
+              No hay pacientes vinculados a este convenio todavía.
+            </div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{borderBottom:"0.5px solid var(--border)"}}>
+                  {["Paciente","DNI","Sesiones","Monto","Autorización","Estado pago","Acción"].map(h=>(
+                    <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {comprasEmpresa.map((c,i)=>(
+                  <tr key={c.id} style={{borderBottom:"0.5px solid var(--border)",background:i%2===0?"transparent":"var(--surface2)"}}>
+                    <td style={{padding:"10px 14px",fontSize:13,fontWeight:600,color:"var(--text)"}}>{c.pacientes?.apellidos} {c.pacientes?.nombres}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"var(--text2)"}}>{c.pacientes?.dni||"—"}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"var(--text2)"}}>{c.sesiones_usadas}/{c.sesiones_totales}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,fontWeight:600,color:"var(--text)"}}>{fmtSol(c.monto_pagado)}</td>
+                    <td style={{padding:"10px 14px",fontSize:12,color:"var(--text3)"}}>{c.numero_autorizacion||"—"}</td>
+                    <td style={{padding:"10px 14px"}}>
+                      <span style={{
+                        background: c.estado_pago==="pagado"?"#D1FAE5":c.estado_pago==="facturado"?"#EDE9FE":"#FEF3C7",
+                        color: c.estado_pago==="pagado"?"#065F46":c.estado_pago==="facturado"?"#5B21B6":"#92400E",
+                        padding:"2px 10px",borderRadius:99,fontSize:11,fontWeight:600,textTransform:"capitalize"
+                      }}>{c.estado_pago}</span>
+                    </td>
+                    <td style={{padding:"10px 14px"}}>
+                      <select value={c.estado_pago} onChange={e=>cambiarEstadoPago(c, e.target.value)}
+                        style={{background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:6,color:"var(--text)",padding:"4px 8px",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="facturado">Facturado</option>
+                        <option value="pagado">Pagado</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
+        {/* Modal editar (reusa el mismo) */}
+        {modalEditar && <ModalConvenio form={form} setForm={setForm} onSave={guardarEmpresa} onClose={()=>{setModalEditar(null);setForm({razon_social:"",ruc:"",contacto_nombre:"",contacto_email:"",contacto_telefono:"",tarifa_sesion:"",notas:""});}} saving={saving} editando={true}/>}
+      </div>
+    );
+  }
+
+  // ── VISTA LISTA DE EMPRESAS ──
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:700,color:"var(--text)"}}>Convenios</h1>
+          <p style={{color:"var(--text3)",fontSize:14,marginTop:3}}>Empresas, pacientes corporativos y cuentas por cobrar</p>
+        </div>
+        <Btn onClick={()=>{ setForm({razon_social:"",ruc:"",contacto_nombre:"",contacto_email:"",contacto_telefono:"",tarifa_sesion:"",notas:""}); setModalNueva(true); }}>
+          + Nuevo convenio
+        </Btn>
+      </div>
+
+      {loading ? (
+        <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
+      ) : empresas.length === 0 ? (
+        <Card><div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>No hay convenios registrados. Crea el primero.</div></Card>
+      ) : (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:16}}>
+          {empresas.map(emp=>{
+            const cxc = cuentasPorCobrar[emp.id] || { pendiente:0, facturado:0, pagado:0, pacientes:0 };
+            const totalPendiente = cxc.pendiente + cxc.facturado;
+            return (
+              <Card key={emp.id} style={{padding:0,cursor:"pointer",overflow:"hidden"}} onClick={()=>cargarComprasEmpresa(emp)}>
+                <div style={{padding:"16px 18px",borderBottom:"0.5px solid var(--border)"}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"var(--text)",fontFamily:"Syne,sans-serif"}}>{emp.razon_social}</div>
+                  <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>
+                    {emp.ruc?`RUC ${emp.ruc} · `:""}Tarifa {fmtSol(emp.tarifa_sesion)}/ses
+                  </div>
+                </div>
+                <div style={{padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:11,color:"var(--text3)"}}>Por cobrar</div>
+                    <div style={{fontSize:20,fontWeight:700,color:totalPendiente>0?"#F59E0B":"#10B981",fontFamily:"Syne,sans-serif"}}>{fmtSol(totalPendiente)}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:11,color:"var(--text3)"}}>{cxc.pacientes} paciente{cxc.pacientes!==1?"s":""}</div>
+                    <div style={{fontSize:12,color:"var(--accent)",fontWeight:600,marginTop:2}}>Ver detalle →</div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {(modalNueva || modalEditar) && (
+        <ModalConvenio form={form} setForm={setForm} onSave={guardarEmpresa}
+          onClose={()=>{setModalNueva(false);setModalEditar(null);setForm({razon_social:"",ruc:"",contacto_nombre:"",contacto_email:"",contacto_telefono:"",tarifa_sesion:"",notas:""});}}
+          saving={saving} editando={!!modalEditar}/>
+      )}
+    </div>
+  );
+}
+
+// Modal reutilizable para crear/editar convenio
+function ModalConvenio({ form, setForm, onSave, onClose, saving, editando }) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"var(--surface)",borderRadius:14,maxWidth:460,width:"100%",padding:24,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>{editando?"Editar convenio":"Nuevo convenio"}</div>
+        <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Datos de la empresa y tarifa acordada</div>
+
+        <Input label="Razón social *" value={form.razon_social} onChange={v=>setForm(f=>({...f,razon_social:v}))} placeholder="ACUAPEZCA SAC"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="RUC" value={form.ruc} onChange={v=>setForm(f=>({...f,ruc:v}))} placeholder="20..."/>
+          <Input label="Tarifa por sesión (S/) *" type="number" value={form.tarifa_sesion} onChange={v=>setForm(f=>({...f,tarifa_sesion:v}))} placeholder="90"/>
+        </div>
+        <Input label="Contacto — nombre" value={form.contacto_nombre} onChange={v=>setForm(f=>({...f,contacto_nombre:v}))} placeholder="Nombre del responsable"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="Contacto — email" value={form.contacto_email} onChange={v=>setForm(f=>({...f,contacto_email:v}))} placeholder="correo@empresa.com"/>
+          <Input label="Contacto — teléfono" value={form.contacto_telefono} onChange={v=>setForm(f=>({...f,contacto_telefono:v}))} placeholder="9..."/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Notas</label>
+          <textarea value={form.notas} onChange={e=>setForm(f=>({...f,notas:e.target.value}))} rows={2}
+            placeholder="Detalles del acuerdo..."
+            style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+        </div>
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:14,borderTop:"0.5px solid var(--border)"}}>
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn onClick={onSave} disabled={saving}>{saving?"Guardando...":(editando?"Guardar cambios":"Crear convenio")}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ControlOxigeno({ perfil }) {
   const esAdmin = perfil?.rol === "admin_general";
   const [balones, setBalones] = useState([]);
@@ -8701,6 +9032,7 @@ function ControlOxigeno({ perfil }) {
       case "agenda":    return                         <AgendaMedico perfil={perfil} cambiarVista={cambiarVista}/>;
       case "dashboard_sede": return f.puedeVerDashboardSede ? <DashboardSede perfil={perfil}/> : null;
       case "oxigeno":    return f.esAdmin              ? <ControlOxigeno perfil={perfil}/> : null;
+      case "convenios":  return f.esAdmin              ? <Convenios perfil={perfil}/>   : null;
       default:          return f.puedeVerDashboard   ? <DashboardAdmin/>              : <Pacientes perfil={perfil}/>;
     }
   };
