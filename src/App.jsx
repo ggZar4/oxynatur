@@ -1814,15 +1814,6 @@ function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }
 
     y+=12;
     if(y > PAGE_H-30){ doc.addPage(); y=30; }
-    // Firmas al pie
-    doc.setDrawColor(120,120,120);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN, y, MARGIN+70, y);
-    doc.line(PAGE_W-MARGIN-70, y, PAGE_W-MARGIN, y);
-    doc.setFontSize(8);
-    doc.setTextColor(80,80,80);
-    doc.text("Medico responsable (Nombre / CMP)", MARGIN, y+5);
-    doc.text("Sello del establecimiento", PAGE_W-MARGIN-70, y+5);
 
     // Footer
     doc.setFontSize(6.5);
