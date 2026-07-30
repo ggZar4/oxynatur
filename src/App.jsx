@@ -1653,6 +1653,267 @@ function Pacientes({perfil}) {
 // Enfermero: registra signos vitales y datos operativos.
 // Médico: agrega evolución clínica y firma de supervisión.
 // Especialista: ve todo, puede editar HC maestra y protocolos.
+// ══════════════════════════════════════════════════════════════════
+// MODAL HOJA DE FIRMA — Vista previa + descarga PDF de control de sesiones
+// ══════════════════════════════════════════════════════════════════
+function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }) {
+  const pac = pacSelec?.pacientes || {};
+  const [compraSel, setCompraSel] = useState("todas");
+  const [descargando, setDescargando] = useState(false);
+
+  // Sesiones realizadas (de evals, que combina evaluaciones + sesiones completadas)
+  // Filtrar solo las que representan sesión real (tienen numero_sesion)
+  const sesionesRealizadas = (evals||[])
+    .filter(e => e.numero_sesion)
+    .filter(e => compraSel === "todas" || e.compra_id === compraSel)
+    .sort((a,b) => {
+      if(a.fecha !== b.fecha) return (a.fecha||"").localeCompare(b.fecha||"");
+      return (a.numero_sesion||0) - (b.numero_sesion||0);
+    });
+
+  // Info de la compra seleccionada para saber cuántas sesiones son en total
+  const compraActual = comprasPaciente?.find(c => c.id === compraSel);
+  const totalSesiones = compraActual?.sesiones_totales || sesionesRealizadas.length || 20;
+  const filasVacias = Math.max(0, totalSesiones - sesionesRealizadas.length);
+
+  const fmtFecha = (f) => f ? new Date(f+"T12:00:00").toLocaleDateString("es-PE") : "";
+  const fmtHora = (h) => h ? h.slice(0,5) : "";
+
+  const descargarPDF = async () => {
+    setDescargando(true);
+    await new Promise((res,rej)=>{
+      if(window.jspdf) return res();
+      const s=document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+    const {jsPDF}=window.jspdf;
+    const norm=(str)=>String(str==null?"":str)
+      .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
+      .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
+      .replace(/ñ/g,"n").replace(/Ñ/g,"N");
+    const doc=new jsPDF();
+    const PAGE_W=210, PAGE_H=297, MARGIN=14;
+    let y=0;
+
+    // Header azul
+    doc.setFillColor(0,75,140);
+    doc.rect(0,0,PAGE_W,26,"F");
+    doc.setFillColor(255,255,255);
+    doc.roundedRect(MARGIN-1,4,18,18,2,2,"F");
+    try{doc.addImage("/logo.jpg","JPEG",MARGIN,5,16,16);}catch(e){}
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(13);
+    doc.setTextColor(255,255,255);
+    doc.text("OXYNATUR", 36, 12);
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(7);
+    doc.setTextColor(200,230,255);
+    doc.text("Red de Medicina Hiperbarica  |  Consorcio Estilo Medico S.A.C.  |  RUC 20614901781", 36, 18);
+    // N HC lado derecho
+    const sedeN=(pacSelec.sedes?.nombre||"").toLowerCase();
+    const renipress = pacSelec.sedes?.renipress ? `RENIPRESS: ${pacSelec.sedes.renipress}` : "";
+    doc.setFontSize(8);
+    doc.setTextColor(255,255,255);
+    doc.text(`N HC: ${norm(hcMaestra?.numero_hc||pacSelec?.numero_hc||"-")}`, PAGE_W-MARGIN, 10, {align:"right"});
+    doc.setFontSize(7);
+    doc.setTextColor(200,230,255);
+    doc.text(`Sede: ${norm(pacSelec.sedes?.nombre||"-")}`, PAGE_W-MARGIN, 15, {align:"right"});
+    if(renipress) doc.text(renipress, PAGE_W-MARGIN, 20, {align:"right"});
+
+    // Titulo
+    y=34;
+    doc.setDrawColor(0,168,150);
+    doc.setLineWidth(1);
+    doc.line(0,26,PAGE_W,26);
+    doc.setLineWidth(0.2);
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(12);
+    doc.setTextColor(0,75,140);
+    doc.text("HOJA DE CONTROL DE SESIONES", PAGE_W/2, y, {align:"center"});
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100,100,100);
+    doc.text("Tratamiento de Oxigenoterapia Hiperbarica", PAGE_W/2, y+5, {align:"center"});
+    y+=13;
+
+    // Datos del paciente
+    doc.setFontSize(9);
+    doc.setTextColor(40,40,40);
+    doc.text(`Paciente: ${norm(pac.apellidos||"")} ${norm(pac.nombres||"")}`, MARGIN, y);
+    doc.text(`DNI: ${pac.dni||"-"}`, PAGE_W-MARGIN, y, {align:"right"});
+    y+=6;
+    doc.text(`Diagnostico: ${norm(hcMaestra?.diagnostico_principal||"-").slice(0,60)}`, MARGIN, y);
+    y+=6;
+    // N sesiones autorizadas destacado
+    doc.setFillColor(230,240,255);
+    doc.rect(MARGIN, y-4, 70, 8, "F");
+    doc.setFont("helvetica","bold");
+    doc.setTextColor(0,75,140);
+    doc.setFontSize(9);
+    doc.text(`N sesiones autorizadas: ${totalSesiones}`, MARGIN+2, y+1.5);
+    doc.setFont("helvetica","normal");
+    y+=10;
+
+    // Tabla — headers
+    const cols = [
+      { t:"N", w:10 },
+      { t:"Fecha", w:24 },
+      { t:"Ingreso", w:20 },
+      { t:"Salida", w:20 },
+      { t:"Presion", w:20 },
+      { t:"Firma paciente", w:40 },
+      { t:"Firma operador", w:30 },
+      { t:"Huella", w:18 },
+    ];
+    let x=MARGIN;
+    doc.setFillColor(240,244,250);
+    doc.rect(MARGIN, y-4, cols.reduce((a,c)=>a+c.w,0), 7, "F");
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(80,80,80);
+    doc.setDrawColor(200,200,200);
+    doc.setLineWidth(0.2);
+    cols.forEach(c=>{
+      doc.rect(x, y-4, c.w, 7, "S");
+      doc.text(c.t, x+c.w/2, y, {align:"center"});
+      x+=c.w;
+    });
+    y+=3;
+
+    // Filas de sesiones realizadas + vacias
+    const rowH = 9;
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(40,40,40);
+
+    const totalFilas = sesionesRealizadas.length + filasVacias;
+    for(let i=0; i<totalFilas; i++){
+      if(y > PAGE_H-40){ doc.addPage(); y=20; }
+      const ses = i < sesionesRealizadas.length ? sesionesRealizadas[i] : null;
+      x=MARGIN;
+      // fondo alterno para realizadas
+      if(ses){ doc.setFillColor(248,252,250); doc.rect(MARGIN, y, cols.reduce((a,c)=>a+c.w,0), rowH, "F"); }
+      cols.forEach((c,ci)=>{
+        doc.rect(x, y, c.w, rowH, "S");
+        if(ses){
+          let val = "";
+          if(ci===0) val = String(ses.numero_sesion||(i+1));
+          else if(ci===1) val = fmtFecha(ses.fecha);
+          else if(ci===2) val = fmtHora(ses.hora);
+          else if(ci===4) val = ses.presion_indicada ? `${ses.presion_indicada} ATA` : "";
+          if(val){ doc.text(val, x+c.w/2, y+rowH/2+1.5, {align:"center"}); }
+        } else {
+          if(ci===0){ doc.setTextColor(160,160,160); doc.text(String(sesionesRealizadas.length+(i-sesionesRealizadas.length)+1), x+c.w/2, y+rowH/2+1.5, {align:"center"}); doc.setTextColor(40,40,40); }
+        }
+        x+=c.w;
+      });
+      y+=rowH;
+    }
+
+    y+=12;
+    if(y > PAGE_H-30){ doc.addPage(); y=30; }
+    // Firmas al pie
+    doc.setDrawColor(120,120,120);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, MARGIN+70, y);
+    doc.line(PAGE_W-MARGIN-70, y, PAGE_W-MARGIN, y);
+    doc.setFontSize(8);
+    doc.setTextColor(80,80,80);
+    doc.text("Medico responsable (Nombre / CMP)", MARGIN, y+5);
+    doc.text("Sello del establecimiento", PAGE_W-MARGIN-70, y+5);
+
+    // Footer
+    doc.setFontSize(6.5);
+    doc.setTextColor(150,150,150);
+    doc.text("Documento de respaldo de sesiones realizadas  |  Protegido por Ley N 29733 de Proteccion de Datos Personales", PAGE_W/2, PAGE_H-8, {align:"center"});
+
+    doc.save(`HojaFirma_${norm(pac.apellidos||"pac")}_${norm(pac.nombres||"")}_${new Date().toISOString().slice(0,10)}.pdf`);
+    setDescargando(false);
+    toast.success("Hoja de firma generada");
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
+      onKeyDown={e=>e.key==="Escape"&&onClose()} tabIndex={-1}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:760,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)",maxHeight:"92vh",overflowY:"auto"}}>
+
+        {/* Header del modal */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,paddingBottom:14,borderBottom:"0.5px solid var(--border)"}}>
+          <div>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Hoja de Control de Sesiones</div>
+            <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
+              {pac.nombres} {pac.apellidos} · DNI {pac.dni} · {sesionesRealizadas.length} sesión{sesionesRealizadas.length!==1?"es":""} realizada{sesionesRealizadas.length!==1?"s":""}
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:22}}>×</button>
+        </div>
+
+        {/* Selector de paquete */}
+        {comprasPaciente && comprasPaciente.length > 0 && (
+          <div style={{marginBottom:16}}>
+            <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Filtrar por paquete / episodio</label>
+            <select value={compraSel} onChange={e=>setCompraSel(e.target.value)}
+              style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"8px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}>
+              <option value="todas">Todas las sesiones</option>
+              {comprasPaciente.map(c=>(
+                <option key={c.id} value={c.id}>{c.paquetes?.nombre||"Paquete"} · {c.sesiones_usadas}/{c.sesiones_totales} sesiones</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Vista previa de la tabla */}
+        <div style={{border:"0.5px solid var(--border)",borderRadius:8,overflow:"hidden",marginBottom:16}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{background:"var(--surface2)"}}>
+                {["N°","Fecha","Ingreso","Presión","Estado"].map(h=>(
+                  <th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,color:"var(--text3)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"0.5px solid var(--border)"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sesionesRealizadas.length === 0 ? (
+                <tr><td colSpan={5} style={{padding:24,textAlign:"center",color:"var(--text3)"}}>Sin sesiones realizadas todavía</td></tr>
+              ) : sesionesRealizadas.map((s,i)=>(
+                <tr key={s.id} style={{borderBottom:"0.5px solid var(--border)"}}>
+                  <td style={{padding:"8px 10px",fontWeight:600,color:"var(--text)"}}>{s.numero_sesion}</td>
+                  <td style={{padding:"8px 10px",color:"var(--text2)"}}>{fmtFecha(s.fecha)}</td>
+                  <td style={{padding:"8px 10px",color:"var(--text2)"}}>{fmtHora(s.hora)||"—"}</td>
+                  <td style={{padding:"8px 10px",color:"var(--text2)"}}>{s.presion_indicada?`${s.presion_indicada} ATA`:"—"}</td>
+                  <td style={{padding:"8px 10px"}}>
+                    <span style={{background:s.es_borrador?"#FEF3C7":"#D1FAE5",color:s.es_borrador?"#92400E":"#065F46",padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:600}}>
+                      {s.es_borrador?"Sin firma médica":"Firmada"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {filasVacias > 0 && (
+                <tr><td colSpan={5} style={{padding:"8px 10px",textAlign:"center",color:"var(--text3)",fontSize:11,fontStyle:"italic",background:"var(--surface2)"}}>
+                  + {filasVacias} fila{filasVacias!==1?"s":""} vacía{filasVacias!==1?"s":""} en el PDF (hasta completar {totalSesiones} sesiones)
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{fontSize:11,color:"var(--text3)",marginBottom:16,lineHeight:1.6}}>
+          El PDF incluirá las sesiones realizadas con sus fechas y horas reales, más las filas vacías para completar el paquete. Las columnas de firma y huella quedan en blanco para llenar en físico.
+        </div>
+
+        {/* Acciones */}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:14,borderTop:"0.5px solid var(--border)"}}>
+          <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
+          <Btn onClick={descargarPDF} disabled={descargando}>{descargando?"Generando...":"Descargar PDF"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HistoriasClinicas({perfil}) {
   const f = getRolFlags(perfil);
 
@@ -1665,6 +1926,7 @@ function HistoriasClinicas({perfil}) {
 
   // Vistas de detalle
   const [pacSelec, setPacSelec]   = useState(null); // paciente seleccionado → ver HC maestra + evaluaciones
+  const [modalHojaFirma, setModalHojaFirma] = useState(false);
   const [modalConsentimiento, setModalConsentimiento] = useState(false);
   const [formConsentimiento, setFormConsentimiento] = useState({medico_nombre:"", medico_cmp:"", fecha: new Date().toLocaleDateString("en-CA")});
   const [guardandoConsentimiento, setGuardandoConsentimiento] = useState(false);
@@ -2390,6 +2652,9 @@ function HistoriasClinicas({perfil}) {
                 Pendiente consentimiento
               </button>
           }
+          <Btn variant="ghost" onClick={()=>setModalHojaFirma(true)} style={{fontSize:12}}>
+            Hoja de firma
+          </Btn>
           <Btn variant="ghost" onClick={exportarPDF} style={{fontSize:12}}>
             HC PDF
           </Btn>
@@ -3207,6 +3472,16 @@ function HistoriasClinicas({perfil}) {
         </div>
       )}
       {/* Modal Consentimiento Informado */}
+      {modalHojaFirma && (
+        <ModalHojaFirma
+          pacSelec={pacSelec}
+          hcMaestra={hcMaestra}
+          evals={evals}
+          comprasPaciente={comprasPaciente}
+          onClose={()=>setModalHojaFirma(false)}
+        />
+      )}
+
       {modalConsentimiento && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
           onKeyDown={e=>e.key==="Escape"&&setModalConsentimiento(false)} tabIndex={-1}
