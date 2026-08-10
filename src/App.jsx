@@ -301,7 +301,7 @@ const PDF_W = 210, PDF_H = 297, PDF_M = 14, PDF_CW = 182;
 const pdfLine = (doc, x1, y, x2) => {
   doc.setDrawColor(170,170,170); doc.setLineWidth(0.2); doc.line(x1, y, x2, y);
 };
-const pdfLabel = (doc, text, x, y, size=8, color=[0,75,140]) => {
+const pdfLabel = (doc, text, x, y, size=8, color=[0,0,0]) => {
   doc.setFont("helvetica","bold"); doc.setFontSize(size);
   doc.setTextColor(...color); doc.text(normPDF(text), x, y);
 };
@@ -314,15 +314,15 @@ const pdfUnidad = (doc, text, x, y) => {
   doc.setTextColor(140,140,140); doc.text(text, x, y);
 };
 const pdfCheck = (doc, x, y, text) => {
-  doc.setDrawColor(130,130,130); doc.setLineWidth(0.25);
+  doc.setDrawColor(80,80,80); doc.setLineWidth(0.25);
   doc.rect(x, y-2.6, 2.8, 2.8, "S");
   doc.setFont("helvetica","normal"); doc.setFontSize(6.5);
-  doc.setTextColor(90,90,90); doc.text(normPDF(text), x+4.2, y);
+  doc.setTextColor(40,40,40); doc.text(normPDF(text), x+4.2, y);
 };
 // Etiqueta + hueco para escribir
-const pdfCampo = (doc, text, x, y, ancho, size=7.5) => {
+const pdfCampo = (doc, text, x, y, ancho, size=7.5, color=[40,40,40]) => {
   doc.setFont("helvetica","bold"); doc.setFontSize(size);
-  doc.setTextColor(100,100,100); doc.text(normPDF(text), x, y);
+  doc.setTextColor(...color); doc.text(normPDF(text), x, y);
   pdfLine(doc, x + doc.getTextWidth(normPDF(text)) + 1.5, y + 0.8, x + ancho);
 };
 
@@ -367,21 +367,29 @@ const pdfFooterHC = (doc, pag) => {
     PDF_W/2, PDF_H-4, {align:"center"});
 };
 
-const pdfSectionTitle = (doc, y, titulo) => {
-  doc.setFillColor(0,168,150);
-  doc.rect(PDF_M, y-4, PDF_CW, 9, "F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(9);
-  doc.setTextColor(255,255,255);
-  doc.text(normPDF(titulo).toUpperCase(), PDF_M+3, y+1);
+// Barras de seccion en B/N. Dos niveles:
+//   "negro" → fondo negro + texto blanco  (titulo de seccion principal)
+//   "gris"  → gris 12% + texto negro + borde  (sub-nivel repetitivo)
+const pdfBanda = (doc, y, titulo, alto, size, estilo) => {
+  const negro = estilo !== "gris";
+  doc.setFillColor(negro?0:226, negro?0:226, negro?0:226);
+  doc.rect(PDF_M, y, PDF_CW, alto, "F");
+  if(!negro) {
+    doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
+    doc.rect(PDF_M, y, PDF_CW, alto, "S");
+  }
+  doc.setFont("helvetica","bold"); doc.setFontSize(size);
+  doc.setTextColor(negro?255:0, negro?255:0, negro?255:0);
+  doc.text(normPDF(titulo), PDF_M+3, y + 5);   // misma linea base que antes
+};
+
+const pdfSectionTitle = (doc, y, titulo, estilo="negro") => {
+  pdfBanda(doc, y-4, normPDF(titulo).toUpperCase(), 9, 9, estilo);
   return y + 10;
 };
 
-const pdfBarra = (doc, y, titulo, rgb) => {
-  doc.setFillColor(...rgb);
-  doc.rect(PDF_M, y-3, PDF_CW, 8, "F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
-  doc.setTextColor(255,255,255);
-  doc.text(normPDF(titulo), PDF_M+3, y+2);
+const pdfBarra = (doc, y, titulo, estilo="negro") => {
+  pdfBanda(doc, y-3, titulo, 8, 8.5, estilo);
   return y + 11;
 };
 
@@ -393,9 +401,9 @@ const dibujarHCBlanco = (doc, sede) => {
   // Datos del paciente
   y = pdfSectionTitle(doc, y, "Datos del Paciente");
   const BOXH = 48;
-  doc.setFillColor(240,246,255);
+  doc.setFillColor(244,244,244);
   doc.rect(PDF_M, y-3, PDF_CW, BOXH, "F");
-  doc.setDrawColor(0,75,140); doc.setLineWidth(0.3);
+  doc.setDrawColor(90,90,90); doc.setLineWidth(0.3);
   doc.rect(PDF_M, y-3, PDF_CW, BOXH, "S"); doc.setLineWidth(0.2);
 
   const bx = PDF_M + 4;
@@ -448,58 +456,68 @@ const dibujarHCBlanco = (doc, sede) => {
 };
 
 // ── Tarjeta de evaluacion en blanco (espejo de las tarjetas de exportarPDF) ──
+// Disenada para impresion laser en B/N: sin rellenos de color, la jerarquia
+// se apoya en filetes y negritas. El unico fondo es un gris 12% en la barra
+// de sesion, que imprime limpio sin ensuciar. Mismos campos y mismo orden.
 const pdfTarjetaBlanco = (doc, cy) => {
-  // 1. Barra de sesion
-  doc.setFillColor(0,168,150);
+  const H = 79.5, mid = PDF_M + PDF_CW/2, TRAZO = 100;
+  const filete = (x1, y, x2, w=0.3) => {
+    doc.setDrawColor(TRAZO,TRAZO,TRAZO); doc.setLineWidth(w); doc.line(x1, y, x2, y);
+  };
+
+  // Marco de la tarjeta
+  doc.setDrawColor(TRAZO,TRAZO,TRAZO); doc.setLineWidth(0.3);
+  doc.rect(PDF_M, cy, PDF_CW, H, "S");
+
+  // 1. Barra de sesion — gris 12% + texto negro en negrita
+  doc.setFillColor(226,226,226);
   doc.rect(PDF_M, cy, PDF_CW, 8, "F");
+  doc.setDrawColor(TRAZO,TRAZO,TRAZO); doc.setLineWidth(0.3);
+  doc.rect(PDF_M, cy, PDF_CW, 8, "S");
   doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
-  doc.setTextColor(255,255,255);
+  doc.setTextColor(0,0,0);
   doc.text("Sesion #  ______        Fecha  ______ / ______ / __________        Sede  ____________________",
     PDF_M+3, cy+5.5);
 
-  // 2. PRE / POST en dos columnas
-  const colW = PDF_CW/2 - 3, colR = PDF_M + PDF_CW/2 + 1;
-  const boxY = cy + 9.5, boxH = 29, sub = 43;
+  // 2. PRE / POST — sin fondo, separados por filete vertical
+  const zy = cy + 8, zh = 30.5, sub = 43;
+  doc.setDrawColor(TRAZO,TRAZO,TRAZO); doc.setLineWidth(0.3);
+  doc.line(mid, zy, mid, zy + zh);
+  filete(PDF_M, zy + zh, PDF_W - PDF_M);
 
-  doc.setFillColor(235,240,255);
-  doc.rect(PDF_M+2, boxY, colW, boxH, "F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(7);
-  doc.setTextColor(60,60,180);
-  doc.text("PRE-SESION", PDF_M+5, boxY+5);
+  doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+  doc.setTextColor(0,0,0);
+  doc.text("PRE-SESION", PDF_M+4, cy+13);
+  doc.text("POST-SESION", mid+4, cy+13);
+  filete(PDF_M+4, cy+14.5, PDF_M+29, 0.2);
+  filete(mid+4,   cy+14.5, mid+32,   0.2);
 
-  doc.setFillColor(220,245,238);
-  doc.rect(colR, boxY, colW, boxH, "F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(7);
-  doc.setTextColor(0,120,80);
-  doc.text("POST-SESION", colR+3, boxY+5);
-
+  const preX = PDF_M + 4, postX = mid + 4;
   [["PA:",0,0],["FC:",1,0],["SatO2:",0,1],["Temp:",1,1],["Peso:",0,2]]
-    .forEach(([t,c,r]) => pdfCampo(doc, t, PDF_M+5+c*sub, boxY+11+r*7, sub-4, 7));
-  pdfUnidad(doc, "bpm", PDF_M+5+sub+30, boxY+11);
-  pdfUnidad(doc, "%",   PDF_M+5+32,     boxY+18);
-  pdfUnidad(doc, "C",   PDF_M+5+sub+32, boxY+18);
-  pdfUnidad(doc, "kg",  PDF_M+5+32,     boxY+25);
+    .forEach(([t,c,r]) => pdfCampo(doc, t, preX+c*sub, cy+20.5+r*7, sub-4, 7));
+  pdfUnidad(doc, "bpm", preX+sub+30, cy+20.5);
+  pdfUnidad(doc, "%",   preX+32,     cy+27.5);
+  pdfUnidad(doc, "C",   preX+sub+32, cy+27.5);
+  pdfUnidad(doc, "kg",  preX+32,     cy+34.5);
 
   [["PA:",0,0],["FC:",1,0],["SatO2:",0,1],["Dolor:",1,1],["Estado:",0,2],["Tolerancia:",1,2]]
-    .forEach(([t,c,r]) => pdfCampo(doc, t, colR+3+c*sub, boxY+11+r*7, sub-4, 7));
-  pdfUnidad(doc, "bpm", colR+3+sub+30, boxY+11);
-  pdfUnidad(doc, "%",   colR+3+32,     boxY+18);
-  pdfUnidad(doc, "/10", colR+3+sub+30, boxY+18);
+    .forEach(([t,c,r]) => pdfCampo(doc, t, postX+c*sub, cy+20.5+r*7, sub-4, 7));
+  pdfUnidad(doc, "bpm", postX+sub+30, cy+20.5);
+  pdfUnidad(doc, "%",   postX+32,     cy+27.5);
+  pdfUnidad(doc, "/10", postX+sub+30, cy+27.5);
 
-  // 3. Parametros de sesion
-  const py = cy + 40;
-  doc.setFillColor(245,245,255);
-  doc.rect(PDF_M+2, py, PDF_CW-4, 7, "F");
-  pdfCampo(doc, "Presion:", PDF_M+5, py+4.8, 40);
-  pdfUnidad(doc, "ATA", PDF_M+46, py+4.8);
-  pdfCampo(doc, "Duracion:", PDF_M+60, py+4.8, 42);
-  pdfUnidad(doc, "min", PDF_M+103, py+4.8);
-  pdfCampo(doc, "Camara:", PDF_M+120, py+4.8, 60);
+  // 3. Parametros de sesion — sin fondo, cerrado por filete
+  pdfCampo(doc, "Presion:",  PDF_M+5,   cy+44, 40);
+  pdfUnidad(doc, "ATA", PDF_M+46, cy+44);
+  pdfCampo(doc, "Duracion:", PDF_M+60,  cy+44, 42);
+  pdfUnidad(doc, "min", PDF_M+103, cy+44);
+  pdfCampo(doc, "Camara:",   PDF_M+120, cy+44, 60);
+  filete(PDF_M, cy+47, PDF_W-PDF_M);
 
   // 4. Alertas pre-sesion — los 7 items que imprime el PDF digital
   const ay = cy + 51;
   doc.setFont("helvetica","bold"); doc.setFontSize(7);
-  doc.setTextColor(200,80,0);
+  doc.setTextColor(0,0,0);
   doc.text("Alertas pre-sesion:", PDF_M+4, ay);
   pdfCheck(doc, PDF_M+40,  ay, "Fiebre activa");
   pdfCheck(doc, PDF_M+73,  ay, "Dolor de oidos");
@@ -513,17 +531,12 @@ const pdfTarjetaBlanco = (doc, cy) => {
   pdfCampo(doc, "Obs:", PDF_M+4, cy+62, 178);
   pdfCampo(doc, "Evolucion:", PDF_M+4, cy+68, 178);
 
-  // 7. Firma
-  doc.setFillColor(220,245,235);
-  doc.rect(PDF_M+2, cy+70, PDF_CW-4, 7, "F");
+  // 7. Firma — sin fondo, separada por filete
+  filete(PDF_M, cy+70, PDF_W-PDF_M);
   doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-  doc.setTextColor(0,120,80);
+  doc.setTextColor(0,0,0);
   doc.text("Evaluado y firmado por:", PDF_M+5, cy+74.7);
   pdfLine(doc, PDF_M+48, cy+75.5, PDF_M+172);
-
-  // 8. Separador
-  doc.setDrawColor(210,210,210); doc.setLineWidth(0.2);
-  doc.line(PDF_M, cy+79.5, PDF_W-PDF_M, cy+79.5);
 };
 
 // ── HOJA 2: continuacion con 3 tarjetas de evaluacion ──
@@ -559,9 +572,9 @@ const dibujarEvalBlanco = (doc, sede) => {
   let y = 36;
 
   // Identificacion
-  doc.setFillColor(240,245,255);
+  doc.setFillColor(244,244,244);
   doc.rect(PDF_M, y-3, PDF_CW, 26, "F");
-  doc.setDrawColor(0,75,140); doc.setLineWidth(0.3);
+  doc.setDrawColor(90,90,90); doc.setLineWidth(0.3);
   doc.rect(PDF_M, y-3, PDF_CW, 26, "S"); doc.setLineWidth(0.2);
   const bx = PDF_M + 3;
   pdfCampo(doc, "APELLIDOS Y NOMBRES:", bx, y+5, 176, 8);
@@ -577,7 +590,7 @@ const dibujarEvalBlanco = (doc, sede) => {
   y += 31;
 
   // Signos vitales — mismo orden que sv[] del PDF digital
-  y = pdfBarra(doc, y, "SIGNOS VITALES", [0,168,150]);
+  y = pdfBarra(doc, y, "SIGNOS VITALES");
   const c2 = PDF_M + PDF_CW/2;
   pdfCampo(doc, "PRESION ARTERIAL:", PDF_M, y, 84);
   pdfCampo(doc, "FC:", c2, y, 76);
@@ -595,7 +608,7 @@ const dibujarEvalBlanco = (doc, sede) => {
   y += 10;
 
   // Screening — mismo orden que contra[], con las opciones de los selects
-  y = pdfBarra(doc, y, "SCREENING DE CONTRAINDICACIONES", [245,158,11]);
+  y = pdfBarra(doc, y, "SCREENING DE CONTRAINDICACIONES");
   pdfLabel(doc, "OTITIS:", PDF_M, y, 7.5, [100,100,100]);
   pdfOpts(doc, "No   /   Si", PDF_M+20, y);
   pdfLabel(doc, "CLAUSTROFOBIA:", c2, y, 7.5, [100,100,100]);
@@ -608,7 +621,7 @@ const dibujarEvalBlanco = (doc, sede) => {
   y += 10;
 
   // Evaluacion clinica
-  y = pdfBarra(doc, y, "EVALUACION CLINICA", [124,106,247]);
+  y = pdfBarra(doc, y, "EVALUACION CLINICA");
   pdfLabel(doc, "ESTADO GENERAL:", PDF_M, y, 7.5, [100,100,100]);
   pdfOpts(doc, "Excelente   /   Bueno   /   Regular   /   Malo", PDF_M+38, y);
   y += 9;
@@ -617,12 +630,12 @@ const dibujarEvalBlanco = (doc, sede) => {
   y += 10;
 
   // Evolucion medica
-  y = pdfBarra(doc, y, "EVOLUCION MEDICA", [16,185,129]);
+  y = pdfBarra(doc, y, "EVOLUCION MEDICA");
   for (let i = 0; i < 4; i++) pdfLine(doc, PDF_M, y + i*8, PDF_W-PDF_M);
   y += 4*8 + 2;
 
   // Incidencias y observaciones
-  y = pdfBarra(doc, y, "INCIDENCIAS Y OBSERVACIONES", [248,113,113]);
+  y = pdfBarra(doc, y, "INCIDENCIAS Y OBSERVACIONES");
   pdfLabel(doc, "Incidencias:", PDF_M, y, 8, [80,80,80]);
   pdfLine(doc, PDF_M+24, y, PDF_W-PDF_M);
   pdfLine(doc, PDF_M, y+7, PDF_W-PDF_M);
