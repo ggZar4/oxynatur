@@ -241,6 +241,433 @@ const CIE10_OHB = [
   { codigo:"OTRO",   desc:"Otro diagnóstico (especificar)" },
 ];
 
+// ── Carga de jsPDF desde CDN — cargador unico compartido ────────
+// Reemplaza las 3 copias del <script> que habia en descargarPDF,
+// exportarPDF y el onClick de exportar evaluacion.
+let __jspdfPromise = null;
+const ensureJsPDF = () => {
+  if (window.jspdf) return Promise.resolve(window.jspdf.jsPDF);
+  if (!__jspdfPromise) {
+    const p = new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    // Si falla, no dejamos cacheada la promesa rechazada
+    __jspdfPromise = p.catch((e) => { __jspdfPromise = null; throw e; });
+  }
+  return __jspdfPromise.then(() => window.jspdf.jsPDF);
+};
+
+// ── Formatos fisicos en blanco ──────────────────────────────────
+// Espejo imprimible de exportarPDF (Historia Clinica) y del PDF de
+// evaluacion medica. Mismos campos, mismo orden y mismas secciones,
+// pero en blanco para llenar a mano.
+
+// helvetica de jsPDF es Latin-1: quita tildes/n y los simbolos que
+// en los PDF actuales salen como cajas (— ° ⛔ ⚠).
+const normPDF = (str) => String(str == null ? "" : str)
+  .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
+  .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
+  .replace(/ü/g,"u").replace(/Ü/g,"U").replace(/ñ/g,"n").replace(/Ñ/g,"N")
+  .replace(/[—–]/g,"-").replace(/°/g,"").replace(/[⛔⚠]/g,"");
+
+// Direccion y RENIPRESS por sede — mismo criterio de match que addHeader.
+// El RENIPRESS de BD manda; el literal es el respaldo para el formato impreso.
+const RENIPRESS_SEDE = { molisalud: "00037878", sma: "00009104" };
+const infoSede = (sede) => {
+  const n = (sede?.nombre || "").toLowerCase();
+  if (n.includes("molisalud") || n.includes("molina")) return {
+    nombre: sede?.nombre || "Molisalud",
+    direccion: "Molisalud: Av. Javier Prado 5998, La Molina  |  Tel: 987203017",
+    renipress: sede?.renipress || RENIPRESS_SEDE.molisalud };
+  if (n.includes("miguel") || n.includes("sma") || n.includes("arcangel")) return {
+    nombre: sede?.nombre || "Clinica San Miguel Arcangel",
+    direccion: "Clinica San Miguel Arcangel: Jr. Las Gardenias 754, SJL  |  Tel: (01)387-5457",
+    renipress: sede?.renipress || RENIPRESS_SEDE.sma };
+  if (n.includes("vitalis") || n.includes("angel")) return {
+    nombre: sede?.nombre || "Angel Vitalis",
+    direccion: "Angel Vitalis: San Martin de Porres",
+    renipress: sede?.renipress || "" };
+  return { nombre: sede?.nombre || "",
+    direccion: normPDF(sede?.nombre || ""),
+    renipress: sede?.renipress || "" };
+};
+
+const PDF_W = 210, PDF_H = 297, PDF_M = 14, PDF_CW = 182;
+
+// ── Primitivas de escritura a mano ──
+const pdfLine = (doc, x1, y, x2) => {
+  doc.setDrawColor(170,170,170); doc.setLineWidth(0.2); doc.line(x1, y, x2, y);
+};
+const pdfLabel = (doc, text, x, y, size=8, color=[0,75,140]) => {
+  doc.setFont("helvetica","bold"); doc.setFontSize(size);
+  doc.setTextColor(...color); doc.text(normPDF(text), x, y);
+};
+const pdfOpts = (doc, text, x, y, size=7.5) => {
+  doc.setFont("helvetica","normal"); doc.setFontSize(size);
+  doc.setTextColor(110,110,110); doc.text(normPDF(text), x, y);
+};
+const pdfUnidad = (doc, text, x, y) => {
+  doc.setFont("helvetica","normal"); doc.setFontSize(6);
+  doc.setTextColor(140,140,140); doc.text(text, x, y);
+};
+const pdfCheck = (doc, x, y, text) => {
+  doc.setDrawColor(130,130,130); doc.setLineWidth(0.25);
+  doc.rect(x, y-2.6, 2.8, 2.8, "S");
+  doc.setFont("helvetica","normal"); doc.setFontSize(6.5);
+  doc.setTextColor(90,90,90); doc.text(normPDF(text), x+4.2, y);
+};
+// Etiqueta + hueco para escribir
+const pdfCampo = (doc, text, x, y, ancho, size=7.5) => {
+  doc.setFont("helvetica","bold"); doc.setFontSize(size);
+  doc.setTextColor(100,100,100); doc.text(normPDF(text), x, y);
+  pdfLine(doc, x + doc.getTextWidth(normPDF(text)) + 1.5, y + 0.8, x + ancho);
+};
+
+// ── Encabezado / pie ──
+const pdfHeaderBlanco = (doc, sede, titulo, sub) => {
+  doc.setFillColor(0,75,140);
+  doc.rect(0, 0, PDF_W, 28, "F");
+  doc.setFillColor(255,255,255);
+  doc.roundedRect(PDF_M-1, 3, 21, 22, 3, 3, "F");
+  try { doc.addImage("/logo.jpg","JPEG", PDF_M, 4, 18, 18); } catch(e) {}
+  doc.setFont("helvetica","bold"); doc.setFontSize(10);
+  doc.setTextColor(255,255,255);
+  doc.text(normPDF(titulo), 36, 10);
+  doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+  doc.setTextColor(200,230,255);
+  doc.text(normPDF(sub), 36, 16);
+  doc.setFontSize(7);
+  doc.setTextColor(180,220,200);
+  const rp = sede.renipress ? "RENIPRESS: " + sede.renipress : "RENIPRESS: ______________";
+  doc.text(normPDF(sede.direccion) + "   |   " + rp, 36, 22);
+  // Identificacion a la derecha (patron de la hoja de firma)
+  doc.setFontSize(8); doc.setTextColor(255,255,255);
+  doc.text("N HC: ______________", PDF_W-PDF_M, 11, {align:"right"});
+  doc.setFontSize(7); doc.setTextColor(200,230,255);
+  doc.text("Sede: " + normPDF(sede.nombre), PDF_W-PDF_M, 17, {align:"right"});
+  doc.setDrawColor(0,168,150); doc.setLineWidth(1.2);
+  doc.line(0, 28, PDF_W, 28); doc.setLineWidth(0.2);
+  return 34;
+};
+
+const pdfFooterHC = (doc, pag) => {
+  doc.setFillColor(245,248,255);
+  doc.rect(0, PDF_H-16, PDF_W, 16, "F");
+  doc.setDrawColor(0,168,150); doc.setLineWidth(0.5);
+  doc.line(0, PDF_H-16, PDF_W, PDF_H-16); doc.setLineWidth(0.2);
+  doc.setFontSize(7); doc.setFont("helvetica","normal");
+  doc.setTextColor(80,80,80);
+  doc.text("Asesor Medico Cientifico: Dr. Raul Aguado Quevedo  |  CMP 028600  |  RNE 022132", PDF_M, PDF_H-9);
+  doc.text("Pag. " + pag + "  |  Fecha: ________________", PDF_W-PDF_M, PDF_H-9, {align:"right"});
+  doc.setFontSize(6.5); doc.setTextColor(150,150,150);
+  doc.text("Documento confidencial - Protegido por Ley N 29733 de Proteccion de Datos Personales",
+    PDF_W/2, PDF_H-4, {align:"center"});
+};
+
+const pdfSectionTitle = (doc, y, titulo) => {
+  doc.setFillColor(0,168,150);
+  doc.rect(PDF_M, y-4, PDF_CW, 9, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(9);
+  doc.setTextColor(255,255,255);
+  doc.text(normPDF(titulo).toUpperCase(), PDF_M+3, y+1);
+  return y + 10;
+};
+
+const pdfBarra = (doc, y, titulo, rgb) => {
+  doc.setFillColor(...rgb);
+  doc.rect(PDF_M, y-3, PDF_CW, 8, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
+  doc.setTextColor(255,255,255);
+  doc.text(normPDF(titulo), PDF_M+3, y+2);
+  return y + 11;
+};
+
+// ── HOJA 1: Historia Clinica (espejo de exportarPDF) ──
+const dibujarHCBlanco = (doc, sede) => {
+  let y = pdfHeaderBlanco(doc, sede, "HISTORIA CLINICA - OXIGENOTERAPIA HIPERBARICA",
+    "Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781");
+
+  // Datos del paciente
+  y = pdfSectionTitle(doc, y, "Datos del Paciente");
+  const BOXH = 48;
+  doc.setFillColor(240,246,255);
+  doc.rect(PDF_M, y-3, PDF_CW, BOXH, "F");
+  doc.setDrawColor(0,75,140); doc.setLineWidth(0.3);
+  doc.rect(PDF_M, y-3, PDF_CW, BOXH, "S"); doc.setLineWidth(0.2);
+
+  const bx = PDF_M + 4;
+  let ry = y + 6;
+  pdfCampo(doc, "APELLIDOS Y NOMBRES:", bx, ry, 174, 8);
+  ry += 8;
+  pdfCampo(doc, "DNI:", bx, ry, 46);
+  pdfCampo(doc, "Nac:", bx+50, ry, 46);
+  pdfCampo(doc, "Edad:", bx+100, ry, 26);
+  pdfLabel(doc, "Genero:", bx+130, ry, 7.5, [100,100,100]);
+  pdfOpts(doc, "M  /  F  /  Otro", bx+145, ry);
+  ry += 8;
+  pdfCampo(doc, "Sede:", bx, ry, 66);
+  pdfCampo(doc, "N HC:", bx+70, ry, 46);
+  pdfCampo(doc, "Apertura:", bx+120, ry, 54);
+  ry += 8;
+  pdfLabel(doc, "Sesiones:", bx, ry, 7.5, [100,100,100]);
+  pdfLine(doc, bx+17, ry+0.8, bx+32);
+  pdfOpts(doc, "realizadas   /", bx+33, ry);
+  pdfLine(doc, bx+56, ry+0.8, bx+71);
+  pdfOpts(doc, "prescritas", bx+72, ry);
+  pdfLabel(doc, "Apto HBOT:", bx+105, ry, 7.5, [100,100,100]);
+  pdfOpts(doc, "SI  /  NO", bx+128, ry);
+  ry += 8;
+  pdfCampo(doc, "Tel:", bx, ry, 80);
+  pdfCampo(doc, "Email:", bx+84, ry, 90);
+
+  y = y + BOXH + 8;
+
+  // Antecedentes — mismo orden que camposHC de exportarPDF
+  y = pdfSectionTitle(doc, y, "Historia Clinica Maestra - Antecedentes");
+  const campos = [
+    ["Diagnostico principal", 2],
+    ["Antecedentes personales", 3],
+    ["Antecedentes familiares", 3],
+    ["Alergias", 2],
+    ["Medicamentos habituales", 3],
+    ["Contraindicaciones", 2],
+    ["Observaciones generales", 3],
+  ];
+  campos.forEach(([txt, nlineas]) => {
+    pdfLabel(doc, txt + ":", PDF_M+2, y, 8);
+    for (let i = 0; i < nlineas; i++) {
+      pdfLine(doc, i === 0 ? PDF_M+45 : PDF_M+2, y + 1 + i*7, PDF_W-PDF_M);
+    }
+    y += nlineas*7 + 4;
+  });
+
+  pdfFooterHC(doc, 1);
+};
+
+// ── Tarjeta de evaluacion en blanco (espejo de las tarjetas de exportarPDF) ──
+const pdfTarjetaBlanco = (doc, cy) => {
+  // 1. Barra de sesion
+  doc.setFillColor(0,168,150);
+  doc.rect(PDF_M, cy, PDF_CW, 8, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
+  doc.setTextColor(255,255,255);
+  doc.text("Sesion #  ______        Fecha  ______ / ______ / __________        Sede  ____________________",
+    PDF_M+3, cy+5.5);
+
+  // 2. PRE / POST en dos columnas
+  const colW = PDF_CW/2 - 3, colR = PDF_M + PDF_CW/2 + 1;
+  const boxY = cy + 9.5, boxH = 29, sub = 43;
+
+  doc.setFillColor(235,240,255);
+  doc.rect(PDF_M+2, boxY, colW, boxH, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(7);
+  doc.setTextColor(60,60,180);
+  doc.text("PRE-SESION", PDF_M+5, boxY+5);
+
+  doc.setFillColor(220,245,238);
+  doc.rect(colR, boxY, colW, boxH, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(7);
+  doc.setTextColor(0,120,80);
+  doc.text("POST-SESION", colR+3, boxY+5);
+
+  [["PA:",0,0],["FC:",1,0],["SatO2:",0,1],["Temp:",1,1],["Peso:",0,2]]
+    .forEach(([t,c,r]) => pdfCampo(doc, t, PDF_M+5+c*sub, boxY+11+r*7, sub-4, 7));
+  pdfUnidad(doc, "bpm", PDF_M+5+sub+30, boxY+11);
+  pdfUnidad(doc, "%",   PDF_M+5+32,     boxY+18);
+  pdfUnidad(doc, "C",   PDF_M+5+sub+32, boxY+18);
+  pdfUnidad(doc, "kg",  PDF_M+5+32,     boxY+25);
+
+  [["PA:",0,0],["FC:",1,0],["SatO2:",0,1],["Dolor:",1,1],["Estado:",0,2],["Tolerancia:",1,2]]
+    .forEach(([t,c,r]) => pdfCampo(doc, t, colR+3+c*sub, boxY+11+r*7, sub-4, 7));
+  pdfUnidad(doc, "bpm", colR+3+sub+30, boxY+11);
+  pdfUnidad(doc, "%",   colR+3+32,     boxY+18);
+  pdfUnidad(doc, "/10", colR+3+sub+30, boxY+18);
+
+  // 3. Parametros de sesion
+  const py = cy + 40;
+  doc.setFillColor(245,245,255);
+  doc.rect(PDF_M+2, py, PDF_CW-4, 7, "F");
+  pdfCampo(doc, "Presion:", PDF_M+5, py+4.8, 40);
+  pdfUnidad(doc, "ATA", PDF_M+46, py+4.8);
+  pdfCampo(doc, "Duracion:", PDF_M+60, py+4.8, 42);
+  pdfUnidad(doc, "min", PDF_M+103, py+4.8);
+  pdfCampo(doc, "Camara:", PDF_M+120, py+4.8, 60);
+
+  // 4. Alertas pre-sesion — los 7 items que imprime el PDF digital
+  const ay = cy + 51;
+  doc.setFont("helvetica","bold"); doc.setFontSize(7);
+  doc.setTextColor(200,80,0);
+  doc.text("Alertas pre-sesion:", PDF_M+4, ay);
+  pdfCheck(doc, PDF_M+40,  ay, "Fiebre activa");
+  pdfCheck(doc, PDF_M+73,  ay, "Dolor de oidos");
+  pdfCheck(doc, PDF_M+108, ay, "Alcohol");
+  pdfCheck(doc, PDF_M+134, ay, "Quimioterapia (Doxorubicina/Bleomicina)");
+  pdfCheck(doc, PDF_M+40,  ay+5, "Resfriado/congestion");
+  pdfCheck(doc, PDF_M+85,  ay+5, "Medicamento nuevo");
+  pdfCheck(doc, PDF_M+130, ay+5, "Sintoma nuevo");
+
+  // 5-6. Observaciones y evolucion
+  pdfCampo(doc, "Obs:", PDF_M+4, cy+62, 178);
+  pdfCampo(doc, "Evolucion:", PDF_M+4, cy+68, 178);
+
+  // 7. Firma
+  doc.setFillColor(220,245,235);
+  doc.rect(PDF_M+2, cy+70, PDF_CW-4, 7, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+  doc.setTextColor(0,120,80);
+  doc.text("Evaluado y firmado por:", PDF_M+5, cy+74.7);
+  pdfLine(doc, PDF_M+48, cy+75.5, PDF_M+172);
+
+  // 8. Separador
+  doc.setDrawColor(210,210,210); doc.setLineWidth(0.2);
+  doc.line(PDF_M, cy+79.5, PDF_W-PDF_M, cy+79.5);
+};
+
+// ── HOJA 2: continuacion con 3 tarjetas de evaluacion ──
+const dibujarContinuacionBlanco = (doc, sede) => {
+  doc.setFillColor(0,75,140);
+  doc.rect(0, 0, PDF_W, 17, "F");
+  doc.setFillColor(255,255,255);
+  doc.roundedRect(PDF_M-1, 2.5, 14, 12, 2, 2, "F");
+  try { doc.addImage("/logo.jpg","JPEG", PDF_M, 3, 12, 11); } catch(e) {}
+  doc.setFont("helvetica","bold"); doc.setFontSize(9);
+  doc.setTextColor(255,255,255);
+  doc.text("HISTORIA CLINICA - EVALUACIONES POR SESION", 32, 8);
+  doc.setFont("helvetica","normal"); doc.setFontSize(6.5);
+  doc.setTextColor(200,230,255);
+  doc.text("Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781  |  " + normPDF(sede.nombre), 32, 13);
+  doc.setFontSize(7.5); doc.setTextColor(255,255,255);
+  doc.text("N HC: ______________", PDF_W-PDF_M, 7, {align:"right"});
+  doc.setFontSize(7); doc.setTextColor(200,230,255);
+  doc.text("Paciente: ______________________", PDF_W-PDF_M, 13, {align:"right"});
+  doc.setDrawColor(0,168,150); doc.setLineWidth(1.2);
+  doc.line(0, 17, PDF_W, 17); doc.setLineWidth(0.2);
+
+  const y = pdfSectionTitle(doc, 23, "Evaluaciones por Sesion");
+  for (let t = 0; t < 3; t++) pdfTarjetaBlanco(doc, y + t*82);
+
+  pdfFooterHC(doc, 2);
+};
+
+// ── HOJA 3: Evaluacion Medica (espejo del PDF de evaluacion) ──
+const dibujarEvalBlanco = (doc, sede) => {
+  pdfHeaderBlanco(doc, sede, "EVALUACION MEDICA - OXIGENOTERAPIA HIPERBARICA",
+    "Consorcio Estilo Medico S.A.C.  |  RUC: 20614901781  |  Oxynatur");
+  let y = 36;
+
+  // Identificacion
+  doc.setFillColor(240,245,255);
+  doc.rect(PDF_M, y-3, PDF_CW, 26, "F");
+  doc.setDrawColor(0,75,140); doc.setLineWidth(0.3);
+  doc.rect(PDF_M, y-3, PDF_CW, 26, "S"); doc.setLineWidth(0.2);
+  const bx = PDF_M + 3;
+  pdfCampo(doc, "APELLIDOS Y NOMBRES:", bx, y+5, 176, 8);
+  pdfCampo(doc, "DNI:", bx, y+13, 44);
+  pdfCampo(doc, "Sesion Nro:", bx+48, y+13, 38);
+  pdfCampo(doc, "Fecha:", bx+90, y+13, 46);
+  pdfCampo(doc, "Hora:", bx+140, y+13, 36);
+  pdfCampo(doc, "Presion aplicada:", bx, y+20, 56);
+  pdfUnidad(doc, "ATA", bx+57, y+20);
+  pdfCampo(doc, "Duracion:", bx+68, y+20, 44);
+  pdfUnidad(doc, "min", bx+113, y+20);
+  pdfCampo(doc, "Camara:", bx+126, y+20, 50);
+  y += 31;
+
+  // Signos vitales — mismo orden que sv[] del PDF digital
+  y = pdfBarra(doc, y, "SIGNOS VITALES", [0,168,150]);
+  const c2 = PDF_M + PDF_CW/2;
+  pdfCampo(doc, "PRESION ARTERIAL:", PDF_M, y, 84);
+  pdfCampo(doc, "FC:", c2, y, 76);
+  pdfUnidad(doc, "bpm", c2+77, y);
+  y += 9;
+  pdfCampo(doc, "SATO2:", PDF_M, y, 84);
+  pdfUnidad(doc, "%", PDF_M+85, y);
+  pdfCampo(doc, "TEMPERATURA:", c2, y, 76);
+  pdfUnidad(doc, "C", c2+77, y);
+  y += 9;
+  pdfCampo(doc, "PESO:", PDF_M, y, 84);
+  pdfUnidad(doc, "kg", PDF_M+85, y);
+  pdfCampo(doc, "NIVEL DOLOR:", c2, y, 76);
+  pdfUnidad(doc, "/10", c2+77, y);
+  y += 10;
+
+  // Screening — mismo orden que contra[], con las opciones de los selects
+  y = pdfBarra(doc, y, "SCREENING DE CONTRAINDICACIONES", [245,158,11]);
+  pdfLabel(doc, "OTITIS:", PDF_M, y, 7.5, [100,100,100]);
+  pdfOpts(doc, "No   /   Si", PDF_M+20, y);
+  pdfLabel(doc, "CLAUSTROFOBIA:", c2, y, 7.5, [100,100,100]);
+  pdfOpts(doc, "No   /   Si - controlada   /   Si - contraindicado", c2+34, y);
+  y += 9;
+  pdfLabel(doc, "EMBARAZO:", PDF_M, y, 7.5, [100,100,100]);
+  pdfOpts(doc, "No   /   Si", PDF_M+26, y);
+  pdfLabel(doc, "FIEBRE ACTIVA:", c2, y, 7.5, [100,100,100]);
+  pdfOpts(doc, "No   /   Si", c2+32, y);
+  y += 10;
+
+  // Evaluacion clinica
+  y = pdfBarra(doc, y, "EVALUACION CLINICA", [124,106,247]);
+  pdfLabel(doc, "ESTADO GENERAL:", PDF_M, y, 7.5, [100,100,100]);
+  pdfOpts(doc, "Excelente   /   Bueno   /   Regular   /   Malo", PDF_M+38, y);
+  y += 9;
+  pdfLabel(doc, "TOLERANCIA:", PDF_M, y, 7.5, [100,100,100]);
+  pdfOpts(doc, "Buena   /   Regular   /   Mala   /   Intolerante", PDF_M+38, y);
+  y += 10;
+
+  // Evolucion medica
+  y = pdfBarra(doc, y, "EVOLUCION MEDICA", [16,185,129]);
+  for (let i = 0; i < 4; i++) pdfLine(doc, PDF_M, y + i*8, PDF_W-PDF_M);
+  y += 4*8 + 2;
+
+  // Incidencias y observaciones
+  y = pdfBarra(doc, y, "INCIDENCIAS Y OBSERVACIONES", [248,113,113]);
+  pdfLabel(doc, "Incidencias:", PDF_M, y, 8, [80,80,80]);
+  pdfLine(doc, PDF_M+24, y, PDF_W-PDF_M);
+  pdfLine(doc, PDF_M, y+7, PDF_W-PDF_M);
+  y += 13;
+  pdfLabel(doc, "Observaciones:", PDF_M, y, 8, [80,80,80]);
+  pdfLine(doc, PDF_M+29, y, PDF_W-PDF_M);
+  pdfLine(doc, PDF_M, y+7, PDF_W-PDF_M);
+  y += 15;
+
+  // Firma
+  y = Math.max(y, 240);
+  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+  doc.line(PDF_M, y, PDF_M+80, y); doc.setLineWidth(0.2);
+  doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
+  doc.setTextColor(30,30,30);
+  doc.text("Nombre y firma", PDF_M, y+5);
+  doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+  doc.setTextColor(100,100,100);
+  doc.text("Medico evaluador - CMP vigente", PDF_M, y+10);
+
+  // Pie — sin la mencion a la Ley 29733: el PDF digital de evaluacion no la lleva
+  doc.setDrawColor(200,200,200);
+  doc.line(PDF_M, PDF_H-14, PDF_W-PDF_M, PDF_H-14);
+  doc.setFontSize(7); doc.setFont("helvetica","normal");
+  doc.setTextColor(120,120,120);
+  doc.text("Asesor Medico Cientifico: Dr. Raul Aguado Quevedo  |  CMP 028600  |  RNE 022132", PDF_M, PDF_H-9);
+  doc.text("Fecha: ________________", PDF_W-PDF_M, PDF_H-9, {align:"right"});
+};
+
+// Formatos disponibles en el desplegable "Formato en blanco".
+// Cada hoja es imprimible por separado para no repetir la HC al reponer
+// hojas de continuación o de evaluación.
+// etiqueta/detalle solo se muestran en pantalla (van con tilde);
+// archivo alimenta el nombre del PDF y va sin tildes.
+const FORMATOS_BLANCO = {
+  hc:   { etiqueta:"Historia Clínica",          detalle:"Hoja 1 — datos y antecedentes",
+          archivo:"HistoriaClinica",  paginas:[dibujarHCBlanco] },
+  cont: { etiqueta:"Hoja de continuación",      detalle:"3 tarjetas de sesión",
+          archivo:"Continuacion",     paginas:[dibujarContinuacionBlanco] },
+  eval: { etiqueta:"Evaluación Médica",         detalle:"1 hoja por sesión",
+          archivo:"EvaluacionMedica", paginas:[dibujarEvalBlanco] },
+  set:  { etiqueta:"Set completo",              detalle:"Las 3 hojas en un archivo",
+          archivo:"SetCompleto",      paginas:[dibujarHCBlanco, dibujarContinuacionBlanco, dibujarEvalBlanco] },
+};
+
 // ── Toast notification system ──────────────────────────────────────────────
 let __toastFn = null;
 const toast = {
@@ -1681,14 +2108,7 @@ function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }
 
   const descargarPDF = async () => {
     setDescargando(true);
-    await new Promise((res,rej)=>{
-      if(window.jspdf) return res();
-      const s=document.createElement("script");
-      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      s.onload=res; s.onerror=rej;
-      document.head.appendChild(s);
-    });
-    const {jsPDF}=window.jspdf;
+    const jsPDF = await ensureJsPDF();
     const norm=(str)=>String(str==null?"":str)
       .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
       .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
@@ -1956,6 +2376,27 @@ function HistoriasClinicas({perfil}) {
   const dolorColor = (n) => parseInt(n)>=7?"#F87171":parseInt(n)>=4?"#F59E0B":"#10B981";
   const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"#10B981":e==="Regular"?"#F59E0B":"#F87171";
 
+  // ── Formatos fisicos en blanco ──
+  const [menuBlanco, setMenuBlanco] = useState(false);
+  const [generandoBlanco, setGenerandoBlanco] = useState(false);
+  const descargarFormatoBlanco = async (tipo) => {
+    const fmt = FORMATOS_BLANCO[tipo];
+    if(!fmt) return;
+    setGenerandoBlanco(true);
+    try {
+      const jsPDF = await ensureJsPDF();
+      const doc   = new jsPDF();
+      const sede  = infoSede(pacSelec?.sedes);
+      fmt.paginas.forEach((dibujar, i) => { if(i) doc.addPage(); dibujar(doc, sede); });
+      doc.save(`${fmt.archivo}_en_blanco_${normPDF(sede.nombre).replace(/\s+/g,"_")||"Oxynatur"}.pdf`);
+      toast.success("Formato en blanco generado");
+    } catch(e) {
+      toast.error("No se pudo generar el formato en blanco");
+    } finally {
+      setGenerandoBlanco(false);
+    }
+  };
+
   // ── Export PDF de HC ──
   const guardarConsentimiento = async () => {
     if(!formConsentimiento.medico_nombre) { toast.error("Ingresa el nombre del médico"); return; }
@@ -1985,14 +2426,7 @@ function HistoriasClinicas({perfil}) {
   };
 
   const exportarPDF = async () => {
-    await new Promise((res,rej)=>{
-      if(window.jspdf) return res();
-      const s = document.createElement("script");
-      s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      s.onload=res; s.onerror=rej;
-      document.head.appendChild(s);
-    });
-    const { jsPDF } = window.jspdf;
+    const jsPDF = await ensureJsPDF();
     const norm = (str) => String(str==null?"":str)
       .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
       .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
@@ -2649,6 +3083,32 @@ function HistoriasClinicas({perfil}) {
           <Btn variant="ghost" onClick={exportarPDF} style={{fontSize:12}}>
             HC PDF
           </Btn>
+          <div style={{position:"relative"}}>
+            <Btn variant="ghost" onClick={()=>setMenuBlanco(v=>!v)} disabled={generandoBlanco} style={{fontSize:12}}>
+              {generandoBlanco ? "Generando..." : "Formato en blanco ▾"}
+            </Btn>
+            {menuBlanco && (
+              <>
+                <div onClick={()=>setMenuBlanco(false)} style={{position:"fixed",inset:0,zIndex:150}}/>
+                <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:151,minWidth:250,
+                  background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,
+                  boxShadow:"0 8px 24px rgba(0,0,0,0.15)",padding:6}}>
+                  {Object.entries(FORMATOS_BLANCO).map(([id,fmt],i)=>(
+                    <button key={id}
+                      onClick={()=>{ setMenuBlanco(false); descargarFormatoBlanco(id); }}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                      style={{display:"block",width:"100%",textAlign:"left",background:"transparent",
+                        border:"none",borderTop:id==="set"?"0.5px solid var(--border)":"none",borderRadius:7,
+                        padding:"8px 10px",marginTop:id==="set"?4:0,cursor:"pointer",fontFamily:"inherit"}}>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{fmt.etiqueta}</div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>{fmt.detalle}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -3211,14 +3671,7 @@ function HistoriasClinicas({perfil}) {
               <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
                 <button onClick={async()=>{
                   // Exportar evaluación a PDF
-                  await new Promise((res,rej)=>{
-                    if(window.jspdf) return res();
-                    const s=document.createElement("script");
-                    s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-                    s.onload=res; s.onerror=rej;
-                    document.head.appendChild(s);
-                  });
-                  const {jsPDF}=window.jspdf;
+                  const jsPDF = await ensureJsPDF();
                   const norm=(str)=>String(str==null?"":str)
                     .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u")
                     .replace(/Á/g,"A").replace(/É/g,"E").replace(/Í/g,"I").replace(/Ó/g,"O").replace(/Ú/g,"U")
