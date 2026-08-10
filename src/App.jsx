@@ -368,27 +368,39 @@ const pdfFooterHC = (doc, pag) => {
 };
 
 // Barras de seccion en B/N. Dos niveles:
-//   "negro" → fondo negro + texto blanco  (titulo de seccion principal)
-//   "gris"  → gris 12% + texto negro + borde  (sub-nivel repetitivo)
+//   "seccion" → titulo en negrita + filete fino debajo, sin relleno
+//               (aireado; un formulario clinico no debe llevar franjas macizas)
+//   "gris"    → gris 12% + texto negro + borde  (sub-nivel repetitivo:
+//               la barra de sesion dentro de cada tarjeta)
+// La linea base del texto y el filete caen donde caia la banda anterior,
+// asi que ninguna maquetacion se desplaza.
 const pdfBanda = (doc, y, titulo, alto, size, estilo) => {
-  const negro = estilo !== "gris";
-  doc.setFillColor(negro?0:226, negro?0:226, negro?0:226);
-  doc.rect(PDF_M, y, PDF_CW, alto, "F");
-  if(!negro) {
+  if (estilo === "gris") {
+    doc.setFillColor(226,226,226);
+    doc.rect(PDF_M, y, PDF_CW, alto, "F");
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
     doc.rect(PDF_M, y, PDF_CW, alto, "S");
+    doc.setFont("helvetica","bold"); doc.setFontSize(size);
+    doc.setTextColor(0,0,0);
+    doc.text(normPDF(titulo), PDF_M+3, y + 5);
+    return;
   }
   doc.setFont("helvetica","bold"); doc.setFontSize(size);
-  doc.setTextColor(negro?255:0, negro?255:0, negro?255:0);
-  doc.text(normPDF(titulo), PDF_M+3, y + 5);   // misma linea base que antes
+  doc.setTextColor(0,0,0);
+  doc.setCharSpace(0.35);
+  doc.text(normPDF(titulo), PDF_M, y + 5);
+  doc.setCharSpace(0);
+  doc.setDrawColor(60,60,60); doc.setLineWidth(0.5);
+  doc.line(PDF_M, y + alto - 1, PDF_W - PDF_M, y + alto - 1);
+  doc.setLineWidth(0.2);
 };
 
-const pdfSectionTitle = (doc, y, titulo, estilo="negro") => {
+const pdfSectionTitle = (doc, y, titulo, estilo="seccion") => {
   pdfBanda(doc, y-4, normPDF(titulo).toUpperCase(), 9, 9, estilo);
   return y + 10;
 };
 
-const pdfBarra = (doc, y, titulo, estilo="negro") => {
+const pdfBarra = (doc, y, titulo, estilo="seccion") => {
   pdfBanda(doc, y-3, titulo, 8, 8.5, estilo);
   return y + 11;
 };
