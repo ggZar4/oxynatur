@@ -117,8 +117,8 @@ function useSupabaseQuery(queryFn, deps = [], contexto = "query") {
 
 // ── Colores por sede ──────────────────────────────────────────
 const SEDE_COLOR = {
-  "Molisalud": "#10B981",
-  "Clínica San Miguel Arcángel": "#7C6AF7",
+  "Molisalud": "var(--color-success)",
+  "Clínica San Miguel Arcángel": "var(--color-accent-alt)",
 };
 const getColor = (nombre) => SEDE_COLOR[nombre] || "var(--accent)";
 
@@ -712,9 +712,9 @@ const ToastContainer = () => {
     return () => { __toastFn = null; };
   }, []);
   const colors = {
-    success: {bg:"#10B981", icon:"✓"},
-    error:   {bg:"#F87171", icon:"✕"},
-    info:    {bg:"#7C6AF7", icon:"i"},
+    success: {bg:"var(--color-success)", icon:"✓"},
+    error:   {bg:"var(--color-error)", icon:"✕"},
+    info:    {bg:"var(--color-accent-alt)", icon:"i"},
   };
   return (
     <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none"}}>
@@ -773,16 +773,16 @@ const Btn = ({children,onClick,variant="primary",disabled=false,style={}}) => {
 
 const Input = ({label,value,onChange,type="text",placeholder="",required=false,error=""}) => (
   <div style={{marginBottom:14}}>
-    {label && <label style={{fontSize:12,color:error?"#F87171":"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
+    {label && <label style={{fontSize:12,color:error?"var(--color-error)":"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"var(--color-error)"}}> *</span>}</label>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${error?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none",transition:"border-color .15s"}}/>
-    {error && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{error}</div>}
+      style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${error?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none",transition:"border-color .15s"}}/>
+    {error && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{error}</div>}
   </div>
 );
 
 const Select = ({label,value,onChange,options=[],required=false}) => (
   <div style={{marginBottom:14}}>
-    {label && <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>}
+    {label && <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"var(--color-error)"}}> *</span>}</label>}
     <select value={value} onChange={e=>onChange(e.target.value)}
       style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:value?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",colorScheme:"light dark",transition:"border-color .15s"}}>
       <option value="" style={{background:"var(--surface)",color:"var(--text3)"}}>Seleccionar...</option>
@@ -812,12 +812,12 @@ function Login() {
 
   return (
     <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif"}}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}
 :root,[data-theme="light"]{
   --bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;
   --text:#0D1829;--text2:#4A5568;--text3:#8A97A8;
   --accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);
+  --color-error:#F87171;--color-success:#10B981;--color-warning:#F59E0B;--color-accent-alt:#7C6AF7;
   --radius-sm:8px;--radius-md:12px;--radius-lg:16px;
 }
 [data-theme="dark"]{
@@ -842,7 +842,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
         <Card style={{padding:32}}>
           <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:6,fontFamily:"Syne,sans-serif"}}>Iniciar sesión</div>
           <div style={{fontSize:13,color:"var(--text3)",marginBottom:24}}>Acceso autorizado al personal Oxynatur</div>
-          {error && <div style={{background:"#F8717115",border:"1px solid #F8717140",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#F87171"}}>⚠ {error}</div>}
+          {error && <div style={{background:"#F8717115",border:"1px solid #F8717140",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"var(--color-error)"}}>⚠ {error}</div>}
           <Input label="Email" value={email} onChange={setEmail} type="email" placeholder="tu@email.com"/>
           <div style={{position:"relative"}}>
             <Input label="Contraseña" value={pass} onChange={setPass} type={showPass?"text":"password"} placeholder="••••••••"/>
@@ -863,6 +863,64 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   );
 }
 
+// ── MODAL BASE ────────────────────────────────────────────────
+// Encapsula lo que antes cada modal repetía a mano —o se saltaba—:
+// overlay, Escape, clic fuera, foco inicial y retención de foco con Tab.
+//
+// El listener de Escape va en document, no en el div del overlay: antes
+// dependía de que el overlay tuviera el foco, y por eso funcionaba solo
+// en algunos modales. La pila __modalPila hace que Escape cierre solo el
+// modal de encima cuando hay uno sobre otro (p. ej. una confirmación
+// abierta desde dentro de un formulario).
+const __modalPila = [];
+const Z_MODAL = 2000, Z_MODAL_CONFIRM = 2500;
+const FOCO_SEL = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = true }) {
+  const wrap = useRef(null);
+  useEffect(() => {
+    const previo = document.activeElement;
+    const token = {};
+    __modalPila.push(token);
+    if (__modalPila.length === 1) document.body.style.overflow = "hidden";
+
+    // Foco inicial: el primer campo de datos si lo hay; si no, el contenedor.
+    // Se evita aterrizar en el botón de cerrar, que sería lo primero enfocable.
+    const campo = wrap.current?.querySelector("input:not([disabled]),select:not([disabled]),textarea:not([disabled])");
+    (campo || wrap.current)?.focus();
+
+    const onKey = (e) => {
+      if (__modalPila[__modalPila.length - 1] !== token) return;
+      if (e.key === "Escape") { e.preventDefault(); onClose?.(); return; }
+      if (e.key !== "Tab" || !wrap.current) return;
+      const foco = wrap.current.querySelectorAll(FOCO_SEL);
+      if (!foco.length) return;
+      const primero = foco[0], ultimo = foco[foco.length - 1];
+      if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      const i = __modalPila.indexOf(token);
+      if (i >= 0) __modalPila.splice(i, 1);
+      if (__modalPila.length === 0) document.body.style.overflow = "";
+      if (previo instanceof HTMLElement) previo.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div ref={wrap} tabIndex={-1}
+      style={{position:"fixed",inset:0,background:`rgba(0,0,0,${opacidad})`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:z,padding:20,outline:"none"}}
+      // onMouseDown y no onClick: si arrastras para seleccionar texto dentro del
+      // panel y sueltas fuera, onClick cerraría el modal y perderías lo escrito.
+      onMouseDown={e=>{ if(cerrarFuera && e.target===e.currentTarget) onClose?.(); }}>
+      {children}
+    </div>
+  );
+}
+
 // ── MODAL DE CONFIRMACIÓN ─────────────────────────────────────
 // Único punto de confirmación para acciones irreversibles. Sustituye a
 // confirm() nativo, que rompía visualmente con el resto de la app.
@@ -873,18 +931,13 @@ function ModalConfirmar({
   textoConfirmar = "Confirmar", textoCancelar = "Volver",
   cargando = false, onConfirmar, onCancelar,
 }) {
-  const ref = useRef(null);
-  useEffect(()=>{ ref.current?.focus(); }, []);
   const tonos = {
     peligro: { bg:"#FEE2E2", fg:"#DC2626", btn:"danger"  },
     aviso:   { bg:"#FEF3C7", fg:"#92400E", btn:"primary" },
   };
   const t = tonos[tono] || tonos.peligro;
   return (
-    <div ref={ref} tabIndex={-1}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9500,padding:20,outline:"none"}}
-      onKeyDown={e=>{ if(e.key==="Escape" && !cargando) onCancelar(); }}
-      onClick={e=>{ if(e.target===e.currentTarget && !cargando) onCancelar(); }}>
+    <Modal onClose={()=>{ if(!cargando) onCancelar(); }} z={Z_MODAL_CONFIRM} opacidad={0.5} cerrarFuera={!cargando}>
       <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:400,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
         <div style={{width:44,height:44,borderRadius:"50%",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={t.fg} strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
@@ -904,7 +957,7 @@ function ModalConfirmar({
           </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -964,7 +1017,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
             <span style={{display:"flex",alignItems:"center",flexShrink:0,opacity:vista===item.id?1:0.6}}>{item.icon}</span>
             <span style={{flex:1}}>{item.label}</span>
             {item.badge && (
-              <span style={{background:"#F87171",color:"white",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 6px",minWidth:18,textAlign:"center",lineHeight:"16px"}}>
+              <span style={{background:"var(--color-error)",color:"white",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 6px",minWidth:18,textAlign:"center",lineHeight:"16px"}}>
                 {item.badge > 99 ? "99+" : item.badge}
               </span>
             )}
@@ -1140,8 +1193,8 @@ function DashboardMedico({perfil}) {
     return ()=>{ mounted=false; };
   },[]); // eslint-disable-line
 
-  const PRIORIDAD_COLOR = {alta:"#F87171",media:"#F59E0B",baja:"var(--text3)"};
-  const ESTADO_COLOR    = {programada:"#F59E0B",en_curso:"var(--accent)",completada:"#10B981",cancelada:"#F87171"};
+  const PRIORIDAD_COLOR = {alta:"var(--color-error)",media:"var(--color-warning)",baja:"var(--text3)"};
+  const ESTADO_COLOR    = {programada:"var(--color-warning)",en_curso:"var(--accent)",completada:"var(--color-success)",cancelada:"var(--color-error)"};
 
   if(loading) return <div style={{padding:32,color:"var(--text3)"}}>Cargando dashboard clínico...</div>;
 
@@ -1164,10 +1217,10 @@ function DashboardMedico({perfil}) {
       {/* KPIs clínicos */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
-          {label:"Firmas pendientes",  val:firmasPend.length,  color: firmasPend.length>0?"#F59E0B":"#10B981"},
-          {label:"Alertas pendientes", val:alertas.length,    color: alertas.length>0?"#F87171":"#10B981"},
+          {label:"Firmas pendientes",  val:firmasPend.length,  color: firmasPend.length>0?"var(--color-warning)":"var(--color-success)"},
+          {label:"Alertas pendientes", val:alertas.length,    color: alertas.length>0?"var(--color-error)":"var(--color-success)"},
           {label:"Sesiones hoy",       val:sesionesHoy.length, color:"var(--accent)"},
-          {label:"Completadas hoy",    val:sesCompletadas,    color:"#10B981"},
+          {label:"Completadas hoy",    val:sesCompletadas,    color:"var(--color-success)"},
         ].map((k,i)=>(
           <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>{k.label}</div>
@@ -1195,12 +1248,12 @@ function DashboardMedico({perfil}) {
             {/* Header con filtros y contador por sede */}
             <div style={{padding:"12px 18px",borderBottom:"0.5px solid var(--border)",background:"#F59E0B08"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"var(--color-warning)",letterSpacing:"0.06em",textTransform:"uppercase"}}>
                   ✍ Cola de firmas — {firmasFiltradas.length} de {firmasPend.length} pendiente{firmasPend.length>1?"s":""}
                 </div>
                 {firmasFiltradas.length > 0 && (
                   <button onClick={()=>abrirFirmaDash(firmasFiltradas[0])}
-                    style={{background:"#7C6AF7",color:"white",border:"none",padding:"5px 14px",borderRadius:8,
+                    style={{background:"var(--color-accent-alt)",color:"white",border:"none",padding:"5px 14px",borderRadius:8,
                       cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                     ✍ Firmar todo
                   </button>
@@ -1212,9 +1265,9 @@ function DashboardMedico({perfil}) {
                   {[{id:"hoy",label:`Hoy (${firmasPend.filter(e=>e.fecha===hoy).length})`},{id:"todas",label:`Todas (${firmasPend.length})`}].map(f=>(
                     <button key={f.id} onClick={()=>setFiltroFirmas(f.id)}
                       style={{padding:"3px 10px",borderRadius:20,border:"0.5px solid",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600,
-                        borderColor:filtroFirmas===f.id?"#F59E0B":"var(--border)",
+                        borderColor:filtroFirmas===f.id?"var(--color-warning)":"var(--border)",
                         background:filtroFirmas===f.id?"#F59E0B20":"none",
-                        color:filtroFirmas===f.id?"#F59E0B":"var(--text3)"}}>
+                        color:filtroFirmas===f.id?"var(--color-warning)":"var(--text3)"}}>
                       {f.label}
                     </button>
                   ))}
@@ -1262,9 +1315,9 @@ function DashboardMedico({perfil}) {
                       </div>
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                      <span style={{fontSize:10,background:"#F59E0B20",color:"#F59E0B",padding:"2px 8px",borderRadius:99,fontWeight:700}}>BORRADOR</span>
+                      <span style={{fontSize:10,background:"#F59E0B20",color:"var(--color-warning)",padding:"2px 8px",borderRadius:99,fontWeight:700}}>BORRADOR</span>
                       <button onClick={()=>abrirFirmaDash(ev)}
-                        style={{background:"#7C6AF7",color:"white",border:"none",padding:"5px 12px",borderRadius:8,
+                        style={{background:"var(--color-accent-alt)",color:"white",border:"none",padding:"5px 12px",borderRadius:8,
                           cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                         ✍ Firmar
                       </button>
@@ -1282,7 +1335,7 @@ function DashboardMedico({perfil}) {
         {/* Alertas pendientes */}
         <Card style={{padding:0,overflow:"hidden"}}>
           <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#F87171",letterSpacing:"0.06em",textTransform:"uppercase"}}>🔔 Alertas pendientes</div>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--color-error)",letterSpacing:"0.06em",textTransform:"uppercase"}}>🔔 Alertas pendientes</div>
             <span style={{fontSize:12,color:"var(--text3)"}}>{alertas.length} sin resolver</span>
           </div>
           {alertas.length===0
@@ -1325,7 +1378,7 @@ function DashboardMedico({perfil}) {
       {/* Pacientes sin evaluación médica firmada */}
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>📋 Pacientes activos por sede</div>
+          <div style={{fontSize:12,fontWeight:700,color:"var(--color-accent-alt)",letterSpacing:"0.06em",textTransform:"uppercase"}}>📋 Pacientes activos por sede</div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:0}}>
           {resumen.map((s,i)=>(
@@ -1337,8 +1390,8 @@ function DashboardMedico({perfil}) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 {[
                   {l:"Pac. activos", v:s.pacientes_activos, c:getColor(s.sede)},
-                  {l:"Ses. hoy",     v:s.sesiones_hoy,      c:"#7C6AF7"},
-                  {l:"Ses. mes",     v:s.sesiones_mes,      c:"#10B981"},
+                  {l:"Ses. hoy",     v:s.sesiones_hoy,      c:"var(--color-accent-alt)"},
+                  {l:"Ses. mes",     v:s.sesiones_mes,      c:"var(--color-success)"},
                 ].map((it,j)=>(
                   <div key={j} style={{background:"var(--surface)",borderRadius:8,padding:"8px",textAlign:"center"}}>
                     <div style={{fontSize:16,fontWeight:700,color:it.c}}>{it.v||0}</div>
@@ -1352,7 +1405,7 @@ function DashboardMedico({perfil}) {
       </Card>
       {/* Modal firma desde Dashboard — con vista completa de la evaluación */}
       {firmaModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setFirmaModal(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:580,width:"100%",
             boxShadow:"0 20px 60px rgba(0,0,0,0.18)",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
@@ -1395,7 +1448,7 @@ function DashboardMedico({perfil}) {
               </div>
 
               {/* Parámetros sesión */}
-              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Parámetros de sesión</div>
+              <div style={{fontSize:11,color:"var(--color-accent-alt)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Parámetros de sesión</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
                 {[
                   ["Estado general",   firmaModal.estado_general],
@@ -1408,8 +1461,8 @@ function DashboardMedico({perfil}) {
                   <div key={l} style={{background:"var(--surface2)",borderRadius:8,padding:"8px 10px"}}>
                     <div style={{fontSize:10,color:"var(--text3)",fontWeight:600,marginBottom:2}}>{l}</div>
                     <div style={{fontSize:13,fontWeight:600,color:
-                      ["Sí","Sí - contraindicado"].includes(v) ? "#F87171" :
-                      v==="Sí - controlada" ? "#F59E0B" : "var(--text)"
+                      ["Sí","Sí - contraindicado"].includes(v) ? "var(--color-error)" :
+                      v==="Sí - controlada" ? "var(--color-warning)" : "var(--text)"
                     }}>{v||"—"}</div>
                   </div>
                 ))}
@@ -1420,7 +1473,7 @@ function DashboardMedico({perfil}) {
                 <div style={{marginBottom:16}}>
                   {firmaModal.incidencias && firmaModal.incidencias !== "NINGUNO" && (
                     <div style={{background:"#F8717110",border:"0.5px solid #F8717140",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                      <div style={{fontSize:10,color:"#F87171",fontWeight:700,marginBottom:4}}>⚠ INCIDENCIAS</div>
+                      <div style={{fontSize:10,color:"var(--color-error)",fontWeight:700,marginBottom:4}}>⚠ INCIDENCIAS</div>
                       <div style={{fontSize:13,color:"var(--text)"}}>{firmaModal.incidencias}</div>
                     </div>
                   )}
@@ -1435,7 +1488,7 @@ function DashboardMedico({perfil}) {
 
               {/* Evolución médica y firma */}
               <div style={{borderTop:"0.5px solid var(--border)",paddingTop:14,marginTop:4}}>
-                <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Nota de evolución médica</div>
+                <div style={{fontSize:11,color:"var(--color-accent-alt)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Nota de evolución médica</div>
                 <textarea value={firmaModal.evolucionEdit||""} onChange={e=>setFirmaModal(m=>({...m,evolucionEdit:e.target.value}))}
                   placeholder="Evolución del paciente, respuesta al tratamiento, observaciones clínicas..."
                   rows={3}
@@ -1463,13 +1516,13 @@ function DashboardMedico({perfil}) {
                     abrirFirmaDash(firmasPend[idx+1]);
                   }}>Saltar →</Btn>
                 )}
-                <Btn onClick={confirmarFirmaDash} disabled={savingFirma||!firmaTexto.trim()} style={{background:"#7C6AF7"}}>
+                <Btn onClick={confirmarFirmaDash} disabled={savingFirma||!firmaTexto.trim()} style={{background:"var(--color-accent-alt)"}}>
                   {savingFirma ? "Firmando..." : "✍ Firmar y siguiente"}
                 </Btn>
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirmFirmaDash && firmaModal && (
@@ -1572,9 +1625,9 @@ function DashboardFinanciero() {
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
         {[
           {label:"Pacientes activos", val:totales.pacientes, color:"var(--accent)", sub:"en tratamiento"},
-          {label:"Sesiones este mes",  val:totales.sesiones,  color:"#7C6AF7", sub:"hiperbáricas"},
-          {label:"Ingresos del mes",   val:`S/ ${totales.ingresos.toLocaleString()}`, color:"#10B981", sub:"facturado"},
-          {label:"Sesiones hoy",       val:totales.sesHoy,   color:"#F59E0B", sub:"programadas"},
+          {label:"Sesiones este mes",  val:totales.sesiones,  color:"var(--color-accent-alt)", sub:"hiperbáricas"},
+          {label:"Ingresos del mes",   val:`S/ ${totales.ingresos.toLocaleString()}`, color:"var(--color-success)", sub:"facturado"},
+          {label:"Sesiones hoy",       val:totales.sesHoy,   color:"var(--color-warning)", sub:"programadas"},
         ].map((k,i)=>(
           <div key={i} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-md)",padding:"18px 20px",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:k.color,borderRadius:"12px 12px 0 0"}}/>
@@ -1593,13 +1646,13 @@ function DashboardFinanciero() {
           <Card key={s.sede_id} style={{borderTop:`3px solid ${getColor(s.sede)}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"var(--text)"}}>{s.sede}</div>
-              <Badge color="#10B981">Activa</Badge>
+              <Badge color="var(--color-success)">Activa</Badge>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
               {[
                 {l:"Pac. activos", v:s.pacientes_activos, c:getColor(s.sede)},
-                {l:"Ses. hoy",     v:s.sesiones_hoy,      c:"#7C6AF7"},
-                {l:"Ingresos mes", v:`S/${Number(s.ingresos_mes||0).toLocaleString()}`, c:"#10B981"},
+                {l:"Ses. hoy",     v:s.sesiones_hoy,      c:"var(--color-accent-alt)"},
+                {l:"Ingresos mes", v:`S/${Number(s.ingresos_mes||0).toLocaleString()}`, c:"var(--color-success)"},
               ].map((it,j)=>(
                 <div key={j} style={{background:"var(--surface)",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
                   <div style={{fontSize:18,fontWeight:700,color:it.c}}>{it.v}</div>
@@ -1619,7 +1672,7 @@ function DashboardFinanciero() {
           </div>
           <BarChart data={historico}/>
           <div style={{marginTop:8,fontSize:12,color:"var(--text3)",textAlign:"right"}}>
-            Total período: <strong style={{color:"#10B981"}}>S/ {historico.reduce((a,d)=>a+d.val,0).toLocaleString("es-PE")}</strong>
+            Total período: <strong style={{color:"var(--color-success)"}}>S/ {historico.reduce((a,d)=>a+d.val,0).toLocaleString("es-PE")}</strong>
           </div>
         </Card>
       )}
@@ -1837,7 +1890,7 @@ function Pacientes({perfil}) {
     load();
   };
 
-  const estadoColor = {activo:"#10B981",inactivo:"var(--text3)",completado:"#7C6AF7",pendiente:"#F59E0B",suspendido:"#F87171"};
+  const estadoColor = {activo:"var(--color-success)",inactivo:"var(--text3)",completado:"var(--color-accent-alt)",pendiente:"var(--color-warning)",suspendido:"var(--color-error)"};
   const fmtSol = (n) => `S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
   // ── Vista perfil de paciente ──
@@ -1917,7 +1970,7 @@ function Pacientes({perfil}) {
                     {Math.max(0,(pacSelec.total_sesiones_prescritas||0)-(pacSelec.sesiones_realizadas||0))} sesiones restantes
                   </div>
                   {pacSelec.sesiones_realizadas >= pacSelec.total_sesiones_prescritas && pacSelec.total_sesiones_prescritas > 0 && (
-                    <div style={{fontSize:12,color:"#10B981",marginTop:4}}>✓ Tratamiento completado</div>
+                    <div style={{fontSize:12,color:"var(--color-success)",marginTop:4}}>✓ Tratamiento completado</div>
                   )}
                 </div>
               </div>
@@ -1926,7 +1979,7 @@ function Pacientes({perfil}) {
 
           {/* Paquetes activos e histórico */}
           <Card style={{marginBottom:14,padding:0,overflow:"hidden"}}>
-            <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:700,color:"#7C6AF7",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:700,color:"var(--color-accent-alt)",letterSpacing:"0.06em",textTransform:"uppercase"}}>
               Paquetes comprados
             </div>
             {compras.length===0
@@ -1935,7 +1988,7 @@ function Pacientes({perfil}) {
                   const usadas    = c.sesiones_usadas||0;
                   const totales   = c.sesiones_totales||1;
                   const pct       = Math.round((usadas/totales)*100);
-                  const estadoC   = c.estado==="activo"?"#10B981":c.estado==="agotado"?"var(--text3)":"#F87171";
+                  const estadoC   = c.estado==="activo"?"var(--color-success)":c.estado==="agotado"?"var(--text3)":"var(--color-error)";
                   return (
                     <div key={c.id} style={{padding:"12px 18px",borderBottom:i<compras.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:14}}>
                       <div style={{flex:1}}>
@@ -1949,7 +2002,7 @@ function Pacientes({perfil}) {
                         </div>
                         {/* Barra de progreso */}
                         <div style={{height:4,background:"var(--border)",borderRadius:2,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#10B981":"var(--accent)",borderRadius:2,transition:"width .3s"}}/>
+                          <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"var(--color-success)":"var(--accent)",borderRadius:2,transition:"width .3s"}}/>
                         </div>
                         <div style={{fontSize:11,color:"var(--text3)",marginTop:3}}>{usadas}/{totales} sesiones usadas ({pct}%)</div>
                       </div>
@@ -1961,13 +2014,13 @@ function Pacientes({perfil}) {
 
           {/* Últimas sesiones */}
           <Card style={{padding:0,overflow:"hidden"}}>
-            <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:700,color:"#F59E0B",letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div style={{padding:"14px 18px",borderBottom:"0.5px solid var(--border)",fontSize:12,fontWeight:700,color:"var(--color-warning)",letterSpacing:"0.06em",textTransform:"uppercase"}}>
               Últimas sesiones
             </div>
             {ultimasSesiones.length===0
               ? <div style={{padding:"20px",textAlign:"center",color:"var(--text3)",fontSize:13}}>Sin sesiones registradas</div>
               : ultimasSesiones.map((s,i)=>{
-                  const ECOLOR = {programada:"#F59E0B",en_curso:"var(--accent)",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
+                  const ECOLOR = {programada:"var(--color-warning)",en_curso:"var(--accent)",completada:"var(--color-success)",cancelada:"var(--color-error)",no_asistio:"var(--text3)"};
                   return (
                     <div key={s.id} style={{padding:"10px 18px",borderBottom:i<ultimasSesiones.length-1?"0.5px solid var(--border)":"none",display:"flex",alignItems:"center",gap:12}}>
                       <div style={{fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:700,color:"var(--accent)",minWidth:44}}>{fmtHora(s.hora_inicio)}</div>
@@ -1985,7 +2038,7 @@ function Pacientes({perfil}) {
       )}
       {/* Modal editar paciente */}
       {modalEditar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setModalEditar(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Editar Paciente</div>
@@ -2011,7 +2064,7 @@ function Pacientes({perfil}) {
               <Btn onClick={guardarEdicion} disabled={savingEditar}>{savingEditar?"Guardando...":"Guardar cambios"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -2109,7 +2162,7 @@ function Pacientes({perfil}) {
         )
       }
       {modal && f.puedeCrearPaciente && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
+        <Modal onClose={()=>setModal(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Paciente</div>
@@ -2130,8 +2183,8 @@ function Pacientes({perfil}) {
                 options={sedes.map(s=>({value:s.id,label:s.nombre}))}/>
               <Input label="Sesiones Prescritas" value={form.total_sesiones_prescritas} onChange={v=>setF("total_sesiones_prescritas",v)} type="number"/>
               <div style={{marginBottom:14}}>
-                <label style={{fontSize:12,color:err.diagnostico_hc?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
-                  Diagnóstico Principal (CIE-10) <span style={{color:"#F87171"}}>*</span>
+                <label style={{fontSize:12,color:err.diagnostico_hc?"var(--color-error)":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                  Diagnóstico Principal (CIE-10) <span style={{color:"var(--color-error)"}}>*</span>
                 </label>
                 <select
                   value={CIE10_OHB.some(c=>c.desc===form.diagnostico_hc||`${c.codigo} — ${c.desc}`===form.diagnostico_hc) ? form.diagnostico_hc : (form.diagnostico_hc?"OTRO":"")}
@@ -2140,7 +2193,7 @@ function Pacientes({perfil}) {
                     else if(e.target.value) { setF("diagnostico_hc", e.target.value); }
                     else { setF("diagnostico_hc",""); }
                   }}
-                  style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.diagnostico_hc?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:form.diagnostico_hc?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",marginBottom:8}}>
+                  style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.diagnostico_hc?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:form.diagnostico_hc?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",marginBottom:8}}>
                   <option value="">— Seleccionar diagnóstico CIE-10 —</option>
                   {CIE10_OHB.map(c=>(
                     <option key={c.codigo} value={c.codigo==="OTRO"?"OTRO":`${c.codigo} — ${c.desc}`}>
@@ -2151,8 +2204,8 @@ function Pacientes({perfil}) {
                 {/* Campo texto libre — siempre visible para detallar o especificar */}
                 <textarea value={form.diagnostico_hc} onChange={e=>setF("diagnostico_hc",e.target.value)} rows={2}
                   placeholder="Especificar diagnóstico o detalles adicionales..."
-                  style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.diagnostico_hc?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
-                {err.diagnostico_hc && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.diagnostico_hc}</div>}
+                  style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.diagnostico_hc?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                {err.diagnostico_hc && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{err.diagnostico_hc}</div>}
               </div>
             </div>
             <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
@@ -2160,7 +2213,7 @@ function Pacientes({perfil}) {
               <Btn onClick={guardar} disabled={saving}>{saving?"Guardando...":"Registrar Paciente"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -2337,9 +2390,7 @@ function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }
   };
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
-      onKeyDown={e=>e.key==="Escape"&&onClose()} tabIndex={-1}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <Modal onClose={onClose}>
       <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:760,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)",maxHeight:"92vh",overflowY:"auto"}}>
 
         {/* Header del modal */}
@@ -2412,7 +2463,7 @@ function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }
           <Btn onClick={descargarPDF} disabled={descargando}>{descargando?"Generando...":"Descargar PDF"}</Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -2464,8 +2515,8 @@ function HistoriasClinicas({perfil}) {
   const [firmaTexto, setFirmaTexto] = useState("");
   const [savingFirma, setSavingFirma] = useState(false);
 
-  const dolorColor = (n) => parseInt(n)>=7?"#F87171":parseInt(n)>=4?"#F59E0B":"#10B981";
-  const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"#10B981":e==="Regular"?"#F59E0B":"#F87171";
+  const dolorColor = (n) => parseInt(n)>=7?"var(--color-error)":parseInt(n)>=4?"var(--color-warning)":"var(--color-success)";
+  const estColor   = (e) => ["Excelente","Bueno"].includes(e)?"var(--color-success)":e==="Regular"?"var(--color-warning)":"var(--color-error)";
 
   // ── Formatos fisicos en blanco ──
   const [menuBlanco, setMenuBlanco] = useState(false);
@@ -3222,7 +3273,7 @@ function HistoriasClinicas({perfil}) {
             )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Badge color={pacSelec.apto_hiperbarica!==false?"#10B981":"#F87171"}>
+            <Badge color={pacSelec.apto_hiperbarica!==false?"var(--color-success)":"var(--color-error)"}>
               {pacSelec.apto_hiperbarica!==false?"Apto HBOT":"No apto HBOT"}
             </Badge>
             {f.puedeEscribirProtocolo && !editandoHC && (
@@ -3276,7 +3327,7 @@ function HistoriasClinicas({perfil}) {
             </div>
             {/* Screening de contraindicaciones absolutas */}
             <div style={{marginBottom:16,border:"0.5px solid #F8717140",borderRadius:10,overflow:"hidden"}}>
-              <div style={{padding:"10px 14px",background:"#F8717108",borderBottom:"0.5px solid #F8717130",fontSize:11,fontWeight:700,color:"#F87171",letterSpacing:"0.08em",textTransform:"uppercase"}}>
+              <div style={{padding:"10px 14px",background:"#F8717108",borderBottom:"0.5px solid #F8717130",fontSize:11,fontWeight:700,color:"var(--color-error)",letterSpacing:"0.08em",textTransform:"uppercase"}}>
                 Screening — Contraindicaciones absolutas para HBOT
               </div>
               <div style={{padding:"10px 14px"}}>
@@ -3306,13 +3357,13 @@ function HistoriasClinicas({perfil}) {
                                     [key]:{...val, presente:val_bool}
                                   }
                                 }))}
-                                style={{accentColor: val_bool?"#F87171":"#10B981"}}/>
-                              <span style={{color:val.presente===val_bool?(val_bool?"#F87171":"#10B981"):"var(--text2)",fontWeight:val.presente===val_bool?700:400}}>{l}</span>
+                                style={{accentColor: val_bool?"var(--color-error)":"var(--color-success)"}}/>
+                              <span style={{color:val.presente===val_bool?(val_bool?"var(--color-error)":"var(--color-success)"):"var(--text2)",fontWeight:val.presente===val_bool?700:400}}>{l}</span>
                             </label>
                           ))}
                         </div>
                         <span style={{fontSize:13,color:"var(--text)",flex:1}}>{label}</span>
-                        {val.presente && <span style={{fontSize:10,background:"#F8717120",color:"#F87171",padding:"1px 8px",borderRadius:99,fontWeight:700,flexShrink:0}}>CONTRAINDICADO</span>}
+                        {val.presente && <span style={{fontSize:10,background:"#F8717120",color:"var(--color-error)",padding:"1px 8px",borderRadius:99,fontWeight:700,flexShrink:0}}>CONTRAINDICADO</span>}
                       </div>
                       {val.presente && (
                         <input value={val.observacion||""} placeholder="Observación..."
@@ -3354,7 +3405,7 @@ function HistoriasClinicas({perfil}) {
             {/* Screening — vista de solo lectura */}
             {hcMaestra?.contraindicaciones_screening && Object.values(hcMaestra.contraindicaciones_screening).some(v=>v.presente) && (
               <div style={{marginTop:10,border:"0.5px solid #F8717140",borderRadius:10,overflow:"hidden"}}>
-                <div style={{padding:"8px 14px",background:"#F8717108",fontSize:11,fontWeight:700,color:"#F87171",letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                <div style={{padding:"8px 14px",background:"#F8717108",fontSize:11,fontWeight:700,color:"var(--color-error)",letterSpacing:"0.08em",textTransform:"uppercase"}}>
                   Contraindicaciones absolutas presentes
                 </div>
                 <div style={{padding:"10px 14px"}}>
@@ -3372,7 +3423,7 @@ function HistoriasClinicas({perfil}) {
                     const v = hcMaestra.contraindicaciones_screening[key];
                     return (
                       <div key={key} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:6}}>
-                        <span style={{color:"#F87171",fontWeight:700,flexShrink:0}}>✕</span>
+                        <span style={{color:"var(--color-error)",fontWeight:700,flexShrink:0}}>✕</span>
                         <div>
                           <div style={{fontSize:13,color:"var(--text)",fontWeight:500}}>{label}</div>
                           {v.observacion && <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{v.observacion}</div>}
@@ -3434,7 +3485,7 @@ function HistoriasClinicas({perfil}) {
                       <div style={{display:"flex",alignItems:"center",gap:12}}>
                         <div style={{
                           width:32,height:32,borderRadius:8,
-                          background: epIdx===0?"linear-gradient(135deg,#00C4B4,#7C6AF7)":"var(--border)",
+                          background: epIdx===0?"linear-gradient(135deg,#00C4B4,var(--color-accent-alt))":"var(--border)",
                           display:"flex",alignItems:"center",justifyContent:"center",
                           fontSize:13,fontWeight:700,color:"white",flexShrink:0,
                         }}>{epNum}</div>
@@ -3454,8 +3505,8 @@ function HistoriasClinicas({perfil}) {
                         </div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        {borradores > 0 && <Badge color="#F59E0B">{borradores} pendiente{borradores>1?"s":""}</Badge>}
-                        {completo && <Badge color="#10B981">✓ Completo</Badge>}
+                        {borradores > 0 && <Badge color="var(--color-warning)">{borradores} pendiente{borradores>1?"s":""}</Badge>}
+                        {completo && <Badge color="var(--color-success)">✓ Completo</Badge>}
                         <span style={{fontSize:11,color:"var(--text3)"}}>{firmadas}/{evCount} firmadas</span>
                       </div>
                     </div>
@@ -3465,7 +3516,7 @@ function HistoriasClinicas({perfil}) {
                       <div key={ev.id} style={{
                         background:"var(--surface)",
                         border:`1px solid ${ev.es_borrador?"#F59E0B40":"var(--border)"}`,
-                        borderLeft:`3px solid ${ev.es_borrador?"#F59E0B":ev.firma_medico?"#10B981":"var(--accent)"}`,
+                        borderLeft:`3px solid ${ev.es_borrador?"var(--color-warning)":ev.firma_medico?"var(--color-success)":"var(--accent)"}`,
                         borderRadius:12,padding:"14px 18px",marginBottom:6,marginLeft:8,
                       }}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
@@ -3473,14 +3524,14 @@ function HistoriasClinicas({perfil}) {
                             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
                               <span style={{fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:"var(--text)"}}>Sesión #{ev.numero_sesion}</span>
                               <span style={{fontSize:12,color:"var(--text3)"}}>{ev.fecha} · {fmtHora(ev.hora)}</span>
-                              {ev.es_borrador && <Badge color="#F59E0B">Borrador</Badge>}
-                              {!ev.es_borrador && ev.firma_medico && <Badge color="#10B981">✓ Firmado</Badge>}
+                              {ev.es_borrador && <Badge color="var(--color-warning)">Borrador</Badge>}
+                              {!ev.es_borrador && ev.firma_medico && <Badge color="var(--color-success)">✓ Firmado</Badge>}
                             </div>
                             {/* PRE y POST separados para sesiones, solo POST para evaluaciones */}
                             {ev._es_sesion && (ev.presion_arterial_pre || ev.saturacion_o2_pre) && (
                               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
                                 <div style={{background:"var(--surface2)",borderRadius:8,padding:"6px 10px"}}>
-                                  <div style={{fontSize:10,color:"#7C6AF7",fontWeight:700,marginBottom:4}}>PRE-SESIÓN</div>
+                                  <div style={{fontSize:10,color:"var(--color-accent-alt)",fontWeight:700,marginBottom:4}}>PRE-SESIÓN</div>
                                   <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:12}}>
                                     {ev.presion_arterial_pre && <span><b>PA:</b> {ev.presion_arterial_pre}</span>}
                                     {ev.frecuencia_cardiaca && <span><b>FC:</b> {ev.frecuencia_cardiaca}</span>}
@@ -3518,23 +3569,23 @@ function HistoriasClinicas({perfil}) {
                             </div>
                             <div style={{fontSize:11,color:"var(--text3)",marginBottom:ev.evolucion?6:0}}>
                               {ev.presion_indicada} ATA · {ev.duracion_minutos} min
-                              {ev.incidencias && <span style={{color:"#F59E0B"}}> · ⚠ {ev.incidencias}</span>}
+                              {ev.incidencias && <span style={{color:"var(--color-warning)"}}> · ⚠ {ev.incidencias}</span>}
                             </div>
                             {ev.evolucion && (
                               <div style={{background:"#7C6AF715",border:"1px solid #7C6AF730",borderRadius:8,padding:"7px 11px",marginBottom:4}}>
-                                <div style={{fontSize:10,color:"#7C6AF7",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>Evolución médica</div>
+                                <div style={{fontSize:10,color:"var(--color-accent-alt)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>Evolución médica</div>
                                 <div style={{fontSize:12,color:"var(--text)",lineHeight:1.5}}>{ev.evolucion}</div>
                               </div>
                             )}
                             {ev.firma_medico && (
-                              <div style={{fontSize:11,color:"#10B981",marginTop:3}}>
+                              <div style={{fontSize:11,color:"var(--color-success)",marginTop:3}}>
                                 ✓ Supervisado por: {ev.firma_medico}
                               </div>
                             )}
                           </div>
                           {(f.esMedico||f.esAdmin) && ev.es_borrador && (
                             <button onClick={()=>abrirFirma(ev)}
-                              style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,flexShrink:0}}>
+                              style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"var(--color-accent-alt)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,flexShrink:0}}>
                               ✍ Firmar
                             </button>
                           )}
@@ -3555,7 +3606,7 @@ function HistoriasClinicas({perfil}) {
 
       {/* Modal nueva evaluación */}
       {modalNuevaEval && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setModalNuevaEval(false)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div>
@@ -3566,7 +3617,7 @@ function HistoriasClinicas({perfil}) {
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
 
-              {errEval.general && <div style={{background:"#FEE2E2",border:"1px solid #F87171",borderRadius:10,padding:"10px 14px",color:"#F87171",fontSize:13,marginBottom:16}}>{errEval.general}</div>}
+              {errEval.general && <div style={{background:"#FEE2E2",border:"1px solid var(--color-error)",borderRadius:10,padding:"10px 14px",color:"var(--color-error)",fontSize:13,marginBottom:16}}>{errEval.general}</div>}
 
               {/* N° sesión */}
               <Input label="N° de sesión" type="number" value={formEval.numero_sesion}
@@ -3614,7 +3665,7 @@ function HistoriasClinicas({perfil}) {
                 options={["Excelente","Bueno","Regular","Malo"].map(v=>({value:v,label:v}))}/>
 
               {/* Contraindicaciones del día */}
-              <div style={{fontSize:11,color:"#F59E0B",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
+              <div style={{fontSize:11,color:"var(--color-warning)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                 ⚠ Contraindicaciones del día
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -3629,7 +3680,7 @@ function HistoriasClinicas({perfil}) {
               </div>
 
               {/* Parámetros cámara */}
-              <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
+              <div style={{fontSize:11,color:"var(--color-accent-alt)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                 🫁 Parámetros de sesión
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -3655,7 +3706,7 @@ function HistoriasClinicas({perfil}) {
               {/* SECCIÓN MÉDICO — solo si es médico o admin */}
               {(f.esMedico || f.esAdmin) && (
                 <>
-                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
+                  <div style={{fontSize:11,color:"var(--color-success)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10,paddingTop:8,paddingBottom:8,borderBottom:"0.5px solid var(--border)"}}>
                     🩺 Sección médica
                   </div>
                   <div style={{marginBottom:14}}>
@@ -3667,7 +3718,7 @@ function HistoriasClinicas({perfil}) {
                   <Input label="Firma de supervisión (nombre completo)" value={formEval.firma_medico}
                     onChange={v=>setFormEval(f=>({...f,firma_medico:v}))}
                     placeholder="Dr. Raúl Aguado Quevedo — CMP 12345"/>
-                  <div style={{padding:"8px 12px",background:"#10B98110",border:"1px solid #10B98130",borderRadius:8,fontSize:12,color:"#10B981",marginBottom:4}}>
+                  <div style={{padding:"8px 12px",background:"#10B98110",border:"1px solid #10B98130",borderRadius:8,fontSize:12,color:"var(--color-success)",marginBottom:4}}>
                     Al firmar confirma: "Ordené verbalmente la terapia hiperbárica. El tratamiento estuvo bajo mi dirección y control general."
                   </div>
                 </>
@@ -3683,12 +3734,12 @@ function HistoriasClinicas({perfil}) {
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal firmar evaluación borrador */}
       {modalEval && (f.esMedico||f.esAdmin) && modalEval.es_borrador && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>{ setModalEval(null); setFormEval(f=>({...f,firma_medico:""})); }}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>Firmar evaluación — Sesión #{modalEval.numero_sesion}</div>
             <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos} · {modalEval.fecha}</div>
@@ -3699,7 +3750,7 @@ function HistoriasClinicas({perfil}) {
             </div>
             <Input label="Firma (nombre completo)" value={formEval.firma_medico}
               onChange={v=>setFormEval(f=>({...f,firma_medico:v}))} placeholder="Dr. Nombre Apellido — CMP"/>
-            <div style={{padding:"8px 12px",background:"#10B98110",border:"1px solid #10B98130",borderRadius:8,fontSize:12,color:"#10B981",marginBottom:16}}>
+            <div style={{padding:"8px 12px",background:"#10B98110",border:"1px solid #10B98130",borderRadius:8,fontSize:12,color:"var(--color-success)",marginBottom:16}}>
               Al firmar confirma supervisión general del tratamiento hiperbárico.
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
@@ -3716,12 +3767,12 @@ function HistoriasClinicas({perfil}) {
               }}>✍ Firmar y cerrar evaluación</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal firma inline — dentro del perfil del paciente */}
       {firmaModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:20}}>
+        <Modal onClose={()=>setFirmaModal(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>
               Firmar evaluación — Sesión #{firmaModal.numero_sesion}
@@ -3747,22 +3798,21 @@ function HistoriasClinicas({perfil}) {
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
-              <Btn onClick={confirmarFirma} disabled={savingFirma||!firmaTexto.trim()} style={{background:"#7C6AF7"}}>
+              <Btn onClick={confirmarFirma} disabled={savingFirma||!firmaTexto.trim()} style={{background:"var(--color-accent-alt)"}}>
                 {savingFirma?"Firmando...":"✍ Confirmar firma"}
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal ver evaluación firmada */}
       {modalEval && !modalEval.es_borrador && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}
-          onKeyDown={e=>e.key==="Escape"&&setModalEval(null)} tabIndex={-1}>
+        <Modal onClose={()=>setModalEval(null)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div>
-                <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Evaluación Firmada · Sesión #{modalEval.numero_sesion}</div>
+                <div style={{fontSize:10,color:"var(--color-success)",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Evaluación Firmada · Sesión #{modalEval.numero_sesion}</div>
                 <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)"}}>{pacSelec.pacientes?.nombres} {pacSelec.pacientes?.apellidos}</div>
                 <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>{modalEval.fecha} · {fmtHora(modalEval.hora)} · {modalEval.sedes?.nombre}</div>
               </div>
@@ -3985,15 +4035,15 @@ function HistoriasClinicas({perfil}) {
                   ["SatO₂",modalEval.saturacion_o2],["Temperatura",modalEval.temperatura],["Peso",modalEval.peso?`${modalEval.peso} kg`:null],
                   ["Dolor",`${modalEval.nivel_dolor}/10`],["Estado",modalEval.estado_general],
                 ]},
-                {titulo:"Contraindicaciones del día", color:"#F59E0B", campos:[
+                {titulo:"Contraindicaciones del día", color:"var(--color-warning)", campos:[
                   ["Otitis",modalEval.otitis],["Claustrofobia",modalEval.claustrofobia],
                   ["Embarazo",modalEval.embarazo],["Fiebre",modalEval.fiebre_activa],
                 ]},
-                {titulo:"Parámetros de sesión", color:"#7C6AF7", campos:[
+                {titulo:"Parámetros de sesión", color:"var(--color-accent-alt)", campos:[
                   ["Presión",`${modalEval.presion_indicada} ATA`],["Duración",`${modalEval.duracion_minutos} min`],
                   ["Incidencias",modalEval.incidencias],["Observaciones",modalEval.observaciones],
                 ]},
-                {titulo:"Evolución médica", color:"#10B981", campos:[
+                {titulo:"Evolución médica", color:"var(--color-success)", campos:[
                   ["Evolución",modalEval.evolucion],["Firmado por",modalEval.firma_medico],
                 ]},
               ].map(sec=>(
@@ -4011,7 +4061,7 @@ function HistoriasClinicas({perfil}) {
               ))}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
       {/* Modal Consentimiento Informado */}
       {modalHojaFirma && (
@@ -4025,9 +4075,7 @@ function HistoriasClinicas({perfil}) {
       )}
 
       {modalConsentimiento && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
-          onKeyDown={e=>e.key==="Escape"&&setModalConsentimiento(false)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModalConsentimiento(false)}>
+        <Modal onClose={()=>setModalConsentimiento(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:500,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)",maxHeight:"90vh",overflowY:"auto"}}>
             {/* Header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,paddingBottom:14,borderBottom:"0.5px solid var(--border)"}}>
@@ -4081,7 +4129,7 @@ function HistoriasClinicas({perfil}) {
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -4148,7 +4196,7 @@ function HistoriasClinicas({perfil}) {
                 <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>{hc.diagnostico_principal}</div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <Badge color={hc.apto_hiperbarica!==false?"#10B981":"#F87171"}>
+                <Badge color={hc.apto_hiperbarica!==false?"var(--color-success)":"var(--color-error)"}>
                   {hc.apto_hiperbarica!==false?"Apto":"No apto"}
                 </Badge>
                 <span style={{color:"var(--text3)",fontSize:18}}>›</span>
@@ -4159,7 +4207,7 @@ function HistoriasClinicas({perfil}) {
 
       {/* Modal firma inline */}
       {firmaModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:20}}>
+        <Modal onClose={()=>setFirmaModal(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>
               Firmar evaluación — Sesión #{firmaModal.numero_sesion}
@@ -4191,12 +4239,12 @@ function HistoriasClinicas({perfil}) {
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setFirmaModal(null)}>Cancelar</Btn>
               <Btn onClick={confirmarFirma} disabled={savingFirma||!firmaTexto.trim()}
-                style={{background:"#7C6AF7"}}>
+                style={{background:"var(--color-accent-alt)"}}>
                 {savingFirma?"Firmando...":"✍ Confirmar firma"}
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -4240,13 +4288,13 @@ function Sedes() {
                   <div style={{fontWeight:700,fontSize:16,color:"var(--text)"}}>Oxynatur {sede.nombre}</div>
                   <div style={{fontSize:12,color:"var(--text3)"}}>{sede.direccion||"Sin dirección"}</div>
                 </div>
-                <span style={{marginLeft:"auto"}}><Badge color={sede.estado==="activa"?"#10B981":"#F87171"}>{sede.estado}</Badge></span>
+                <span style={{marginLeft:"auto"}}><Badge color={sede.estado==="activa"?"var(--color-success)":"var(--color-error)"}>{sede.estado}</Badge></span>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                 {[
                   {l:"Pac. activos", v:r.pacientes_activos||0, c:getColor(sede.nombre)},
-                  {l:"Ses. hoy",     v:r.sesiones_hoy||0,     c:"#7C6AF7"},
-                  {l:"Cámaras OK",  v:r.camaras_operativas||0,c:"#10B981"},
+                  {l:"Ses. hoy",     v:r.sesiones_hoy||0,     c:"var(--color-accent-alt)"},
+                  {l:"Cámaras OK",  v:r.camaras_operativas||0,c:"var(--color-success)"},
                 ].map((it,j)=>(
                   <div key={j} style={{background:"var(--surface)",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
                     <div style={{fontSize:20,fontWeight:700,color:it.c}}>{it.v}</div>
@@ -4352,9 +4400,9 @@ function Finanzas() {
       {/* KPIs globales */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
         {[
-          {label:"Ingresos del mes",  val:fmtSol(totalIngresos),  color:"#10B981", sub:`${ventas.length} ventas`},
-          {label:"Descuentos",        val:fmtSol(totalDescuento), color:"#F59E0B", sub:"vs precio sugerido"},
-          {label:"Ticket promedio",   val:fmtSol(ticketPromedio), color:"#7C6AF7", sub:"por venta"},
+          {label:"Ingresos del mes",  val:fmtSol(totalIngresos),  color:"var(--color-success)", sub:`${ventas.length} ventas`},
+          {label:"Descuentos",        val:fmtSol(totalDescuento), color:"var(--color-warning)", sub:"vs precio sugerido"},
+          {label:"Ticket promedio",   val:fmtSol(ticketPromedio), color:"var(--color-accent-alt)", sub:"por venta"},
           {label:"Precio sugerido",   val:fmtSol(totalSugerido),  color:"var(--accent)", sub:"total sin descuento"},
         ].map((k,i)=>(
           <Card key={i} style={{borderTop:`3px solid ${k.color}`,paddingTop:16,minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
@@ -4444,7 +4492,7 @@ function Finanzas() {
                         </span>
                       </td>
                       <td style={{padding:"9px 12px",fontSize:13,fontWeight:700,
-                        color: Number(v.monto_pagado) < Number(v.precio_sugerido) ? "#F59E0B" : "#10B981"}}>
+                        color: Number(v.monto_pagado) < Number(v.precio_sugerido) ? "var(--color-warning)" : "var(--color-success)"}}>
                         {fmtSol(v.monto_pagado)}
                       </td>
                     </tr>
@@ -4455,7 +4503,7 @@ function Finanzas() {
             {/* Totales */}
             <div style={{padding:"10px 16px",borderTop:"0.5px solid var(--border)",background:"var(--surface2)",display:"flex",justifyContent:"flex-end",gap:24}}>
               <span style={{fontSize:12,color:"var(--text3)"}}>Total cobrado:</span>
-              <span style={{fontSize:14,fontWeight:700,color:"#10B981",fontFamily:"Syne,sans-serif"}}>{fmtSol(totalIngresos)}</span>
+              <span style={{fontSize:14,fontWeight:700,color:"var(--color-success)",fontFamily:"Syne,sans-serif"}}>{fmtSol(totalIngresos)}</span>
             </div>
           </Card>
         </div>
@@ -4575,7 +4623,7 @@ function Usuarios({perfil:adminPerfil}) {
     load();
   };
 
-  const rolColor = {admin_general:"var(--accent)",admin_sede:"#7C6AF7",medico:"#F59E0B",enfermero:"#10B981"};
+  const rolColor = {admin_general:"var(--accent)",admin_sede:"var(--color-accent-alt)",medico:"var(--color-warning)",enfermero:"var(--color-success)"};
   const rolLabel = (u) => {
     if(u.rol === "medico" && u.es_especialista) return "Médico Especialista";
     if(u.rol === "medico") return "Médico";
@@ -4611,7 +4659,7 @@ function Usuarios({perfil:adminPerfil}) {
                     ✏ Editar
                   </button>
                   <button onClick={()=>toggleActivo(u)}
-                    style={{background:u.activo===false?"#10B98115":"#F8717115",border:u.activo===false?"1px solid #10B98130":"1px solid #F8717130",color:u.activo===false?"#10B981":"#F87171",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
+                    style={{background:u.activo===false?"#10B98115":"#F8717115",border:u.activo===false?"1px solid #10B98130":"1px solid #F8717130",color:u.activo===false?"var(--color-success)":"var(--color-error)",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
                     {u.activo===false?"Activar":"Desactivar"}
                   </button>
                 </div>
@@ -4620,13 +4668,13 @@ function Usuarios({perfil:adminPerfil}) {
           </Card>
       }
       {modal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
+        <Modal onClose={()=>setModal(false)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Usuario</div>
               <button onClick={()=>setModal(false)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
             </div>
-            {msg && <div style={{background:"#F8717115",border:"1px solid #F8717140",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#F87171"}}>{msg}</div>}
+            {msg && <div style={{background:"#F8717115",border:"1px solid #F8717140",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"var(--color-error)"}}>{msg}</div>}
             <Input label="Nombre completo" value={form.nombre} onChange={v=>setF("nombre",v)} required/>
             <Input label="Email" value={form.email} onChange={v=>setF("email",v)} type="email" required/>
             <Input label="Contraseña temporal" value={form.password} onChange={v=>setF("password",v)} type="password" required/>
@@ -4653,11 +4701,11 @@ function Usuarios({perfil:adminPerfil}) {
               <Btn onClick={crear} disabled={saving}>{saving?"Creando...":"Crear Usuario"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
       {/* Modal editar usuario */}
       {modalEdit && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setModalEdit(null)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:440,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Editar Usuario</div>
@@ -4689,7 +4737,7 @@ function Usuarios({perfil:adminPerfil}) {
               <Btn onClick={guardarEditUsuario} disabled={savingEdit}>{savingEdit?"Guardando...":"Guardar"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirmUsuario && (
@@ -4805,7 +4853,7 @@ function AgendaMedico({perfil, cambiarVista}) {
   const [showCalAgenda, setShowCalAgenda] = useState(false);
   const [accionando, setAccionando] = useState(null); // id de sesion en acción
 
-  const ESTADO_COLOR = {programada:"#F59E0B",en_curso:"var(--accent)",completada:"#10B981",cancelada:"#F87171",no_asistio:"var(--text3)"};
+  const ESTADO_COLOR = {programada:"var(--color-warning)",en_curso:"var(--accent)",completada:"var(--color-success)",cancelada:"var(--color-error)",no_asistio:"var(--text3)"};
   const ESTADO_LABEL = {programada:"Programada",en_curso:"En curso",completada:"Completada",cancelada:"Cancelada",no_asistio:"No asistió"};
 
   // FIX #7 — getSemana memoizada, no recalcula en cada render
@@ -5031,8 +5079,8 @@ function AgendaMedico({perfil, cambiarVista}) {
                             position:"absolute", top, left:0, right:0, zIndex:3,
                             display:"flex", alignItems:"center", pointerEvents:"none",
                           }}>
-                            <div style={{width:6,height:6,borderRadius:"50%",background:"#F87171",flexShrink:0}}/>
-                            <div style={{flex:1,height:1.5,background:"#F87171",opacity:0.7}}/>
+                            <div style={{width:6,height:6,borderRadius:"50%",background:"var(--color-error)",flexShrink:0}}/>
+                            <div style={{flex:1,height:1.5,background:"var(--color-error)",opacity:0.7}}/>
                           </div>
                         );
                       })()}
@@ -5049,14 +5097,14 @@ function AgendaMedico({perfil, cambiarVista}) {
                             height:28,
                             background:"#7C6AF720",
                             border:"1px solid #7C6AF750",
-                            borderLeft:"3px solid #7C6AF7",
+                            borderLeft:"3px solid var(--color-accent-alt)",
                             borderRadius:5,
                             padding:"2px 5px",
                             overflow:"hidden",
                             zIndex:1,
                             cursor:"default",
                           }}>
-                            <div style={{fontSize:9,fontWeight:700,color:"#7C6AF7",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                            <div style={{fontSize:9,fontWeight:700,color:"var(--color-accent-alt)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                               {p.nombre.split(" ").slice(-1)[0]}
                             </div>
                             <div style={{fontSize:8,color:"var(--text3)"}}>Eval</div>
@@ -5204,9 +5252,9 @@ function AgendaMedico({perfil, cambiarVista}) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
         {[
           {label: vistaMode==="semana"?"Total semana":"Total hoy",  val:kpis.total,      color:"var(--text)"},
-          {label:"Completadas", val:kpis.completadas, color:"#10B981"},
+          {label:"Completadas", val:kpis.completadas, color:"var(--color-success)"},
           {label:"En curso",    val:kpis.enCurso,     color:"var(--accent)"},
-          {label:"Pendientes",  val:kpis.pendientes,  color:"#F59E0B"},
+          {label:"Pendientes",  val:kpis.pendientes,  color:"var(--color-warning)"},
         ].map((k,i)=>(
           <div key={i} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",padding:"12px 16px",minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
@@ -5248,9 +5296,9 @@ function AgendaMedico({perfil, cambiarVista}) {
 
           {/* FIX #8 — usa prospectosHoy ya computado, no re-filtra inline */}
           {prospectosHoy.map(p=>(
-            <div key={p.id} style={{background:"#7C6AF708",border:"0.5px solid #7C6AF730",borderLeft:"3px solid #7C6AF7",borderRadius:12,padding:"14px 18px",display:"grid",gridTemplateColumns:"90px 1fr auto auto",alignItems:"center",gap:14}}>
+            <div key={p.id} style={{background:"#7C6AF708",border:"0.5px solid #7C6AF730",borderLeft:"3px solid var(--color-accent-alt)",borderRadius:12,padding:"14px 18px",display:"grid",gridTemplateColumns:"90px 1fr auto auto",alignItems:"center",gap:14}}>
               <div style={{textAlign:"center"}}>
-                <div style={{fontSize:18,fontWeight:700,color:"#7C6AF7",fontFamily:"Syne,sans-serif",lineHeight:1}}>
+                <div style={{fontSize:18,fontWeight:700,color:"var(--color-accent-alt)",fontFamily:"Syne,sans-serif",lineHeight:1}}>
                   {fmtHora(new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"America/Lima"}))}
                 </div>
                 <div style={{fontSize:9,color:"var(--text3)",marginTop:4,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>Evaluación</div>
@@ -5260,22 +5308,22 @@ function AgendaMedico({perfil, cambiarVista}) {
                 <div style={{fontSize:12,color:"var(--text3)",marginTop:3,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                   <span>📞 {p.telefono}</span>
                   {p.motivo && <span>· {p.motivo}</span>}
-                  {p.canal && <span style={{background:"#7C6AF715",color:"#7C6AF7",borderRadius:4,padding:"1px 6px",fontSize:11}}>vía {p.canal}</span>}
+                  {p.canal && <span style={{background:"#7C6AF715",color:"var(--color-accent-alt)",borderRadius:4,padding:"1px 6px",fontSize:11}}>vía {p.canal}</span>}
                 </div>
               </div>
               {(f.esAdmin||f.esMedicoEsp) && (
                 <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  <span style={{width:7,height:7,borderRadius:"50%",background:"#7C6AF7",display:"inline-block"}}/>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:"var(--color-accent-alt)",display:"inline-block"}}/>
                   <span style={{fontSize:12,color:"var(--text2)"}}>{p.sedes?.nombre||"—"}</span>
                 </div>
               )}
-              <Badge color="#7C6AF7">Eval.</Badge>
+              <Badge color="var(--color-accent-alt)">Eval.</Badge>
             </div>
           ))}
 
           {agendaFiltrada.map(s=>{
             const col = ESTADO_COLOR[s.estado]||"var(--border2)";
-            const camaraCol = s.estado==="en_curso"?"#F87171":s.estado==="programada"?"#F59E0B":"#10B981";
+            const camaraCol = s.estado==="en_curso"?"var(--color-error)":s.estado==="programada"?"var(--color-warning)":"var(--color-success)";
             const enAccion = accionando===s.id;
             return (
               <div key={s.id} style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderLeft:`3px solid ${col}`,borderRadius:12,padding:"14px 18px",display:"grid",gridTemplateColumns:"90px 1fr 150px 110px",alignItems:"center",gap:14,opacity:s.estado==="cancelada"||s.estado==="no_asistio"?0.55:1,transition:"opacity 0.2s"}}>
@@ -5297,7 +5345,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                   <div style={{display:"flex",flexWrap:"wrap",gap:5,alignItems:"center"}}>
                     <span style={{fontSize:11,color:"var(--text3)"}}>DNI {s.dni} · #{s.numero_sesion}</span>
                     {s.sesiones_restantes != null && (
-                      <span style={{fontSize:11,fontWeight:600,color:s.sesiones_restantes===0?"#F87171":s.sesiones_restantes<=2?"#F59E0B":"#10B981",background:s.sesiones_restantes===0?"#F8717115":s.sesiones_restantes<=2?"#F59E0B15":"#10B98115",borderRadius:4,padding:"1px 6px"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:s.sesiones_restantes===0?"var(--color-error)":s.sesiones_restantes<=2?"var(--color-warning)":"var(--color-success)",background:s.sesiones_restantes===0?"#F8717115":s.sesiones_restantes<=2?"#F59E0B15":"#10B98115",borderRadius:4,padding:"1px 6px"}}>
                         {s.sesiones_restantes===0?"última":""+s.sesiones_restantes+" rest."}
                       </span>
                     )}
@@ -5327,7 +5375,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                 {/* Estado + acciones — FIX #1 y #6 */}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
                   <Badge color={col}>{ESTADO_LABEL[s.estado]||s.estado}</Badge>
-                  {!s.hc_completada && s.estado==="completada" && <Badge color="#F59E0B">⚠ Sin HC</Badge>}
+                  {!s.hc_completada && s.estado==="completada" && <Badge color="var(--color-warning)">⚠ Sin HC</Badge>}
                   {s.estado==="programada" && (
                     <button
                       disabled={enAccion}
@@ -5340,7 +5388,7 @@ function AgendaMedico({perfil, cambiarVista}) {
                     <button
                       disabled={enAccion}
                       onClick={()=>cambiarEstado(s.id,"completada")}
-                      style={{background:enAccion?"var(--border2)":"#10B98118",border:`1px solid ${enAccion?"var(--border)":"#10B98150"}`,color:enAccion?"var(--text3)":"#10B981",fontSize:11,fontWeight:700,cursor:enAccion?"not-allowed":"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"inherit",width:"100%",textAlign:"center",transition:"all 0.15s"}}>
+                      style={{background:enAccion?"var(--border2)":"#10B98118",border:`1px solid ${enAccion?"var(--border)":"#10B98150"}`,color:enAccion?"var(--text3)":"var(--color-success)",fontSize:11,fontWeight:700,cursor:enAccion?"not-allowed":"pointer",padding:"4px 10px",borderRadius:6,fontFamily:"inherit",width:"100%",textAlign:"center",transition:"all 0.15s"}}>
                       {enAccion?"..." : "✓ Completar"}
                     </button>
                   )}
@@ -5873,14 +5921,14 @@ function Ventas({perfil}) {
           <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"var(--accent)",marginTop:4}}>{fmtSol(totalMes)}</div>
           <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{statsMes.cantidad} ventas en el período</div>
         </Card>
-        <Card style={{borderTop:"3px solid #F59E0B",paddingTop:16}}>
+        <Card style={{borderTop:"3px solid var(--color-warning)",paddingTop:16}}>
           <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Descuentos otorgados</div>
-          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#F59E0B",marginTop:8}}>{fmtSol(descuentosMes)}</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"var(--color-warning)",marginTop:8}}>{fmtSol(descuentosMes)}</div>
           <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>diferencia sugerido vs cobrado</div>
         </Card>
-        <Card style={{borderTop:"3px solid #7C6AF7",paddingTop:16}}>
+        <Card style={{borderTop:"3px solid var(--color-accent-alt)",paddingTop:16}}>
           <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>Total registrado</div>
-          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#7C6AF7",marginTop:8}}>{ventas.length}</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"var(--color-accent-alt)",marginTop:8}}>{ventas.length}</div>
           <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>últimos 50 movimientos</div>
         </Card>
       </div>
@@ -5994,7 +6042,7 @@ function Ventas({perfil}) {
                         {v.paquetes?.codigo || "—"}
                         <div style={{fontSize:11,color:"var(--text3)"}}>{v.paquetes?.nombre}</div>
                       </td>
-                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color:conDesc?"#F59E0B":"var(--accent)"}}>{fmtSol(pag)}</td>
+                      <td style={{padding:"11px 14px",fontSize:13,fontWeight:600,color:conDesc?"var(--color-warning)":"var(--accent)"}}>{fmtSol(pag)}</td>
                       <td style={{padding:"11px 14px",fontSize:12,color:"var(--text3)"}}>{v.metodo_pago}</td>
                       <td style={{padding:"11px 14px"}}>
                         {v.comprobante_url
@@ -6031,9 +6079,7 @@ function Ventas({perfil}) {
 
       {/* Modal editar venta */}
       {modalEditar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
-          onKeyDown={e=>e.key==="Escape"&&setModalEditar(null)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModalEditar(null)}>
+        <Modal onClose={()=>setModalEditar(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:440,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div>
@@ -6082,14 +6128,12 @@ function Ventas({perfil}) {
               <Btn onClick={guardarEdicion} disabled={savingEditar}>{savingEditar?"Guardando...":"Guardar cambios"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal nueva venta */}
       {modal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
-          onKeyDown={e=>e.key==="Escape"&&setModal(false)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModal(false)}>
+        <Modal onClose={()=>setModal(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:540,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",maxHeight:"92vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"var(--text)"}}>Nueva venta</div>
@@ -6106,13 +6150,13 @@ function Ventas({perfil}) {
               const selPac = (pacientesData||[]).find(p=>p.id===form.paciente_id);
               return (
                 <div style={{marginBottom:14,position:"relative"}}>
-                  <label style={{fontSize:12,color:err.paciente_id?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Paciente <span style={{color:"#F87171"}}>*</span></label>
+                  <label style={{fontSize:12,color:err.paciente_id?"var(--color-error)":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Paciente <span style={{color:"var(--color-error)"}}>*</span></label>
                   <input
                     value={abiertoDropPac ? busqPac : (selPac ? `${selPac.apellidos}, ${selPac.nombres}` : "")}
                     onFocus={()=>{ setAbiertoDropPac(true); setBusqPac(""); }}
                     onChange={e=>{ setBusqPac(e.target.value); setAbiertoDropPac(true); }}
                     placeholder="Buscar por nombre o DNI..."
-                    style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${err.paciente_id?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
+                    style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${err.paciente_id?"var(--color-error)":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
                   />
                   {abiertoDropPac && (
                     <>
@@ -6138,7 +6182,7 @@ function Ventas({perfil}) {
                 </div>
               );
             })()}
-            {err.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paciente_id}</div>}
+            {err.paciente_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{err.paciente_id}</div>}
 
             {/* Sede: fija para enfermero, seleccionable para admin */}
             {sedeFija
@@ -6148,7 +6192,7 @@ function Ventas({perfil}) {
               : <>
                   <Select label="Sede" value={form.sede_id} onChange={v=>setForm({...form,sede_id:v})}
                     options={(sedesData||[]).map(s=>({value:s.id,label:s.nombre}))} required/>
-                  {err.sede_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.sede_id}</div>}
+                  {err.sede_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{err.sede_id}</div>}
                 </>
             }
 
@@ -6171,28 +6215,28 @@ function Ventas({perfil}) {
                   const extra = precioSede?.incluye_evaluacion ? " (inc. evaluación)" : "";
                   return {value:p.id, label:`${p.codigo} — ${p.nombre}${extra} — ${fmtSol(precio)}`};
                 })} required/>
-            {err.paquete_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
+            {err.paquete_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{err.paquete_id}</div>}
 
             {/* Campo especial para paquetes de convenio — sesiones variables */}
             {esConvenio && (
               <div style={{padding:14,background:"#7C6AF710",border:"0.5px solid #7C6AF740",borderRadius:10,marginBottom:14}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#7C6AF7",marginBottom:8}}>Convenio Institucional</div>
+                <div style={{fontSize:12,fontWeight:700,color:"var(--color-accent-alt)",marginBottom:8}}>Convenio Institucional</div>
                 <div style={{fontSize:11,color:"var(--text3)",marginBottom:12}}>
                   Vincula la empresa, define las sesiones autorizadas y el monto. El pago quedará como pendiente.
                 </div>
                 {/* Selector de empresa */}
                 <div style={{marginBottom:12}}>
-                  <label style={{fontSize:12,color:err.convenio_id?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Empresa del convenio *</label>
+                  <label style={{fontSize:12,color:err.convenio_id?"var(--color-error)":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Empresa del convenio *</label>
                   <select value={form.convenio_id} onChange={e=>{
                     const emp = conveniosData?.find(c=>c.id===e.target.value);
                     setForm(f=>({...f, convenio_id:e.target.value,
                       monto_pagado: (emp && f.sesiones_convenio) ? String(emp.tarifa_sesion * Number(f.sesiones_convenio)) : f.monto_pagado }));
                   }}
-                    style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.convenio_id?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                    style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${err.convenio_id?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
                     <option value="">— Seleccionar empresa —</option>
                     {(conveniosData||[]).map(c=><option key={c.id} value={c.id}>{c.razon_social} (S/{c.tarifa_sesion}/ses)</option>)}
                   </select>
-                  {err.convenio_id && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.convenio_id}</div>}
+                  {err.convenio_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{err.convenio_id}</div>}
                 </div>
                 <Input label="N° de sesiones autorizadas *" type="number" value={form.sesiones_convenio}
                   onChange={v=>{
@@ -6204,7 +6248,7 @@ function Ventas({perfil}) {
                 <Input label="N° de autorización / orden (opcional)" value={form.numero_autorizacion}
                   onChange={v=>setForm({...form,numero_autorizacion:v})} placeholder="N° de orden de la empresa"/>
                 {form.convenio_id && form.sesiones_convenio && (
-                  <div style={{fontSize:12,color:"#7C6AF7",marginTop:4}}>
+                  <div style={{fontSize:12,color:"var(--color-accent-alt)",marginTop:4}}>
                     Monto calculado: {form.sesiones_convenio} sesiones × S/{conveniosData?.find(c=>c.id===form.convenio_id)?.tarifa_sesion||0} = <strong>S/{(conveniosData?.find(c=>c.id===form.convenio_id)?.tarifa_sesion||0)*Number(form.sesiones_convenio)}</strong>
                   </div>
                 )}
@@ -6218,7 +6262,7 @@ function Ventas({perfil}) {
                   <span>Precio base</span><span>{fmtSol(calculo.precio_base)}</span>
                 </div>
                 {calculo.promo_aplicada && (
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#7C6AF7",marginBottom:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--color-accent-alt)",marginBottom:6}}>
                     <span>{calculo.promo_aplicada} (-{calculo.descuento_pct}%)</span>
                     <span>-{fmtSol(Number(calculo.precio_base)-Number(calculo.precio_final))}</span>
                   </div>
@@ -6245,18 +6289,18 @@ function Ventas({perfil}) {
             {/* Nota Kiwi: monto neto después de comisión 5% */}
             {form.metodo_pago === "kiwi" && form.monto_pagado && Number(form.monto_pagado) > 0 && (
               <div style={{padding:"10px 14px",background:"#7C6AF715",border:"0.5px solid #7C6AF740",borderRadius:10,fontSize:12,color:"var(--text2)",marginBottom:14}}>
-                <div style={{fontWeight:700,color:"#7C6AF7",marginBottom:4}}>Financiamiento Kiwi</div>
+                <div style={{fontWeight:700,color:"var(--color-accent-alt)",marginBottom:4}}>Financiamiento Kiwi</div>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
                   <span>Monto al paciente</span>
                   <span>{fmtSol(Number(form.monto_pagado))}</span>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
                   <span>Comisión Kiwi (5%)</span>
-                  <span style={{color:"#F87171"}}>-{fmtSol(Number(form.monto_pagado)*0.05)}</span>
+                  <span style={{color:"var(--color-error)"}}>-{fmtSol(Number(form.monto_pagado)*0.05)}</span>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,borderTop:"0.5px solid #7C6AF740",paddingTop:6,marginTop:4}}>
                   <span>Neto a recibir</span>
-                  <span style={{color:"#7C6AF7"}}>{fmtSol(Number(form.monto_pagado)*0.95)}</span>
+                  <span style={{color:"var(--color-accent-alt)"}}>{fmtSol(Number(form.monto_pagado)*0.95)}</span>
                 </div>
                 <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Desembolso al día hábil siguiente</div>
               </div>
@@ -6320,20 +6364,20 @@ function Ventas({perfil}) {
                 <div style={{marginTop:8,position:"relative",display:"inline-block"}}>
                   <img src={form.fotoPreview} alt="preview" style={{width:120,height:80,objectFit:"cover",borderRadius:8,border:"1px solid #2A3550"}}/>
                   <button onClick={()=>setForm(f=>({...f,fotoFile:null,fotoPreview:null}))}
-                    style={{position:"absolute",top:-6,right:-6,background:"#F87171",border:"none",borderRadius:"50%",width:18,height:18,color:"white",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                    style={{position:"absolute",top:-6,right:-6,background:"var(--color-error)",border:"none",borderRadius:"50%",width:18,height:18,color:"white",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
                 </div>
               )}
             </div>
 
             {/* Notas */}
             <div style={{marginBottom:14}}>
-              <label style={{fontSize:12,color:err.notas?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
-                Notas {calculo&&form.monto_pagado&&Number(form.monto_pagado)<Number(calculo.precio_final)&&<span style={{color:"#F87171"}}> *</span>}
+              <label style={{fontSize:12,color:err.notas?"var(--color-error)":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                Notas {calculo&&form.monto_pagado&&Number(form.monto_pagado)<Number(calculo.precio_final)&&<span style={{color:"var(--color-error)"}}> *</span>}
               </label>
               <textarea value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})}
                 placeholder="Razón del descuento, paciente referido, observaciones..."
-                style={{width:"100%",background:"var(--surface2)",border:`1px solid ${err.notas?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",minHeight:60,resize:"vertical"}}/>
-              {err.notas && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{err.notas}</div>}
+                style={{width:"100%",background:"var(--surface2)",border:`1px solid ${err.notas?"var(--color-error)":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",minHeight:60,resize:"vertical"}}/>
+              {err.notas && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{err.notas}</div>}
             </div>
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}>
@@ -6343,12 +6387,12 @@ function Ventas({perfil}) {
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal exportar Excel */}
       {modalExport && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}>
+        <Modal onClose={()=>setModalExport(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.12)",width:"100%",padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,color:"var(--text)"}}>Exportar ventas</div>
@@ -6384,7 +6428,7 @@ function Ventas({perfil}) {
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirmAnular && (
@@ -6555,7 +6599,7 @@ function DashboardSede({perfil}) {
         {kpi("Sesiones completadas", completadas, "var(--accent)")}
         {kpi("Pacientes atendidos", pacientesUnicos, "#6366F1")}
         {kpi("Ingreso bruto", fmtS(ingresoBruto), "#059669")}
-        {kpi("En curso hoy", enCurso, "#F59E0B")}
+        {kpi("En curso hoy", enCurso, "var(--color-warning)")}
         {kpi("Programadas hoy", programadasHoy, "#64748B")}
       </div>
 
@@ -6627,8 +6671,8 @@ function Sesiones({perfil}) {
   const f = getRolFlags(perfil);
 
   const ESTADO_COLOR = {
-    programada:"#F59E0B", en_curso:"var(--accent)",
-    completada:"#10B981", cancelada:"#F87171", no_asistio:"var(--text3)"
+    programada:"var(--color-warning)", en_curso:"var(--accent)",
+    completada:"var(--color-success)", cancelada:"var(--color-error)", no_asistio:"var(--text3)"
   };
   const ESTADO_LABEL = {
     programada:"Programada", en_curso:"En curso",
@@ -7160,8 +7204,8 @@ function Sesiones({perfil}) {
         {[
           {label:"Total del día",  val:total,      color:"var(--text)"},
           {label:"En curso",       val:enCurso,    color:"var(--accent)"},
-          {label:"Completadas",    val:completadas, color:"#10B981"},
-          {label:"Pendientes",     val:pendientes, color:"#F59E0B"},
+          {label:"Completadas",    val:completadas, color:"var(--color-success)"},
+          {label:"Pendientes",     val:pendientes, color:"var(--color-warning)"},
         ].map((k,i)=>(
           <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{k.label}</div>
@@ -7205,7 +7249,7 @@ function Sesiones({perfil}) {
                 <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>
                   DNI {s.dni} · Sesión #{s.numero_sesion}
                   {s.sesiones_restantes != null && (
-                    <span style={{color: s.sesiones_restantes <= 2 ? "#F87171" : "var(--text3)"}}>
+                    <span style={{color: s.sesiones_restantes <= 2 ? "var(--color-error)" : "var(--text3)"}}>
                       {" "}· {s.sesiones_restantes} restantes
                     </span>
                   )}
@@ -7233,20 +7277,20 @@ function Sesiones({perfil}) {
                       ▶ Iniciar
                     </button>
                     <button onClick={()=>cancelar(s)}
-                      style={{background:"#F8717115",border:"1px solid #F8717130",color:"#F87171",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                      style={{background:"#F8717115",border:"1px solid #F8717130",color:"var(--color-error)",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
                       ✕
                     </button>
                   </>
                 )}
                 {s.estado === "en_curso" && (
                   <button onClick={()=>{ setVerSesion(s); setFormCompletar({hora_inicio_real:s.hora_inicio_real||s.hora_inicio?.slice(0,5)||"",hora_fin_real:new Date().toTimeString().slice(0,5),nivel_dolor:0,estado_general:"Bueno",tolerancia:"Buena",observaciones:"",requiere_atencion:false,presion_arterial:"",saturacion_o2:""}); }}
-                    style={{background:"#10B98120",border:"1px solid #10B98140",color:"#10B981",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    style={{background:"#10B98120",border:"1px solid #10B98140",color:"var(--color-success)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                     ✓ Completar
                   </button>
                 )}
                 {s.estado === "cancelada" && (f.esAdmin || f.esEnfermero || f.esMedico) && (
                   <button onClick={()=>{ setModalReprog(s); setFormReprog({fecha:fecha,hora_inicio:s.hora_inicio?.slice(0,5)||"08:00",hora_fin:s.hora_fin?.slice(0,5)||"09:00"}); }}
-                    style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"#7C6AF7",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    style={{background:"#7C6AF720",border:"1px solid #7C6AF740",color:"var(--color-accent-alt)",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                     📅 Reprogramar
                   </button>
                 )}
@@ -7265,9 +7309,7 @@ function Sesiones({perfil}) {
 
       {/* Modal programar nueva sesión */}
       {modalNueva && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}
-          onKeyDown={e=>e.key==="Escape"&&setModalNueva(false)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModalNueva(false)}>
+        <Modal onClose={()=>setModalNueva(false)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Programar Sesión</div>
@@ -7276,8 +7318,8 @@ function Sesiones({perfil}) {
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
               {/* Buscador de paciente */}
               <div style={{marginBottom:14,position:"relative"}}>
-                <label style={{fontSize:12,color:errNueva.paciente_id?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
-                  Paciente <span style={{color:"#F87171"}}>*</span>
+                <label style={{fontSize:12,color:errNueva.paciente_id?"var(--color-error)":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                  Paciente <span style={{color:"var(--color-error)"}}>*</span>
                 </label>
                 <div style={{position:"relative"}}>
                   <input
@@ -7289,7 +7331,7 @@ function Sesiones({perfil}) {
                     }
                     onFocus={()=>{ setAbiertoDropPacSes(true); setBusqPacSes(""); }}
                     onChange={e=>{ setBusqPacSes(e.target.value); setAbiertoDropPacSes(true); }}
-                    style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${errNueva.paciente_id?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
+                    style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${errNueva.paciente_id?"var(--color-error)":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
                   />
                   {abiertoDropPacSes && (
                     <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,zIndex:9999,maxHeight:200,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.3)"}}>
@@ -7319,7 +7361,7 @@ function Sesiones({perfil}) {
                 </div>
                 {abiertoDropPacSes && <div style={{position:"fixed",inset:0,zIndex:9998}} onClick={()=>setAbiertoDropPacSes(false)}/>}
               </div>
-              {errNueva.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.paciente_id}</div>}
+              {errNueva.paciente_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{errNueva.paciente_id}</div>}
 
               {/* Paquete activo del paciente */}
               {formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length > 0 && (
@@ -7335,7 +7377,7 @@ function Sesiones({perfil}) {
               {formNueva.paciente_id && comprasDelPaciente(formNueva.paciente_id).length === 0 && (
                 <div style={{background:"rgba(248,113,113,0.12)",border:"1px solid rgba(248,113,113,0.5)",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:16}}>🚫</span>
-                  <span style={{fontSize:13,color:"#F87171",fontWeight:600}}>Sin paquete activo. Registra una venta antes de programar sesión.</span>
+                  <span style={{fontSize:13,color:"var(--color-error)",fontWeight:600}}>Sin paquete activo. Registra una venta antes de programar sesión.</span>
                 </div>
               )}
 
@@ -7351,7 +7393,7 @@ function Sesiones({perfil}) {
                 options={(camarasData||[])
                   .filter(c => !formNueva.sede_id || c.sede_id === formNueva.sede_id)
                   .map(c=>({value:c.id,label:`Cámara #${c.numero} — ${c.modelo}`}))} required/>
-              {errNueva.camara_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.camara_id}</div>}
+              {errNueva.camara_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{errNueva.camara_id}</div>}
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <Input label="Fecha" type="date" value={formNueva.fecha}
@@ -7371,12 +7413,12 @@ function Sesiones({perfil}) {
                   </div>
                 </div>
                 <div style={{marginBottom:14}}>
-                  <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora inicio <span style={{color:"#F87171"}}>*</span></label>
+                  <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora inicio <span style={{color:"var(--color-error)"}}>*</span></label>
                   <select value={formNueva.hora_inicio} onChange={e=>setFormNueva(f=>({...f,hora_inicio:e.target.value}))}
-                    style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${errNueva.hora_inicio?"#F87171":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                    style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${errNueva.hora_inicio?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
                     {HORA_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
-                  {errNueva.hora_inicio && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{errNueva.hora_inicio}</div>}
+                  {errNueva.hora_inicio && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{errNueva.hora_inicio}</div>}
                 </div>
                 <div style={{marginBottom:14}}>
                   <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora fin estimada</label>
@@ -7396,19 +7438,19 @@ function Sesiones({perfil}) {
               <Btn onClick={programar} disabled={savingNueva}>{savingNueva?"Guardando...":"Programar"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal reprogramar sesión */}
       {modalReprog && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setModalReprog(null)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:420,padding:28}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>Reprogramar Sesión</div>
             <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>{modalReprog.paciente} · Sesión #{modalReprog.numero_sesion}</div>
             <Input label="Nueva fecha" type="date" value={formReprog.fecha} onChange={v=>setFormReprog(f=>({...f,fecha:v}))} required/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <div style={{marginBottom:14}}>
-                <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora inicio <span style={{color:"#F87171"}}>*</span></label>
+                <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5}}>Hora inicio <span style={{color:"var(--color-error)"}}>*</span></label>
                 <select value={formReprog.hora_inicio} onChange={e=>setFormReprog(f=>({...f,hora_inicio:e.target.value}))}
                   style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
                   {HORA_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
@@ -7429,12 +7471,12 @@ function Sesiones({perfil}) {
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal completar / ver sesión */}
       {verSesion && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setVerSesion(null)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
@@ -7470,7 +7512,7 @@ function Sesiones({perfil}) {
                     </div>
                   ))}
                   {verSesion.requiere_atencion && (
-                    <div style={{gridColumn:"1/-1",background:"#F8717115",border:"1px solid #F8717130",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F87171"}}>
+                    <div style={{gridColumn:"1/-1",background:"#F8717115",border:"1px solid #F8717130",borderRadius:10,padding:"10px 14px",fontSize:13,color:"var(--color-error)"}}>
                       ⚠ Esta sesión generó una alerta clínica
                     </div>
                   )}
@@ -7512,7 +7554,7 @@ function Sesiones({perfil}) {
                       </div>
                       <div style={{gridColumn:"1/-1"}}>
                         <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
-                          Nivel de dolor post: <span style={{color:formCompletar.nivel_dolor>=7?"#F87171":formCompletar.nivel_dolor>=4?"#F59E0B":"#10B981",fontWeight:700}}>{formCompletar.nivel_dolor}/10</span>
+                          Nivel de dolor post: <span style={{color:formCompletar.nivel_dolor>=7?"var(--color-error)":formCompletar.nivel_dolor>=4?"var(--color-warning)":"var(--color-success)",fontWeight:700}}>{formCompletar.nivel_dolor}/10</span>
                         </label>
                         <input type="range" min="0" max="10" value={formCompletar.nivel_dolor}
                           onChange={e=>setFormCompletar(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
@@ -7523,7 +7565,7 @@ function Sesiones({perfil}) {
                       </div>
                     </div>
                     {formCompletar.saturacion_o2 && Number(formCompletar.saturacion_o2) < 92 && (
-                      <div style={{margin:"0 14px 12px",padding:"8px 12px",background:"#F8717110",border:"0.5px solid #F8717140",borderRadius:8,fontSize:12,color:"#F87171",fontWeight:600}}>
+                      <div style={{margin:"0 14px 12px",padding:"8px 12px",background:"#F8717110",border:"0.5px solid #F8717140",borderRadius:8,fontSize:12,color:"var(--color-error)",fontWeight:600}}>
                         ⚠ SatO₂ post &lt; 92% — Llamar al médico on-call. No dar de alta al paciente.
                       </div>
                     )}
@@ -7551,7 +7593,7 @@ function Sesiones({perfil}) {
                   <div style={{padding:"12px 14px",background:"var(--surface2)",borderRadius:10,border:"1px solid #2A3550",display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
                     <input type="checkbox" id="reqAtencion" checked={formCompletar.requiere_atencion}
                       onChange={e=>setFormCompletar(f=>({...f,requiere_atencion:e.target.checked}))}
-                      style={{width:16,height:16,cursor:"pointer",accentColor:"#F87171"}}/>
+                      style={{width:16,height:16,cursor:"pointer",accentColor:"var(--color-error)"}}/>
                     <label htmlFor="reqAtencion" style={{fontSize:14,color:"var(--text)",cursor:"pointer"}}>
                       🔔 Requiere atención médica
                       <span style={{fontSize:12,color:"var(--text3)",display:"block"}}>Genera alerta automática al especialista y médico de sede</span>
@@ -7561,9 +7603,9 @@ function Sesiones({perfil}) {
                   {/* ── REGISTRO DE LLAMADA AL MÉDICO ON-CALL ── */}
                   <div style={{marginTop:16,border:"0.5px solid #F59E0B40",borderRadius:10,overflow:"hidden"}}>
                     <div style={{background:"#FEF3C7",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>Llamadas al médico on-call {llamadasSesion.length > 0 && <span style={{background:"#F59E0B",color:"white",borderRadius:10,padding:"1px 7px",marginLeft:6,fontSize:11}}>{llamadasSesion.length}</span>}</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>Llamadas al médico on-call {llamadasSesion.length > 0 && <span style={{background:"var(--color-warning)",color:"white",borderRadius:10,padding:"1px 7px",marginLeft:6,fontSize:11}}>{llamadasSesion.length}</span>}</div>
                       <button onClick={()=>setShowLlamada(v=>!v)}
-                        style={{fontSize:11,background:"#F59E0B",color:"white",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
+                        style={{fontSize:11,background:"var(--color-warning)",color:"white",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
                         {showLlamada ? "Cerrar" : "+ Registrar llamada"}
                       </button>
                     </div>
@@ -7603,7 +7645,7 @@ function Sesiones({perfil}) {
                             setFormLlamada({hora:"",motivo:"",respuesta:""});
                             setShowLlamada(false);
                           }}
-                          style={{background:"#F59E0B",color:"white",border:"none",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:(!formLlamada.hora||!formLlamada.motivo)?0.5:1}}>
+                          style={{background:"var(--color-warning)",color:"white",border:"none",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:(!formLlamada.hora||!formLlamada.motivo)?0.5:1}}>
                           Guardar llamada
                         </button>
                       </div>
@@ -7619,7 +7661,7 @@ function Sesiones({perfil}) {
                               {ll.respuesta && <div style={{color:"var(--text3)",marginTop:2,fontSize:11}}>{ll.respuesta}</div>}
                             </div>
                             <button onClick={()=>setLlamadasSesion(l=>l.filter((_,j)=>j!==i))}
-                              style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
+                              style={{background:"none",border:"none",color:"var(--color-error)",cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
                           </div>
                         ))}
                       </div>
@@ -7643,12 +7685,12 @@ function Sesiones({perfil}) {
               )}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── CHECKLIST DE CÁMARA — paso 1 antes del cuestionario pre ── */}
       {modalChecklist && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setModalChecklist(null)}>
           <div style={{background:"var(--surface)",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
             {/* Header */}
             <div style={{padding:"20px 24px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -7702,7 +7744,7 @@ function Sesiones({perfil}) {
               </button>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 {Object.values(checklist).filter(Boolean).length < CHECKLIST_CAMARA.length && (
-                  <span style={{fontSize:11,color:"#F59E0B"}}>
+                  <span style={{fontSize:11,color:"var(--color-warning)"}}>
                     Faltan {CHECKLIST_CAMARA.length - Object.values(checklist).filter(Boolean).length} ítems
                   </span>
                 )}
@@ -7721,12 +7763,12 @@ function Sesiones({perfil}) {
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal Iniciar — Cuestionario pre + Signos vitales pre */}
       {modalIniciar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setModalIniciar(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:560,width:"100%",
             boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
@@ -7755,7 +7797,7 @@ function Sesiones({perfil}) {
                       </div>
                       <div style={{fontSize:10,color:"var(--text3)",marginTop:3}}>
                         {completadas} de {modalIniciar.sesiones_totales} completadas
-                        <span style={{color:restantes<=2?"#F87171":"var(--text3)",marginLeft:6}}>
+                        <span style={{color:restantes<=2?"var(--color-error)":"var(--text3)",marginLeft:6}}>
                           · {restantes} restantes
                         </span>
                       </div>
@@ -7770,12 +7812,12 @@ function Sesiones({perfil}) {
             <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
 
               {/* Sección A — Médico evaluador del día (OBLIGATORIO) */}
-              <div style={{marginBottom:20,background:"var(--surface2)",borderRadius:"var(--radius-sm)",padding:"12px 14px",border:`0.5px solid ${medicoEvaluadorId?"var(--accent-mid)":"#F87171"}`}}>
+              <div style={{marginBottom:20,background:"var(--surface2)",borderRadius:"var(--radius-sm)",padding:"12px 14px",border:`0.5px solid ${medicoEvaluadorId?"var(--accent-mid)":"var(--color-error)"}`}}>
                 <div style={{fontSize:11,color:medicoEvaluadorId?"var(--accent)":"#DC2626",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>
                   A. Médico evaluador del día {!medicoEvaluadorId && "— REQUERIDO"}
                 </div>
                 <select value={medicoEvaluadorId} onChange={e=>setMedicoEvaluadorId(e.target.value)}
-                  style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${medicoEvaluadorId?"var(--border)":"#F87171"}`,borderRadius:"var(--radius-sm)",color:medicoEvaluadorId?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
+                  style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${medicoEvaluadorId?"var(--border)":"var(--color-error)"}`,borderRadius:"var(--radius-sm)",color:medicoEvaluadorId?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
                   <option value="">— Seleccionar médico evaluador —</option>
                   {(medicosData||[]).map(m=>(
                     <option key={m.id} value={m.id}>{m.nombre}</option>
@@ -7790,11 +7832,11 @@ function Sesiones({perfil}) {
 
               {/* Sección B — Cuestionario pre-sesión */}
               <div style={{marginBottom:20}}>
-                <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
+                <div style={{fontSize:11,color:"var(--color-accent-alt)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>
                   B. Cuestionario pre-sesión
                 </div>
                 <div style={{fontSize:11,color:"var(--text3)",marginBottom:10,padding:"8px 12px",background:"var(--surface2)",borderRadius:8}}>
-                  Completar ANTES de que el paciente ingrese a cámara. <strong style={{color:"#F87171"}}>Cualquier Sí → suspender y llamar al médico.</strong>
+                  Completar ANTES de que el paciente ingrese a cámara. <strong style={{color:"var(--color-error)"}}>Cualquier Sí → suspender y llamar al médico.</strong>
                 </div>
 
                 {CUESTIONARIO_PRE.map((q,i)=>{
@@ -7814,8 +7856,8 @@ function Sesiones({perfil}) {
                               <input type="radio"
                                 checked={resp===val}
                                 onChange={()=>setCuestionarioPre(p=>({...p,[q.key]:val}))}
-                                style={{accentColor: val?"#F87171":"#10B981"}}/>
-                              <span style={{fontWeight:resp===val?700:400,color:resp===val?(val?"#F87171":"#10B981"):"var(--text2)"}}>{l}</span>
+                                style={{accentColor: val?"var(--color-error)":"var(--color-success)"}}/>
+                              <span style={{fontWeight:resp===val?700:400,color:resp===val?(val?"var(--color-error)":"var(--color-success)"):"var(--text2)"}}>{l}</span>
                             </label>
                           ))}
                         </div>
@@ -7826,7 +7868,7 @@ function Sesiones({perfil}) {
                         {i+1 === CUESTIONARIO_PRE.length && <span style={{fontSize:10,color:"var(--text3)"}}>(Sí = normal)</span>}
                       </div>
                       {esAlerta && (
-                        <div style={{marginTop:6,fontSize:11,color: esAbsoluta ? "#DC2626" : "#F87171",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                        <div style={{marginTop:6,fontSize:11,color: esAbsoluta ? "#DC2626" : "var(--color-error)",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
                           {esAbsoluta ? "⛔" : "⚠"} {q.accion}
                         </div>
                       )}
@@ -7837,8 +7879,8 @@ function Sesiones({perfil}) {
                 {/* Alerta general */}
                 {hayAlertaPre && (
                   <div style={{marginTop:10,padding:"12px 14px",background:"#F8717110",border:"1px solid #F8717140",borderRadius:10}}>
-                    <div style={{fontSize:13,fontWeight:700,color:"#F87171",marginBottom:4}}>⚠ Alerta de seguridad</div>
-                    <div style={{fontSize:12,color:"#F87171"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"var(--color-error)",marginBottom:4}}>⚠ Alerta de seguridad</div>
+                    <div style={{fontSize:12,color:"var(--color-error)"}}>
                       El paciente tiene respuestas que requieren evaluación médica antes de ingresar a cámara.
                       Llamar al médico on-call antes de proceder.
                     </div>
@@ -7875,16 +7917,16 @@ function Sesiones({perfil}) {
                     }
                     return (
                     <div key={f.key}>
-                      <label style={{fontSize:11,color:enAlerta?"#F59E0B":"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>
+                      <label style={{fontSize:11,color:enAlerta?"var(--color-warning)":"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>
                         {f.label}{enAlerta && " ⚠"}
                       </label>
                       <input type={f.type} value={signosPre[f.key]||""} placeholder={f.placeholder}
                         onChange={e=>setSignosPre(p=>({...p,[f.key]:e.target.value}))}
                         style={{width:"100%",background:"var(--surface2)",
-                          border:`0.5px solid ${enAlerta?"#F59E0B":"var(--border)"}`,
+                          border:`0.5px solid ${enAlerta?"var(--color-warning)":"var(--border)"}`,
                           borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,
                           fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-                      {enAlerta && <div style={{fontSize:10,color:"#F59E0B",marginTop:2}}>Fuera de rango — llamar al médico</div>}
+                      {enAlerta && <div style={{fontSize:10,color:"var(--color-warning)",marginTop:2}}>Fuera de rango — llamar al médico</div>}
                     </div>
                     );
                   })}
@@ -7897,7 +7939,7 @@ function Sesiones({perfil}) {
 
             {/* Footer */}
             {errIniciar && (
-              <div style={{margin:"0 20px 8px",padding:"8px 12px",background:"#F8717115",border:"1px solid #F8717140",borderRadius:8,fontSize:12,color:"#F87171"}}>
+              <div style={{margin:"0 20px 8px",padding:"8px 12px",background:"#F8717115",border:"1px solid #F8717140",borderRadius:8,fontSize:12,color:"var(--color-error)"}}>
                 {errIniciar}
               </div>
             )}
@@ -7937,13 +7979,13 @@ function Sesiones({perfil}) {
               <div style={{display:"flex",gap:8}}>
                 <Btn variant="ghost" onClick={()=>setModalIniciar(null)}>Cancelar</Btn>
                 <Btn onClick={confirmarIniciar} disabled={savingIniciar||Object.keys(cuestionarioPre).length<8}
-                  style={{background: hayAlertaPre?"#F59E0B":"var(--accent)"}}>
+                  style={{background: hayAlertaPre?"var(--color-warning)":"var(--accent)"}}>
                   {savingIniciar ? "Iniciando..." : hayAlertaPre ? "⚠ Iniciar con alerta" : "▶ Iniciar sesión"}
                 </Btn>
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── MIS OBSERVACIONES — solo enfermero ── */}
@@ -7967,9 +8009,7 @@ function Sesiones({perfil}) {
       )}
 
       {confirmCancelar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
-          onKeyDown={e=>e.key==="Escape"&&setConfirmCancelar(null)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setConfirmCancelar(null)}>
+        <Modal onClose={()=>setConfirmCancelar(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:380,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
             <div style={{width:44,height:44,borderRadius:"50%",background:"#FEE2E2",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
@@ -7987,7 +8027,7 @@ function Sesiones({perfil}) {
               <Btn variant="danger" onClick={ejecutarCancelar}>Sí, cancelar sesión</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -7998,7 +8038,7 @@ function MisObservaciones({perfil}) {
   const [obs, setObs]         = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const ESTADO_COLOR = { nueva:"#F87171", vista:"#F59E0B", resuelta:"#10B981" };
+  const ESTADO_COLOR = { nueva:"var(--color-error)", vista:"var(--color-warning)", resuelta:"var(--color-success)" };
   const ESTADO_LABEL = { nueva:"Pendiente de revisión", vista:"En revisión", resuelta:"Revisada ✓" };
   const ESTADO_ICON  = { nueva:"🔔", vista:"👁", resuelta:"✓" };
 
@@ -8047,7 +8087,7 @@ function MisObservaciones({perfil}) {
               </div>
               {o.respuesta && (
                 <div style={{background:"#10B98115",border:"1px solid #10B98130",borderRadius:8,padding:"8px 12px",marginTop:6}}>
-                  <div style={{fontSize:10,color:"#10B981",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>Respuesta médica</div>
+                  <div style={{fontSize:10,color:"var(--color-success)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>Respuesta médica</div>
                   <div style={{fontSize:13,color:"var(--text)",lineHeight:1.5}}>{o.respuesta}</div>
                 </div>
               )}
@@ -8075,14 +8115,14 @@ function MisObservaciones({perfil}) {
 function Alertas({perfil}) {
   const f = getRolFlags(perfil);
 
-  const PRIORIDAD_COLOR = { alta:"#F87171", media:"#F59E0B", baja:"var(--text3)" };
+  const PRIORIDAD_COLOR = { alta:"var(--color-error)", media:"var(--color-warning)", baja:"var(--text3)" };
   const TIPO_LABEL = {
     observacion_critica: "Observación crítica",
     protocolo_pendiente: "Protocolo pendiente",
     seguimiento:         "Seguimiento",
     consulta:            "Consulta",
   };
-  const ESTADO_COLOR = { nueva:"#F87171", vista:"#F59E0B", resuelta:"#10B981" };
+  const ESTADO_COLOR = { nueva:"var(--color-error)", vista:"var(--color-warning)", resuelta:"var(--color-success)" };
 
   const [alertas, setAlertas]   = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -8225,9 +8265,9 @@ function Alertas({perfil}) {
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
         {[
-          {label:"Nuevas",    val:countNuevas,    color:"#F87171"},
-          {label:"En revisión", val:countVistas,  color:"#F59E0B"},
-          {label:"Resueltas", val:countResueltas, color:"#10B981"},
+          {label:"Nuevas",    val:countNuevas,    color:"var(--color-error)"},
+          {label:"En revisión", val:countVistas,  color:"var(--color-warning)"},
+          {label:"Resueltas", val:countResueltas, color:"var(--color-success)"},
         ].map((k,i)=>(
           <Card key={i} style={{minHeight:90,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{k.label}</div>
@@ -8279,7 +8319,7 @@ function Alertas({perfil}) {
                   <Badge color={PRIORIDAD_COLOR[alerta.prioridad]}>{alerta.prioridad}</Badge>
                   <span style={{fontSize:12,color:"var(--text3)"}}>{TIPO_LABEL[alerta.tipo]}</span>
                   {alerta.estado==="nueva" && (
-                    <span style={{background:"#F87171",color:"white",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 8px"}}>NUEVA</span>
+                    <span style={{background:"var(--color-error)",color:"white",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 8px"}}>NUEVA</span>
                   )}
                 </div>
                 <div style={{fontWeight:600,fontSize:14,color:"var(--text)",marginBottom:4}}>
@@ -8306,7 +8346,7 @@ function Alertas({perfil}) {
 
       {/* Modal ver/responder alerta */}
       {verAlerta && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}>
+        <Modal onClose={()=>setVerAlerta(null)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:580,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
             {/* Header modal */}
             <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -8346,7 +8386,7 @@ function Alertas({perfil}) {
               {/* Respuesta existente */}
               {verAlerta.respuesta && (
                 <div style={{marginBottom:20}}>
-                  <div style={{fontSize:11,color:"#10B981",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>
+                  <div style={{fontSize:11,color:"var(--color-success)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>
                     Respuesta médica
                   </div>
                   <div style={{background:"#10B98115",border:"1px solid #10B98130",borderRadius:10,padding:"14px 16px",fontSize:14,color:"var(--text)",lineHeight:1.6}}>
@@ -8368,7 +8408,7 @@ function Alertas({perfil}) {
                     <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>Coordinar sesión con el médico de sede</div>
                   </div>
                   <a href="https://meet.google.com/new" target="_blank" rel="noreferrer"
-                    style={{background:"linear-gradient(135deg,#00C4B4,#7C6AF7)",color:"white",padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:600,textDecoration:"none",whiteSpace:"nowrap"}}>
+                    style={{background:"linear-gradient(135deg,#00C4B4,var(--color-accent-alt))",color:"white",padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:600,textDecoration:"none",whiteSpace:"nowrap"}}>
                     📹 Iniciar Meet
                   </a>
                 </div>
@@ -8377,7 +8417,7 @@ function Alertas({perfil}) {
               {/* Campo respuesta — solo médico y admin, solo si no está resuelta */}
               {(f.esMedico || f.esAdmin) && verAlerta.estado !== "resuelta" && (
                 <div>
-                  <div style={{fontSize:11,color:"#7C6AF7",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>
+                  <div style={{fontSize:11,color:"var(--color-accent-alt)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>
                     Escribir respuesta / indicación
                   </div>
                   <textarea
@@ -8406,14 +8446,12 @@ function Alertas({perfil}) {
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal nueva alerta manual */}
       {modalNueva && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,padding:16}}
-          onKeyDown={e=>e.key==="Escape"&&setModalNueva(false)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModalNueva(false)}>
+        <Modal onClose={()=>setModalNueva(false)}>
           <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:500,padding:28}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nueva Alerta Clínica</div>
@@ -8423,12 +8461,12 @@ function Alertas({perfil}) {
             <Select label="Paciente" value={formNueva.paciente_id}
               onChange={v=>setFormNueva(f=>({...f,paciente_id:v}))}
               options={(pacientesData||[]).map(p=>({value:p.id,label:`${p.apellidos}, ${p.nombres} — DNI ${p.dni}`}))} required/>
-            {errNueva.paciente_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.paciente_id}</div>}
+            {errNueva.paciente_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{errNueva.paciente_id}</div>}
 
             <Select label="Sede" value={formNueva.sede_id}
               onChange={v=>setFormNueva(f=>({...f,sede_id:v}))}
               options={(sedesData||[]).map(s=>({value:s.id,label:s.nombre}))} required/>
-            {errNueva.sede_id && <div style={{fontSize:11,color:"#F87171",marginTop:-10,marginBottom:10}}>{errNueva.sede_id}</div>}
+            {errNueva.sede_id && <div style={{fontSize:11,color:"var(--color-error)",marginTop:-10,marginBottom:10}}>{errNueva.sede_id}</div>}
 
             <Select label="Tipo" value={formNueva.tipo}
               onChange={v=>setFormNueva(f=>({...f,tipo:v}))}
@@ -8448,15 +8486,15 @@ function Alertas({perfil}) {
               ]}/>
 
             <div style={{marginBottom:14}}>
-              <label style={{fontSize:12,color:errNueva.mensaje?"#F87171":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
-                Mensaje <span style={{color:"#F87171"}}>*</span>
+              <label style={{fontSize:12,color:errNueva.mensaje?"var(--color-error)":"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>
+                Mensaje <span style={{color:"var(--color-error)"}}>*</span>
               </label>
               <textarea value={formNueva.mensaje}
                 onChange={e=>setFormNueva(f=>({...f,mensaje:e.target.value}))}
                 placeholder="Describe la observación o consulta clínica..."
                 rows={4}
-                style={{width:"100%",background:"var(--surface2)",border:`1px solid ${errNueva.mensaje?"#F87171":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
-              {errNueva.mensaje && <div style={{fontSize:11,color:"#F87171",marginTop:3}}>{errNueva.mensaje}</div>}
+                style={{width:"100%",background:"var(--surface2)",border:`1px solid ${errNueva.mensaje?"var(--color-error)":"var(--border)"}`,borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+              {errNueva.mensaje && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{errNueva.mensaje}</div>}
             </div>
 
             <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
@@ -8464,7 +8502,7 @@ function Alertas({perfil}) {
               <Btn onClick={crearAlerta} disabled={savingNueva}>{savingNueva?"Creando...":"Crear alerta"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -8484,8 +8522,8 @@ function Prospectos({perfil}) {
     evaluacion_agendada:"Eval. Agendada", convertido:"Convertido", perdido:"Perdido"
   };
   const ESTADO_COLOR = {
-    nuevo:"#7C6AF7", contactado:"var(--accent)",
-    evaluacion_agendada:"#F59E0B", convertido:"#10B981", perdido:"#F87171"
+    nuevo:"var(--color-accent-alt)", contactado:"var(--accent)",
+    evaluacion_agendada:"var(--color-warning)", convertido:"var(--color-success)", perdido:"var(--color-error)"
   };
   const CANAL_LABEL = {
     whatsapp:"WhatsApp", instagram:"Instagram", facebook:"Facebook",
@@ -8771,10 +8809,10 @@ function Prospectos({perfil}) {
 
   // KPIs
   const kpis = [
-    { label:"Total",        val: prospectos.length,                                          color:"#7C6AF7" },
+    { label:"Total",        val: prospectos.length,                                          color:"var(--color-accent-alt)" },
     { label:"Nuevos",       val: prospectos.filter(p=>p.estado==="nuevo").length,             color:"var(--accent)" },
-    { label:"En seguimiento", val: prospectos.filter(p=>["contactado","evaluacion_agendada"].includes(p.estado)).length, color:"#F59E0B" },
-    { label:"Convertidos",  val: prospectos.filter(p=>p.estado==="convertido").length,        color:"#10B981" },
+    { label:"En seguimiento", val: prospectos.filter(p=>["contactado","evaluacion_agendada"].includes(p.estado)).length, color:"var(--color-warning)" },
+    { label:"Convertidos",  val: prospectos.filter(p=>p.estado==="convertido").length,        color:"var(--color-success)" },
   ];
 
   return (
@@ -8848,8 +8886,8 @@ function Prospectos({perfil}) {
                     </td>
                     <td style={{padding:"11px 14px"}}>
                       {p.estado === "convertido" ? (
-                        <span style={{background:"#10B98115",border:"0.5px solid #10B981",
-                          color:"#10B981",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>
+                        <span style={{background:"#10B98115",border:"0.5px solid var(--color-success)",
+                          color:"var(--color-success)",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>
                           Convertido ✓
                         </span>
                       ) : (
@@ -8865,7 +8903,7 @@ function Prospectos({perfil}) {
                     </td>
                     <td style={{padding:"11px 14px",fontSize:11,color:"var(--text3)"}}>
                       {p.estado === "evaluacion_agendada" && p.fecha_cita
-                        ? <span style={{color:"#F59E0B",fontWeight:600}}>
+                        ? <span style={{color:"var(--color-warning)",fontWeight:600}}>
                             📅 {new Date(p.fecha_cita).toLocaleDateString("es-PE",{timeZone:"America/Lima"})} {fmtHora(new Date(p.fecha_cita).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"America/Lima"}))}
                           </span>
                         : p.fecha_ultimo_contacto ? new Date(p.fecha_ultimo_contacto).toLocaleDateString("es-PE") : "—"}
@@ -8886,9 +8924,7 @@ function Prospectos({perfil}) {
 
       {/* Modal Nuevo Prospecto */}
       {modal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
-          onKeyDown={e=>e.key==="Escape"&&setModal(false)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModal(false)}>
+        <Modal onClose={()=>setModal(false)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:480,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>Nuevo Prospecto</div>
@@ -8933,7 +8969,7 @@ function Prospectos({perfil}) {
             {/* Fecha y hora de cita — solo si estado es evaluacion_agendada */}
             {(form.estado === "evaluacion_agendada" || form.fecha_cita) && (
               <div style={{marginBottom:18,padding:"12px 14px",background:"#F59E0B10",border:"0.5px solid #F59E0B40",borderRadius:10}}>
-                <label style={{fontSize:12,color:"#F59E0B",fontWeight:600,display:"block",marginBottom:8}}>
+                <label style={{fontSize:12,color:"var(--color-warning)",fontWeight:600,display:"block",marginBottom:8}}>
                   📅 Fecha y hora de evaluación
                 </label>
                 <input type="datetime-local" value={form.fecha_cita}
@@ -8943,21 +8979,19 @@ function Prospectos({perfil}) {
               </div>
             )}
 
-            {err.general && <div style={{color:"#F87171",fontSize:13,marginBottom:12}}>{err.general}</div>}
+            {err.general && <div style={{color:"var(--color-error)",fontSize:13,marginBottom:12}}>{err.general}</div>}
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setModal(false)}>Cancelar</Btn>
               <Btn onClick={guardar} disabled={saving}>{saving?"Guardando...":"Registrar prospecto"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal Ver Prospecto */}
       {modalVer && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}}
-          onKeyDown={e=>e.key==="Escape"&&setModalVer(null)} tabIndex={-1}
-          onClick={e=>e.target===e.currentTarget&&setModalVer(null)}>
+        <Modal onClose={()=>setModalVer(null)}>
           <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:480,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)"}}>{modalVer.nombre}</div>
@@ -8997,7 +9031,7 @@ function Prospectos({perfil}) {
 
             {/* Campo editable fecha/hora cita */}
             <div style={{marginBottom:16,padding:"12px 14px",background:"#F59E0B10",border:"0.5px solid #F59E0B40",borderRadius:10}}>
-              <div style={{fontSize:12,color:"#F59E0B",fontWeight:600,marginBottom:8}}>📅 Fecha y hora de evaluación</div>
+              <div style={{fontSize:12,color:"var(--color-warning)",fontWeight:600,marginBottom:8}}>📅 Fecha y hora de evaluación</div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <input type="datetime-local" value={editFecha}
                   onChange={e=>setEditFecha(e.target.value)}
@@ -9007,7 +9041,7 @@ function Prospectos({perfil}) {
                   {savingFecha ? "..." : "Guardar"}
                 </Btn>
               </div>
-              {editFecha && <div style={{fontSize:11,color:"#F59E0B",marginTop:6}}>
+              {editFecha && <div style={{fontSize:11,color:"var(--color-warning)",marginTop:6}}>
                 {new Date(editFecha).toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})} a las {new Date(editFecha).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})}
               </div>}
             </div>
@@ -9025,7 +9059,7 @@ function Prospectos({perfil}) {
                   ) : actividades.length === 0 ? (
                     <div style={{padding:"12px 14px",fontSize:12,color:"var(--text3)"}}>Sin actividad registrada aún</div>
                   ) : actividades.map((act,i) => {
-                    const tipoColor = {cambio_estado:"var(--accent)",nota:"#6366F1",llamada:"#F59E0B",whatsapp:"#10B981",email:"#3B82F6",sistema:"#9CA3AF"}[act.tipo]||"#9CA3AF";
+                    const tipoColor = {cambio_estado:"var(--accent)",nota:"#6366F1",llamada:"var(--color-warning)",whatsapp:"var(--color-success)",email:"#3B82F6",sistema:"#9CA3AF"}[act.tipo]||"#9CA3AF";
                     const tipoIcon = {cambio_estado:"↻",nota:"✎",llamada:"☎",whatsapp:"💬",email:"✉",sistema:"⚙"}[act.tipo]||"●";
                     return (
                       <div key={act.id||i} style={{padding:"8px 14px",borderBottom:i<actividades.length-1?"0.5px solid var(--border)":"none",display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -9091,41 +9125,41 @@ function Prospectos({perfil}) {
               <div style={{marginTop:8}}>
                 {!showConvertForm ? (
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <Btn onClick={abrirConvertForm} style={{background:"#10B981",fontSize:13}}>
+                    <Btn onClick={abrirConvertForm} style={{background:"var(--color-success)",fontSize:13}}>
                       ✓ Convertir a paciente
                     </Btn>
                     <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
                   </div>
                 ) : (
                   <div style={{background:"#10B98110",border:"0.5px solid #10B98140",borderRadius:10,padding:"14px 16px"}}>
-                    <div style={{fontSize:12,color:"#10B981",fontWeight:700,marginBottom:12,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                    <div style={{fontSize:12,color:"var(--color-success)",fontWeight:700,marginBottom:12,letterSpacing:"0.04em",textTransform:"uppercase"}}>
                       Confirmar datos del paciente
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                       <div>
                         <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Nombres *</label>
                         <input value={convertForm.nombres} onChange={e=>setConvertForm(f=>({...f,nombres:e.target.value}))}
-                          style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.nombres?"#F87171":"var(--border)"}`,
+                          style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.nombres?"var(--color-error)":"var(--border)"}`,
                             borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-                        {convertErr.nombres && <div style={{fontSize:11,color:"#F87171",marginTop:2}}>{convertErr.nombres}</div>}
+                        {convertErr.nombres && <div style={{fontSize:11,color:"var(--color-error)",marginTop:2}}>{convertErr.nombres}</div>}
                       </div>
                       <div>
                         <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Apellidos *</label>
                         <input value={convertForm.apellidos} onChange={e=>setConvertForm(f=>({...f,apellidos:e.target.value}))}
-                          style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.apellidos?"#F87171":"var(--border)"}`,
+                          style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.apellidos?"var(--color-error)":"var(--border)"}`,
                             borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-                        {convertErr.apellidos && <div style={{fontSize:11,color:"#F87171",marginTop:2}}>{convertErr.apellidos}</div>}
+                        {convertErr.apellidos && <div style={{fontSize:11,color:"var(--color-error)",marginTop:2}}>{convertErr.apellidos}</div>}
                       </div>
                     </div>
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>DNI * (8 dígitos)</label>
                       <input value={convertForm.dni} onChange={e=>setConvertForm(f=>({...f,dni:e.target.value.replace(/\D/g,"").slice(0,8)}))}
                         placeholder="12345678" maxLength={8}
-                        style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.dni?"#F87171":"var(--border)"}`,
+                        style={{width:"100%",background:"var(--surface)",border:`0.5px solid ${convertErr.dni?"var(--color-error)":"var(--border)"}`,
                           borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-                      {convertErr.dni && <div style={{fontSize:11,color:"#F87171",marginTop:2}}>{convertErr.dni}</div>}
+                      {convertErr.dni && <div style={{fontSize:11,color:"var(--color-error)",marginTop:2}}>{convertErr.dni}</div>}
                     </div>
-                    {convertErr.general && <div style={{fontSize:12,color:"#F87171",marginBottom:10}}>{convertErr.general}</div>}
+                    {convertErr.general && <div style={{fontSize:12,color:"var(--color-error)",marginBottom:10}}>{convertErr.general}</div>}
                     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                       <button onClick={()=>setShowConvertForm(false)}
                         style={{background:"none",border:"0.5px solid var(--border)",color:"var(--text2)",padding:"7px 14px",
@@ -9133,7 +9167,7 @@ function Prospectos({perfil}) {
                         Cancelar
                       </button>
                       <Btn onClick={convertirAPaciente} disabled={convirtiendo}
-                        style={{background:"#10B981",fontSize:13}}>
+                        style={{background:"var(--color-success)",fontSize:13}}>
                         {convirtiendo ? "Registrando..." : "Confirmar y crear paciente"}
                       </Btn>
                     </div>
@@ -9143,7 +9177,7 @@ function Prospectos({perfil}) {
             )}
             {modalVer.convertido_paciente_id && (
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
-                <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>✓ Ya es paciente</span>
+                <span style={{fontSize:12,color:"var(--color-success)",fontWeight:600}}>✓ Ya es paciente</span>
                 <Btn variant="ghost" onClick={()=>setModalVer(null)}>Cerrar</Btn>
               </div>
             )}
@@ -9153,7 +9187,7 @@ function Prospectos({perfil}) {
               </div>
             )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {dupPaciente && (
@@ -9455,9 +9489,9 @@ function Convenios({ perfil }) {
         {/* Resumen cuenta por cobrar */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
           {[
-            { label:"Pendiente de facturar", value: cxc.pendiente, color:"#F59E0B" },
-            { label:"Facturado sin cobrar", value: cxc.facturado, color:"#7C6AF7" },
-            { label:"Cobrado", value: cxc.pagado, color:"#10B981" },
+            { label:"Pendiente de facturar", value: cxc.pendiente, color:"var(--color-warning)" },
+            { label:"Facturado sin cobrar", value: cxc.facturado, color:"var(--color-accent-alt)" },
+            { label:"Cobrado", value: cxc.pagado, color:"var(--color-success)" },
           ].map(s=>(
             <Card key={s.label} style={{padding:"16px 18px"}}>
               <div style={{fontSize:24,fontWeight:700,color:s.color,fontFamily:"Syne,sans-serif"}}>{fmtSol(s.value)}</div>
@@ -9553,7 +9587,7 @@ function Convenios({ perfil }) {
                 <div style={{padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{fontSize:11,color:"var(--text3)"}}>Por cobrar</div>
-                    <div style={{fontSize:20,fontWeight:700,color:totalPendiente>0?"#F59E0B":"#10B981",fontFamily:"Syne,sans-serif"}}>{fmtSol(totalPendiente)}</div>
+                    <div style={{fontSize:20,fontWeight:700,color:totalPendiente>0?"var(--color-warning)":"var(--color-success)",fontFamily:"Syne,sans-serif"}}>{fmtSol(totalPendiente)}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:11,color:"var(--text3)"}}>{cxc.pacientes} paciente{cxc.pacientes!==1?"s":""}</div>
@@ -9578,8 +9612,7 @@ function Convenios({ perfil }) {
 // Modal reutilizable para crear/editar convenio
 function ModalConvenio({ form, setForm, onSave, onClose, saving, editando }) {
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <Modal onClose={onClose}>
       <div style={{background:"var(--surface)",borderRadius:14,maxWidth:460,width:"100%",padding:24,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
         <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>{editando?"Editar convenio":"Nuevo convenio"}</div>
         <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Datos de la empresa y tarifa acordada</div>
@@ -9606,7 +9639,7 @@ function ModalConvenio({ form, setForm, onSave, onClose, saving, editando }) {
           <Btn onClick={onSave} disabled={saving}>{saving?"Guardando...":(editando?"Guardar cambios":"Crear convenio")}</Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -9785,8 +9818,8 @@ function ControlOxigeno({ perfil }) {
         <div style={{fontSize:11,color:"var(--text3)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Stock actual</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
           {[
-            { label:"Balones activos ahora", value: stockActivo ?? "—", color:"#10B981", sub:"En uso o disponibles" },
-            { label:"Total registrados", value: totalBalones, color:"#7C6AF7", sub:filtroPeriodo.desde?"En el filtro actual":"Histórico" },
+            { label:"Balones activos ahora", value: stockActivo ?? "—", color:"var(--color-success)", sub:"En uso o disponibles" },
+            { label:"Total registrados", value: totalBalones, color:"var(--color-accent-alt)", sub:filtroPeriodo.desde?"En el filtro actual":"Histórico" },
             { label:"Agotados (tabla)", value: balonesAgotados, color:"var(--text3)", sub:"En el filtro actual" },
           ].map(stat=>(
             <Card key={stat.label} style={{padding:"14px 16px"}}>
@@ -9806,10 +9839,10 @@ function ControlOxigeno({ perfil }) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
             {[
-              { label:"Balones consumidos", value: balonesAgotadosPeriodo ?? "—", color:"#F59E0B", sub:"Agotados en el período" },
+              { label:"Balones consumidos", value: balonesAgotadosPeriodo ?? "—", color:"var(--color-warning)", sub:"Agotados en el período" },
               { label:"Sesiones completadas", value: sesionesCount ?? "—", color:"var(--accent)", sub:"Realizadas en el período" },
-              { label:"Pacientes únicos", value: pacientesCount ?? "—", color:"#7C6AF7", sub:"Atendidos en el período" },
-              { label:"Rendimiento", value: rendimiento ?? "—", color:"#10B981", sub:"Sesiones por balón" },
+              { label:"Pacientes únicos", value: pacientesCount ?? "—", color:"var(--color-accent-alt)", sub:"Atendidos en el período" },
+              { label:"Rendimiento", value: rendimiento ?? "—", color:"var(--color-success)", sub:"Sesiones por balón" },
             ].map(stat=>(
               <Card key={stat.label} style={{padding:"14px 16px"}}>
                 <div style={{fontSize:28,fontWeight:700,color:stat.color,fontFamily:"Syne,sans-serif"}}>{stat.value}</div>
@@ -9876,14 +9909,13 @@ function ControlOxigeno({ perfil }) {
 
       {/* Modal nuevo balón */}
       {modalNuevo && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
-          onClick={e=>e.target===e.currentTarget&&setModalNuevo(false)}>
+        <Modal onClose={()=>setModalNuevo(false)}>
           <div style={{background:"var(--surface)",borderRadius:14,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:4}}>Registrar balón de O₂</div>
             <div style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Ingresa los datos del balón al conectarlo</div>
 
             <div style={{marginBottom:14}}>
-              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Sede <span style={{color:"#F87171"}}>*</span></label>
+              <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:5}}>Sede <span style={{color:"var(--color-error)"}}>*</span></label>
               <select value={form.sede_id} onChange={e=>setForm(f=>({...f,sede_id:e.target.value}))}
                 style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none"}}>
                 <option value="">— Seleccionar sede —</option>
@@ -9903,13 +9935,12 @@ function ControlOxigeno({ perfil }) {
               <Btn onClick={registrarBalon} disabled={saving}>{saving?"Guardando...":"Registrar balón"}</Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal confirmar agotado */}
       {modalAgotar && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
-          onClick={e=>e.target===e.currentTarget&&setModalAgotar(null)}>
+        <Modal onClose={()=>setModalAgotar(null)}>
           <div style={{background:"var(--surface)",borderRadius:14,maxWidth:380,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",marginBottom:8}}>¿Marcar balón como agotado?</div>
             <div style={{fontSize:13,color:"var(--text2)",marginBottom:6}}>
@@ -9920,12 +9951,12 @@ function ControlOxigeno({ perfil }) {
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setModalAgotar(null)}>Cancelar</Btn>
-              <Btn onClick={()=>agotarBalon(modalAgotar)} style={{background:"#F59E0B",border:"none"}}>
+              <Btn onClick={()=>agotarBalon(modalAgotar)} style={{background:"var(--color-warning)",border:"none"}}>
                 Confirmar agotado
               </Btn>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -9953,10 +9984,9 @@ function ControlOxigeno({ perfil }) {
 
   return (
     <div style={{fontFamily:"'DM Sans',system-ui,sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",width:"100%"}}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
       <ToastContainer/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;--text:#0D1829;--text2:#4A5568;--text3:#8A97A8;--accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);--radius-sm:8px;--radius-md:12px;--radius-lg:16px}
+:root{--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;--text:#0D1829;--text2:#4A5568;--text3:#8A97A8;--accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);--color-error:#F87171;--color-success:#10B981;--color-warning:#F59E0B;--color-accent-alt:#7C6AF7;--radius-sm:8px;--radius-md:12px;--radius-lg:16px}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}select option{background:var(--surface)}input::placeholder{color:var(--text3)}textarea::placeholder{color:var(--text3)}textarea{box-sizing:border-box}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}`}</style>
       <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
         <Sidebar vista={vista} setVista={cambiarVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>

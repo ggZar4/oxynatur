@@ -10,7 +10,10 @@ html, body, #root {
   padding: 0;
   width: 100%;
   min-height: 100vh;
-  background: #080C18;
+  /* Mismo valor que --bg del tema claro: evita que el rebote de scroll
+     y cualquier zona no cubierta por la app pinten de otro color.
+     Si el usuario elige tema oscuro, index.html fija color-scheme en línea. */
+  background: #F0F4F8;
 }
 
 body {
@@ -18,5 +21,5 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  color-scheme: dark;
+  color-scheme: light;
 }
