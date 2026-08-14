@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, createContext, useContext } from "react";
+import { useState, useEffect, useMemo, useRef, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── Helper fecha Lima (UTC-5) ─────────────────────────────────
@@ -863,6 +863,51 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   );
 }
 
+// ── MODAL DE CONFIRMACIÓN ─────────────────────────────────────
+// Único punto de confirmación para acciones irreversibles. Sustituye a
+// confirm() nativo, que rompía visualmente con el resto de la app.
+// zIndex 9500: se apila por encima de los modales normales (9000), porque
+// casi siempre se abre desde dentro de uno.
+function ModalConfirmar({
+  titulo, detalle, subdetalle, aviso, tono = "peligro",
+  textoConfirmar = "Confirmar", textoCancelar = "Volver",
+  cargando = false, onConfirmar, onCancelar,
+}) {
+  const ref = useRef(null);
+  useEffect(()=>{ ref.current?.focus(); }, []);
+  const tonos = {
+    peligro: { bg:"#FEE2E2", fg:"#DC2626", btn:"danger"  },
+    aviso:   { bg:"#FEF3C7", fg:"#92400E", btn:"primary" },
+  };
+  const t = tonos[tono] || tonos.peligro;
+  return (
+    <div ref={ref} tabIndex={-1}
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9500,padding:20,outline:"none"}}
+      onKeyDown={e=>{ if(e.key==="Escape" && !cargando) onCancelar(); }}
+      onClick={e=>{ if(e.target===e.currentTarget && !cargando) onCancelar(); }}>
+      <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:14,maxWidth:400,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={t.fg} strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        </div>
+        <div style={{fontFamily:"Syne,sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:6}}>{titulo}</div>
+        {detalle    && <div style={{fontSize:13,color:"var(--text2)",marginBottom:3}}>{detalle}</div>}
+        {subdetalle && <div style={{fontSize:12,color:"var(--text3)",marginBottom:16}}>{subdetalle}</div>}
+        {aviso && (
+          <div style={{fontSize:12,color:t.fg,background:t.bg,borderRadius:"var(--radius-sm)",padding:"8px 12px",marginBottom:20}}>
+            {aviso}
+          </div>
+        )}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <Btn variant="ghost" onClick={onCancelar} disabled={cargando}>{textoCancelar}</Btn>
+          <Btn variant={t.btn} onClick={onConfirmar} disabled={cargando}>
+            {cargando ? "Procesando..." : textoConfirmar}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 // FASE B: Nav completamente dinámico basado en getRolFlags().
 // Badge de alertas recibe alertasNuevas como prop desde App.
@@ -983,8 +1028,15 @@ function DashboardMedico({perfil}) {
     setFirmaModal({...ev, evolucionEdit: ev.evolucion || ""});
   };
 
-  const confirmarFirmaDash = async () => {
+  // La firma da validez legal a la evaluación: se confirma antes de ejecutar.
+  const [confirmFirmaDash, setConfirmFirmaDash] = useState(false);
+  const confirmarFirmaDash = () => {
     if(!firmaTexto.trim()) return;
+    setConfirmFirmaDash(true);
+  };
+  const ejecutarFirmaDash = async () => {
+    if(!firmaTexto.trim()) return;
+    setConfirmFirmaDash(false);
     setSavingFirma(true);
     const idxActual = firmasPend.findIndex(e=>e.id===firmaModal.id);
     await safeQuery(()=>
@@ -1418,6 +1470,20 @@ function DashboardMedico({perfil}) {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmFirmaDash && firmaModal && (
+        <ModalConfirmar
+          tono="aviso"
+          titulo="¿Firmar esta evaluación?"
+          detalle={`Sesión #${firmaModal.numero_sesion} · ${firmaModal.pacientes?.nombres||""} ${firmaModal.pacientes?.apellidos||""}`.trim()}
+          subdetalle={`Firma: ${firmaTexto.trim()}`}
+          aviso="La firma da validez legal al registro clínico y no se puede deshacer."
+          textoConfirmar="Sí, firmar"
+          cargando={savingFirma}
+          onConfirmar={ejecutarFirmaDash}
+          onCancelar={()=>setConfirmFirmaDash(false)}
+        />
       )}
     </div>
   );
@@ -3002,8 +3068,15 @@ function HistoriasClinicas({perfil}) {
     setFirmaModal({...ev, evolucionEdit: ev.evolucion || ""});
   };
 
-  const confirmarFirma = async () => {
+  // Misma confirmación que en el dashboard: la firma es irreversible.
+  const [confirmFirma, setConfirmFirma] = useState(false);
+  const confirmarFirma = () => {
     if(!firmaTexto.trim()) return;
+    setConfirmFirma(true);
+  };
+  const ejecutarFirma = async () => {
+    if(!firmaTexto.trim()) return;
+    setConfirmFirma(false);
     setSavingFirma(true);
 
     if(firmaModal._es_sesion) {
@@ -4489,9 +4562,12 @@ function Usuarios({perfil:adminPerfil}) {
     load();
   };
 
-  const toggleActivo = async (u) => {
-    const accion = u.activo !== false ? "desactivar" : "activar";
-    if(!confirm(`¿${accion} al usuario ${u.nombre}?`)) return;
+  const [confirmUsuario, setConfirmUsuario] = useState(null);
+  const toggleActivo = (u) => setConfirmUsuario(u);
+  const ejecutarToggleActivo = async () => {
+    const u = confirmUsuario;
+    if(!u) return;
+    setConfirmUsuario(null);
     await safeQuery(()=>
       supabase.from("perfiles").update({ activo: u.activo === false }).eq("id", u.id),
       "Usuarios:toggleActivo"
@@ -4614,6 +4690,21 @@ function Usuarios({perfil:adminPerfil}) {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmUsuario && (
+        <ModalConfirmar
+          tono={confirmUsuario.activo !== false ? "peligro" : "aviso"}
+          titulo={confirmUsuario.activo !== false ? "¿Desactivar este usuario?" : "¿Activar este usuario?"}
+          detalle={confirmUsuario.nombre}
+          subdetalle={confirmUsuario.email}
+          aviso={confirmUsuario.activo !== false
+            ? "Perderá el acceso al sistema de inmediato."
+            : "Recuperará el acceso al sistema con su rol actual."}
+          textoConfirmar={confirmUsuario.activo !== false ? "Sí, desactivar" : "Sí, activar"}
+          onConfirmar={ejecutarToggleActivo}
+          onCancelar={()=>setConfirmUsuario(null)}
+        />
       )}
     </div>
   );
@@ -5381,8 +5472,12 @@ function Ventas({perfil}) {
 
   useEffect(()=>{ loadVentas(); }, []); // eslint-disable-line
 
-  const anularVenta = async (venta) => {
-    if(!confirm(`¿Anular venta de ${venta.paquetes?.nombre||"paquete"} por ${fmtSol(venta.monto_pagado)}? Esta acción no se puede deshacer.`)) return;
+  const [confirmAnular, setConfirmAnular] = useState(null);
+  const anularVenta = (venta) => setConfirmAnular(venta);
+  const ejecutarAnular = async () => {
+    const venta = confirmAnular;
+    if(!venta) return;
+    setConfirmAnular(null);
     await safeQuery(()=>
       supabase.from("compras_paciente").update({ estado:"cancelado" }).eq("id", venta.id),
       "Ventas:anular"
@@ -6291,6 +6386,18 @@ function Ventas({perfil}) {
           </div>
         </div>
       )}
+
+      {confirmAnular && (
+        <ModalConfirmar
+          titulo="¿Anular esta venta?"
+          detalle={confirmAnular.paquetes?.nombre || "Paquete"}
+          subdetalle={`${confirmAnular.pacientes?.nombres||""} ${confirmAnular.pacientes?.apellidos||""} · ${fmtSol(confirmAnular.monto_pagado)}`.trim()}
+          aviso="Esta acción no se puede deshacer."
+          textoConfirmar="Sí, anular venta"
+          onConfirmar={ejecutarAnular}
+          onCancelar={()=>setConfirmAnular(null)}
+        />
+      )}
     </div>
   );
 }
@@ -6826,6 +6933,8 @@ function Sesiones({perfil}) {
     load();
   };
 
+  // Completar descuenta del paquete y puede generar alerta: se confirma antes.
+  const [confirmCompletar, setConfirmCompletar] = useState(false);
   const completar = async () => {
     setSavingCompletar(true);
     const { error } = await safeQuery(() => supabase.from("sesiones").update({
@@ -6860,6 +6969,7 @@ function Sesiones({perfil}) {
     }
 
     setSavingCompletar(false);
+    setConfirmCompletar(false);
     if(error) { toast.error("Error al completar la sesión"); return; }
     toast.success("Sesión completada correctamente");
     setVerSesion(null);
@@ -7527,7 +7637,7 @@ function Sesiones({perfil}) {
             <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
               <Btn variant="ghost" onClick={()=>setVerSesion(null)}>Cerrar</Btn>
               {verSesion.estado === "en_curso" && (
-                <Btn onClick={completar} disabled={savingCompletar}>
+                <Btn onClick={()=>setConfirmCompletar(true)} disabled={savingCompletar}>
                   {savingCompletar ? "Guardando..." : "✓ Marcar completada"}
                 </Btn>
               )}
@@ -7842,6 +7952,20 @@ function Sesiones({perfil}) {
       )}
 
       {/* Modal confirmación cancelar sesión */}
+      {confirmCompletar && verSesion && (
+        <ModalConfirmar
+          tono="aviso"
+          titulo="¿Marcar la sesión como completada?"
+          detalle={verSesion.paciente}
+          subdetalle={`Sesión #${verSesion.numero_sesion} · ${verSesion.fecha} · ${verSesion.sede_nombre||""}`}
+          aviso={`Se descontará una sesión del paquete y no se puede deshacer.${formCompletar.requiere_atencion ? " Además se generará una alerta clínica." : ""}`}
+          textoConfirmar="Sí, completar sesión"
+          cargando={savingCompletar}
+          onConfirmar={completar}
+          onCancelar={()=>setConfirmCompletar(false)}
+        />
+      )}
+
       {confirmCancelar && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}
           onKeyDown={e=>e.key==="Escape"&&setConfirmCancelar(null)} tabIndex={-1}
@@ -8489,6 +8613,10 @@ function Prospectos({perfil}) {
     setShowConvertForm(true);
   };
 
+  // Antes creaba a ciegas y solo detectaba el duplicado por el error 23505
+  // de la BD, vinculando en silencio. Ahora se comprueba antes y se avisa.
+  const [dupPaciente, setDupPaciente] = useState(null);
+
   const convertirAPaciente = async () => {
     const e = {};
     if(!convertForm.nombres.trim())  e.nombres  = "Requerido";
@@ -8497,7 +8625,30 @@ function Prospectos({perfil}) {
     else if(!/^\d{8}$/.test(convertForm.dni.trim())) e.dni = "DNI debe tener 8 dígitos";
     if(Object.keys(e).length){ setConvertErr(e); return; }
 
+    setConvertErr({});
     setConvirtiendo(true);
+    const { data: yaExiste } = await safeQuery(() =>
+      supabase.from("pacientes")
+        .select("id,nombres,apellidos,dni,estado,sede_principal_id,sedes:sede_principal_id(nombre)")
+        .eq("dni", convertForm.dni.trim()).maybeSingle(),
+      "Prospectos:verificarDNI"
+    );
+    setConvirtiendo(false);
+
+    if(yaExiste?.id) { setDupPaciente(yaExiste); return; }
+    await ejecutarConversion(null);
+  };
+
+  // pacExistente != null → se vincula al paciente ya registrado en vez de crear
+  const ejecutarConversion = async (pacExistente) => {
+    setDupPaciente(null);
+    setConvirtiendo(true);
+
+    if(pacExistente?.id) {
+      await finalizarConversion(pacExistente.id);
+      return;
+    }
+
     const { data: pac, error } = await safeQuery(() =>
       supabase.from("pacientes").insert({
         nombres:           convertForm.nombres.trim(),
@@ -8514,25 +8665,29 @@ function Prospectos({perfil}) {
     let pacienteId = pac?.id;
 
     if(error || !pac) {
-      // Si el error es DNI duplicado, buscar el paciente existente y vincularlo
+      // Red de seguridad: alguien pudo registrar ese DNI entre la comprobación
+      // y el insert. Se avisa en vez de vincular en silencio.
       if(error?.code === "23505") {
         const { data: pacExistente } = await safeQuery(() =>
-          supabase.from("pacientes").select("id").eq("dni", convertForm.dni.trim()).maybeSingle(),
+          supabase.from("pacientes")
+            .select("id,nombres,apellidos,dni,estado,sede_principal_id,sedes:sede_principal_id(nombre)")
+            .eq("dni", convertForm.dni.trim()).maybeSingle(),
           "Prospectos:buscarDuplicado"
         );
-        if(pacExistente?.id) {
-          pacienteId = pacExistente.id;
-        } else {
-          setConvertErr({general: "El DNI ya está registrado pero no se pudo vincular. Contacta al administrador."});
-          setConvirtiendo(false);
-          return;
-        }
-      } else {
-        setConvertErr({general: "Error al crear el paciente. Verificá que el DNI no esté duplicado."});
         setConvirtiendo(false);
+        if(pacExistente?.id) { setDupPaciente(pacExistente); return; }
+        setConvertErr({general: "El DNI ya está registrado pero no se pudo vincular. Contacta al administrador."});
         return;
       }
+      setConvertErr({general: "Error al crear el paciente. Verificá que el DNI no esté duplicado."});
+      setConvirtiendo(false);
+      return;
     }
+
+    await finalizarConversion(pacienteId);
+  };
+
+  const finalizarConversion = async (pacienteId) => {
 
     // Crear HC maestra vacía y vincular sede (solo si no existe ya)
     await safeQuery(() =>
@@ -8999,6 +9154,21 @@ function Prospectos({perfil}) {
             )}
           </div>
         </div>
+      )}
+
+      {dupPaciente && (
+        <ModalConfirmar
+          tono="aviso"
+          titulo="Ya existe un paciente con ese DNI"
+          detalle={`${dupPaciente.nombres||""} ${dupPaciente.apellidos||""}`.trim()}
+          subdetalle={`DNI ${dupPaciente.dni}${dupPaciente.sedes?.nombre ? " · "+dupPaciente.sedes.nombre : ""}${dupPaciente.estado ? " · "+dupPaciente.estado : ""}`}
+          aviso="No se creará un paciente nuevo. Puedes vincular este prospecto al paciente ya registrado, o cancelar y revisar el DNI."
+          textoConfirmar="Vincular al existente"
+          textoCancelar="Cancelar"
+          cargando={convirtiendo}
+          onConfirmar={()=>ejecutarConversion(dupPaciente)}
+          onCancelar={()=>setDupPaciente(null)}
+        />
       )}
     </div>
   );
