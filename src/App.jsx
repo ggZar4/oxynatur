@@ -880,14 +880,21 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
   const wrap = useRef(null);
 
   // onClose se guarda en una ref y NO va en las dependencias del efecto.
-  // Las 29 llamadas pasan una flecha en línea, que cambia de identidad en cada
+  // Las llamadas pasan una flecha en línea, que cambia de identidad en cada
   // render del padre. Con [onClose] como dependencia, el efecto se desmontaba y
   // volvía a montar en cada pulsación de tecla: quitaba el listener, devolvía el
-  // foco al botón que abrió el modal y volvía a enfocar el primer campo. El
-  // efecto neto era que no se podía escribir en ningún campo que no fuera el
-  // primero, y el listener de Escape se recreaba constantemente.
+  // foco al botón que abrió el modal y volvía a enfocar el primer campo, con lo
+  // que no se podía escribir en ningún campo que no fuera el primero.
   const cerrar = useRef(onClose);
   useEffect(() => { cerrar.current = onClose; });
+
+  // Cierre por fondo: se exige que la pulsación EMPIECE y TERMINE en el fondo.
+  //   - Cerrar en mousedown dejaba el modal desmontado antes del click, así que
+  //     el click caía sobre lo que hubiera detrás y podía reabrir el modal o
+  //     disparar otra acción. Por eso "clic fuera" parecía no funcionar.
+  //   - Cerrar solo en click permitiría cerrar sin querer al arrastrar para
+  //     seleccionar texto dentro del panel y soltar fuera.
+  const prensaEnFondo = useRef(false);
 
   useEffect(() => {
     const previo = document.activeElement;
@@ -902,7 +909,7 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
 
     const onKey = (e) => {
       if (__modalPila[__modalPila.length - 1] !== token) return;
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrar.current?.(); return; }
+      if (e.key === "Escape") { e.preventDefault(); cerrar.current?.(); return; }
       if (e.key !== "Tab" || !wrap.current) return;
       const foco = wrap.current.querySelectorAll(FOCO_SEL);
       if (!foco.length) return;
@@ -910,8 +917,8 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
       if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
       else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
     };
-    // Fase de captura: llega antes que cualquier handler intermedio, así que
-    // nada puede impedir que Escape cierre el modal.
+    // Fase de captura: llega antes que cualquier handler intermedio. No se
+    // detiene la propagación, para no interferir con nada más de la página.
     document.addEventListener("keydown", onKey, true);
 
     return () => {
@@ -927,7 +934,12 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
   return (
     <div ref={wrap} tabIndex={-1}
       style={{position:"fixed",inset:0,background:`rgba(0,0,0,${opacidad})`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:z,padding:20,outline:"none"}}
-      onMouseDown={e=>{ if(cerrarFuera && e.target===e.currentTarget) cerrar.current?.(); }}>
+      onMouseDown={e=>{ prensaEnFondo.current = (e.target === e.currentTarget); }}
+      onClick={e=>{
+        const enFondo = prensaEnFondo.current && e.target === e.currentTarget;
+        prensaEnFondo.current = false;
+        if (cerrarFuera && enFondo) cerrar.current?.();
+      }}>
       {children}
     </div>
   );
