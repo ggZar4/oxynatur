@@ -1,6 +1,11 @@
 /* Reset minimalista para dashboard full-width.
    App.jsx maneja todos los estilos visuales con inline styles. */
 
+/* Evita que iOS Safari infle el texto al girar el teléfono. */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 * {
   box-sizing: border-box;
 }

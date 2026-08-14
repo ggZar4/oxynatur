@@ -1,6 +1,46 @@
 import { useState, useEffect, useMemo, useRef, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// ── BREAKPOINTS ───────────────────────────────────────────────
+// Móvil <768 · Tablet 768–1024 · Escritorio ≥1024
+// La app usa estilos en línea, que no admiten media queries, así que los
+// breakpoints se resuelven en JS con matchMedia. Se usa matchMedia y no
+// window.innerWidth a propósito: solo provoca un render al CRUZAR el
+// límite, no en cada píxel de un redimensionado.
+const BP = { movil: 768, tablet: 1024 };
+
+const useMedia = (query) => {
+  const [coincide, setCoincide] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const alCambiar = (e) => setCoincide(e.matches);
+    setCoincide(mq.matches);
+    mq.addEventListener("change", alCambiar);
+    return () => mq.removeEventListener("change", alCambiar);
+  }, [query]);
+  return coincide;
+};
+
+// Uso: const { esMovil, esTablet, hastaTablet } = useResponsive();
+const useResponsive = () => {
+  const esMovil      = useMedia(`(max-width: ${BP.movil - 1}px)`);
+  const esTablet     = useMedia(`(min-width: ${BP.movil}px) and (max-width: ${BP.tablet - 1}px)`);
+  const esEscritorio = useMedia(`(min-width: ${BP.tablet}px)`);
+  return { esMovil, esTablet, esEscritorio, hastaTablet: esMovil || esTablet };
+};
+
+// Padding del área de contenido según el ancho. Centralizado aquí para que
+// todas las vistas respiren igual sin repetir el valor en cada pantalla.
+const padContenido = ({ esMovil, esTablet }) =>
+  esMovil ? "14px 12px" : esTablet ? "22px 20px" : "30px 36px";
+
+// Envoltorio de scroll horizontal para tablas anchas en pantallas chicas.
+// -webkit-overflow-scrolling da inercia en iOS.
+const ScrollX = ({ children, style = {} }) => (
+  <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",...style}}>{children}</div>
+);
+
 // ── Helper fecha Lima (UTC-5) ─────────────────────────────────
 const fechaHoyLima = () => {
   return new Date().toLocaleDateString("en-CA", {timeZone:"America/Lima"});
@@ -876,7 +916,7 @@ const __modalPila = [];
 const Z_MODAL = 2000, Z_MODAL_CONFIRM = 2500;
 const FOCO_SEL = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = true }) {
+function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = true, alinear = "center", padding = 20 }) {
   const wrap = useRef(null);
 
   // onClose se guarda en una ref y NO va en las dependencias del efecto.
@@ -933,7 +973,7 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
 
   return (
     <div ref={wrap} tabIndex={-1}
-      style={{position:"fixed",inset:0,background:`rgba(0,0,0,${opacidad})`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:z,padding:20,outline:"none"}}
+      style={{position:"fixed",inset:0,background:`rgba(0,0,0,${opacidad})`,display:"flex",alignItems:alinear==="izquierda"?"stretch":"center",justifyContent:alinear==="izquierda"?"flex-start":"center",zIndex:z,padding,outline:"none"}}
       onMouseDown={e=>{ prensaEnFondo.current = (e.target === e.currentTarget); }}
       onClick={e=>{
         const enFondo = prensaEnFondo.current && e.target === e.currentTarget;
@@ -985,6 +1025,44 @@ function ModalConfirmar({
   );
 }
 
+// ── BARRA SUPERIOR (solo móvil) ───────────────────────────────
+// Sustituye al sidebar fijo de 218px, que en un teléfono se comía media
+// pantalla. Lleva el badge de alertas para que se vea sin abrir el menú.
+const Z_BARRA_MOVIL = 1500, Z_DRAWER = 1600;
+
+function BarraMovil({ onMenu, perfil, alertasNuevas = 0 }) {
+  const f = getRolFlags(perfil);
+  return (
+    <div style={{position:"fixed",top:0,left:0,right:0,height:56,zIndex:Z_BARRA_MOVIL,
+      background:"var(--surface)",borderBottom:"0.5px solid var(--border)",
+      display:"flex",alignItems:"center",gap:12,padding:"0 12px"}}>
+      <button onClick={onMenu} aria-label="Abrir menú"
+        style={{position:"relative",background:"transparent",border:"none",cursor:"pointer",
+          color:"var(--text2)",padding:8,display:"flex",alignItems:"center",borderRadius:"var(--radius-sm)"}}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M3 6h18M3 12h18M3 18h18"/>
+        </svg>
+        {alertasNuevas > 0 && (
+          <span style={{position:"absolute",top:4,right:4,minWidth:16,height:16,borderRadius:99,
+            background:"var(--color-error)",color:"white",fontSize:9,fontWeight:700,
+            display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>
+            {alertasNuevas > 99 ? "99+" : alertasNuevas}
+          </span>
+        )}
+      </button>
+      <div style={{width:28,height:28,borderRadius:8,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
+        </svg>
+      </div>
+      <div style={{minWidth:0}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:15,color:"var(--text)",letterSpacing:"-0.02em",lineHeight:1}}>Oxynatur</div>
+        <div style={{fontSize:9,color:"var(--text3)",marginTop:2,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.rolLabel}</div>
+      </div>
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 // FASE B: Nav completamente dinámico basado en getRolFlags().
 // Badge de alertas recibe alertasNuevas como prop desde App.
@@ -1010,7 +1088,7 @@ function Sidebar({vista, setVista, perfil, onLogout, alertasNuevas = 0, darkMode
   ].filter(item => item.visible);
 
   return (
-    <div style={{width:218,background:"var(--surface)",borderRight:"0.5px solid var(--border)",padding:"0",display:"flex",flexDirection:"column",flexShrink:0,minHeight:"100vh"}}>
+    <div style={{width:218,maxWidth:"84vw",background:"var(--surface)",borderRight:"0.5px solid var(--border)",padding:"0",display:"flex",flexDirection:"column",flexShrink:0,minHeight:"100vh"}}>
       {/* Logo area */}
       <div style={{padding:"20px 16px 16px",borderBottom:"0.5px solid var(--border)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -2444,7 +2522,8 @@ function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }
 
         {/* Vista previa de la tabla */}
         <div style={{border:"0.5px solid var(--border)",borderRadius:8,overflow:"hidden",marginBottom:16}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <ScrollX>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:420}}>
             <thead>
               <tr style={{background:"var(--surface2)"}}>
                 {["N°","Fecha","Ingreso","Presión","Estado"].map(h=>(
@@ -2475,6 +2554,7 @@ function ModalHojaFirma({ pacSelec, hcMaestra, evals, comprasPaciente, onClose }
               )}
             </tbody>
           </table>
+          </ScrollX>
         </div>
 
         <div style={{fontSize:11,color:"var(--text3)",marginBottom:16,lineHeight:1.6}}>
@@ -4491,8 +4571,8 @@ function Finanzas() {
             <div style={{padding:"12px 16px",borderBottom:"0.5px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--text3)",textTransform:"uppercase",letterSpacing:"0.06em"}}>
               Detalle de ventas — {ventas.length} registros
             </div>
-            <div style={{maxHeight:320,overflowY:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <div style={{maxHeight:320,overflowY:"auto",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
                 <thead>
                   <tr style={{background:"var(--surface2)"}}>
                     {["Fecha","Paciente","Paquete","Método","Sede","Monto"].map(h=>(
@@ -8883,7 +8963,8 @@ function Prospectos({perfil}) {
               No hay prospectos {filtroEstado !== "todos" ? `con estado "${ESTADO_LABEL[filtroEstado]}"` : "registrados aún"}
             </div>
           ) : (
-            <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <ScrollX>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
               <thead>
                 <tr style={{background:"var(--surface2)"}}>
                   {["Nombre","Teléfono","Canal","Sede","Motivo","Estado","Último contacto",""].map(h=>(
@@ -8942,6 +9023,7 @@ function Prospectos({perfil}) {
                 ))}
               </tbody>
             </table>
+            </ScrollX>
           )}
         </Card>
       )}
@@ -9245,6 +9327,8 @@ export default function App() {
     setVista(v);
   };
   const [darkMode, setDarkMode] = useState(()=>localStorage.getItem("oxynatur-theme")==="dark");
+  const { esMovil, esTablet } = useResponsive();
+  const [menuMovil, setMenuMovil] = useState(false);
   useEffect(()=>{
     localStorage.setItem("oxynatur-theme", darkMode ? "dark" : "light");
     let el = document.getElementById("oxynatur-theme-vars");
@@ -9534,7 +9618,8 @@ function Convenios({ perfil }) {
               No hay pacientes vinculados a este convenio todavía.
             </div>
           ) : (
-            <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <ScrollX>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
               <thead>
                 <tr style={{borderBottom:"0.5px solid var(--border)"}}>
                   {["Paciente","DNI","Sesiones","Monto","Autorización","Estado pago","Acción"].map(h=>(
@@ -9569,6 +9654,7 @@ function Convenios({ perfil }) {
                 ))}
               </tbody>
             </table>
+            </ScrollX>
           )}
         </Card>
 
@@ -9894,7 +9980,8 @@ function ControlOxigeno({ perfil }) {
             No hay balones registrados {filtroSede?"en esta sede":""}.
           </div>
         ) : (
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <ScrollX>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
             <thead>
               <tr style={{borderBottom:"0.5px solid var(--border)"}}>
                 {["N° Serie","Sede","Ingreso","Agotado","Estado",""].map(h=>(
@@ -9928,6 +10015,7 @@ function ControlOxigeno({ perfil }) {
               ))}
             </tbody>
           </table>
+          </ScrollX>
         )}
       </Card>
 
@@ -9986,6 +10074,9 @@ function ControlOxigeno({ perfil }) {
   );
 }
 
+  // Al navegar desde el drawer, se cierra solo.
+  const irA = (v) => { cambiarVista(v); setMenuMovil(false); };
+
   const renderVista = () => {
     switch(vista){
       case "dashboard": return f.puedeVerDashboard  ? <DashboardAdmin perfil={perfil}/>        : null;
@@ -10013,8 +10104,21 @@ function ControlOxigeno({ perfil }) {
 :root{--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;--border:#E8EDF3;--border2:#CDD5DF;--text:#0D1829;--text2:#4A5568;--text3:#8A97A8;--accent:#00A896;--accent-light:rgba(0,168,150,0.10);--accent-mid:rgba(0,168,150,0.18);--color-error:#F87171;--color-success:#10B981;--color-warning:#F59E0B;--color-accent-alt:#7C6AF7;--radius-sm:8px;--radius-md:12px;--radius-lg:16px}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}select option{background:var(--surface)}input::placeholder{color:var(--text3)}textarea::placeholder{color:var(--text3)}textarea{box-sizing:border-box}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}`}</style>
       <div style={{display:"flex",minHeight:"100vh",width:"100%"}}>
-        <Sidebar vista={vista} setVista={cambiarVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
-        <div style={{flex:1,overflow:"auto",padding:"30px 36px",background:"var(--bg)"}}>
+        {esMovil ? (
+          <>
+            <BarraMovil onMenu={()=>setMenuMovil(true)} perfil={perfil} alertasNuevas={alertasNuevas}/>
+            {menuMovil && (
+              <Modal onClose={()=>setMenuMovil(false)} z={Z_DRAWER} opacidad={0.5} alinear="izquierda" padding={0}>
+                <Sidebar vista={vista} setVista={irA} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
+              </Modal>
+            )}
+          </>
+        ) : (
+          <Sidebar vista={vista} setVista={cambiarVista} perfil={perfil} onLogout={handleLogout} alertasNuevas={alertasNuevas} darkMode={darkMode} setDarkMode={setDarkMode}/>
+        )}
+        <div style={{flex:1,minWidth:0,overflow:"auto",background:"var(--bg)",
+          padding:padContenido({esMovil,esTablet}),
+          paddingTop:esMovil?68:undefined}}>
           {renderVista()}
         </div>
       </div>
