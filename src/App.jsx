@@ -878,6 +878,17 @@ const FOCO_SEL = 'a[href],button:not([disabled]),input:not([disabled]),select:no
 
 function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = true }) {
   const wrap = useRef(null);
+
+  // onClose se guarda en una ref y NO va en las dependencias del efecto.
+  // Las 29 llamadas pasan una flecha en línea, que cambia de identidad en cada
+  // render del padre. Con [onClose] como dependencia, el efecto se desmontaba y
+  // volvía a montar en cada pulsación de tecla: quitaba el listener, devolvía el
+  // foco al botón que abrió el modal y volvía a enfocar el primer campo. El
+  // efecto neto era que no se podía escribir en ningún campo que no fuera el
+  // primero, y el listener de Escape se recreaba constantemente.
+  const cerrar = useRef(onClose);
+  useEffect(() => { cerrar.current = onClose; });
+
   useEffect(() => {
     const previo = document.activeElement;
     const token = {};
@@ -891,7 +902,7 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
 
     const onKey = (e) => {
       if (__modalPila[__modalPila.length - 1] !== token) return;
-      if (e.key === "Escape") { e.preventDefault(); onClose?.(); return; }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrar.current?.(); return; }
       if (e.key !== "Tab" || !wrap.current) return;
       const foco = wrap.current.querySelectorAll(FOCO_SEL);
       if (!foco.length) return;
@@ -899,23 +910,24 @@ function Modal({ onClose, children, z = Z_MODAL, opacidad = 0.6, cerrarFuera = t
       if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
       else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
     };
-    document.addEventListener("keydown", onKey);
+    // Fase de captura: llega antes que cualquier handler intermedio, así que
+    // nada puede impedir que Escape cierre el modal.
+    document.addEventListener("keydown", onKey, true);
 
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
       const i = __modalPila.indexOf(token);
       if (i >= 0) __modalPila.splice(i, 1);
       if (__modalPila.length === 0) document.body.style.overflow = "";
-      if (previo instanceof HTMLElement) previo.focus();
+      // Solo se devuelve el foco si el elemento sigue en el documento.
+      if (previo instanceof HTMLElement && document.body.contains(previo)) previo.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div ref={wrap} tabIndex={-1}
       style={{position:"fixed",inset:0,background:`rgba(0,0,0,${opacidad})`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:z,padding:20,outline:"none"}}
-      // onMouseDown y no onClick: si arrastras para seleccionar texto dentro del
-      // panel y sueltas fuera, onClick cerraría el modal y perderías lo escrito.
-      onMouseDown={e=>{ if(cerrarFuera && e.target===e.currentTarget) onClose?.(); }}>
+      onMouseDown={e=>{ if(cerrarFuera && e.target===e.currentTarget) cerrar.current?.(); }}>
       {children}
     </div>
   );
