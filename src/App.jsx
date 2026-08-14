@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── BREAKPOINTS ───────────────────────────────────────────────
@@ -9,26 +9,62 @@ import { createClient } from "@supabase/supabase-js";
 // límite, no en cada píxel de un redimensionado.
 const BP = { movil: 768, tablet: 1024 };
 
-const useMedia = (query) => {
-  const [coincide, setCoincide] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia(query).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const alCambiar = (e) => setCoincide(e.matches);
-    setCoincide(mq.matches);
-    mq.addEventListener("change", alCambiar);
-    return () => mq.removeEventListener("change", alCambiar);
-  }, [query]);
-  return coincide;
+// Un único par de listeners para toda la app, no uno por componente: con ~80
+// botones y decenas de campos consultando el breakpoint, suscribir cada uno
+// saldría caro. useSyncExternalStore además garantiza que todos los
+// componentes vean el mismo valor en el mismo render.
+let __mqls = null;
+const __subsBP = new Set();
+const __initBP = () => {
+  if (__mqls || typeof window === "undefined") return;
+  __mqls = {
+    movil:  window.matchMedia(`(max-width: ${BP.movil - 1}px)`),
+    tablet: window.matchMedia(`(min-width: ${BP.movil}px) and (max-width: ${BP.tablet - 1}px)`),
+  };
+  const avisar = () => __subsBP.forEach(fn => fn());
+  Object.values(__mqls).forEach(mq => mq.addEventListener("change", avisar));
 };
+let __snapBP = null;
+// El snapshot debe ser estable entre renders o useSyncExternalStore entra en
+// bucle: solo se crea un objeto nuevo cuando cambia de verdad el breakpoint.
+const __leerBP = () => {
+  __initBP();
+  const esMovil  = __mqls ? __mqls.movil.matches  : false;
+  const esTablet = __mqls ? __mqls.tablet.matches : false;
+  if (!__snapBP || __snapBP.esMovil !== esMovil || __snapBP.esTablet !== esTablet) {
+    __snapBP = { esMovil, esTablet, esEscritorio: !esMovil && !esTablet, hastaTablet: esMovil || esTablet };
+  }
+  return __snapBP;
+};
+const __suscribirBP = (fn) => { __initBP(); __subsBP.add(fn); return () => __subsBP.delete(fn); };
 
 // Uso: const { esMovil, esTablet, hastaTablet } = useResponsive();
-const useResponsive = () => {
-  const esMovil      = useMedia(`(max-width: ${BP.movil - 1}px)`);
-  const esTablet     = useMedia(`(min-width: ${BP.movil}px) and (max-width: ${BP.tablet - 1}px)`);
-  const esEscritorio = useMedia(`(min-width: ${BP.tablet}px)`);
-  return { esMovil, esTablet, esEscritorio, hastaTablet: esMovil || esTablet };
-};
+const useResponsive = () => useSyncExternalStore(__suscribirBP, __leerBP, __leerBP);
+
+// Estilo de campo "crudo" (los que no usan <Input/>).
+// En móvil la fuente sube a 16px: por debajo de eso iOS Safari hace zoom
+// automático al enfocar y deja la vista descuadrada. Y 44px de alto mínimo,
+// que es el objetivo táctil por debajo del cual se falla el toque.
+const campoMovil = (esMovil, fondo = "var(--surface2)") => ({
+  width:"100%", background:fondo, border:"0.5px solid var(--border)",
+  borderRadius:8, color:"var(--text)",
+  padding: esMovil ? "11px 12px" : "8px 10px",
+  fontSize: esMovil ? 16 : 13,
+  minHeight: esMovil ? 44 : undefined,
+  fontFamily:"inherit", outline:"none", boxSizing:"border-box",
+});
+
+// Al enfocar un campo, el teclado del móvil tapa la mitad inferior de la
+// pantalla. Se centra el campo en el área que queda visible, tras el tiempo
+// que tarda el teclado en abrirse.
+const useCampoVisible = (activo) => ({
+  onFocusCapture: (e) => {
+    if (!activo) return;
+    const el = e.target;
+    if (!el?.matches?.("input,select,textarea")) return;
+    setTimeout(() => el.scrollIntoView({ block:"center", behavior:"smooth" }), 280);
+  },
+});
 
 // Padding del área de contenido según el ancho. Centralizado aquí para que
 // todas las vistas respiren igual sin repetir el valor en cada pantalla.
@@ -798,6 +834,7 @@ const Card = ({children, style={}}) => (
 );
 
 const Btn = ({children,onClick,variant="primary",disabled=false,style={}}) => {
+  const { esMovil } = useResponsive();
   const styles = {
     primary: {background:"var(--accent)",color:"white",border:"none"},
     ghost:   {background:"transparent",color:"var(--text2)",border:"0.5px solid var(--border)"},
@@ -805,31 +842,37 @@ const Btn = ({children,onClick,variant="primary",disabled=false,style={}}) => {
   };
   return (
     <button onClick={onClick} disabled={disabled}
-      style={{...styles[variant],padding:"9px 20px",borderRadius:"var(--radius-sm)",cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",fontSize:14,fontWeight:600,opacity:disabled?0.5:1,transition:"all .15s",...style}}>
+      style={{...styles[variant],padding:esMovil?"12px 20px":"9px 20px",minHeight:esMovil?44:undefined,borderRadius:"var(--radius-sm)",cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",fontSize:14,fontWeight:600,opacity:disabled?0.5:1,transition:"all .15s",...style}}>
       {children}
     </button>
   );
 };
 
-const Input = ({label,value,onChange,type="text",placeholder="",required=false,error=""}) => (
+const Input = ({label,value,onChange,type="text",placeholder="",required=false,error=""}) => {
+  const { esMovil } = useResponsive();
+  return (
   <div style={{marginBottom:14}}>
     {label && <label style={{fontSize:12,color:error?"var(--color-error)":"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"var(--color-error)"}}> *</span>}</label>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${error?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none",transition:"border-color .15s"}}/>
+      style={{width:"100%",background:"var(--surface2)",border:`0.5px solid ${error?"var(--color-error)":"var(--border)"}`,borderRadius:"var(--radius-sm)",color:"var(--text)",padding:esMovil?"12px 14px":"10px 14px",minHeight:esMovil?44:undefined,fontSize:esMovil?16:14,fontFamily:"inherit",outline:"none",boxSizing:"border-box",WebkitAppearance:"none",transition:"border-color .15s"}}/>
     {error && <div style={{fontSize:11,color:"var(--color-error)",marginTop:3}}>{error}</div>}
   </div>
-);
+  );
+};
 
-const Select = ({label,value,onChange,options=[],required=false}) => (
+const Select = ({label,value,onChange,options=[],required=false}) => {
+  const { esMovil } = useResponsive();
+  return (
   <div style={{marginBottom:14}}>
     {label && <label style={{fontSize:12,color:"var(--text2)",fontWeight:500,display:"block",marginBottom:5,letterSpacing:"0.01em"}}>{label}{required&&<span style={{color:"var(--color-error)"}}> *</span>}</label>}
     <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:value?"var(--text)":"var(--text3)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",colorScheme:"light dark",transition:"border-color .15s"}}>
+      style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:"var(--radius-sm)",color:value?"var(--text)":"var(--text3)",padding:esMovil?"12px 14px":"10px 14px",minHeight:esMovil?44:undefined,fontSize:esMovil?16:14,fontFamily:"inherit",outline:"none",colorScheme:"light dark",transition:"border-color .15s"}}>
       <option value="" style={{background:"var(--surface)",color:"var(--text3)"}}>Seleccionar...</option>
       {options.map(o=><option key={o.value} value={o.value} style={{background:"var(--surface)",color:"var(--text)"}}>{o.label}</option>)}
     </select>
   </div>
-);
+  );
+};
 
 // ── LOGIN ─────────────────────────────────────────────────────
 function Login() {
@@ -6773,6 +6816,8 @@ function DashboardSede({perfil}) {
 
 function Sesiones({perfil}) {
   const f = getRolFlags(perfil);
+  const { esMovil, hastaTablet } = useResponsive();
+  const campoVisible = useCampoVisible(esMovil);
 
   const ESTADO_COLOR = {
     programada:"var(--color-warning)", en_curso:"var(--accent)",
@@ -7580,9 +7625,12 @@ function Sesiones({perfil}) {
 
       {/* Modal completar / ver sesión */}
       {verSesion && (
-        <Modal onClose={()=>setVerSesion(null)}>
-          <div style={{background:"var(--bg)",border:"1px solid #2A3550",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <Modal onClose={()=>setVerSesion(null)} padding={esMovil?0:20}>
+          {/* En móvil ocupa la pantalla entera: con maxWidth 560 y el padding
+              del overlay quedaban ~320px útiles en un teléfono normal.
+              100dvh y no 100vh para que la barra del navegador no recorte. */}
+          <div style={{background:"var(--bg)",border:esMovil?"none":"1px solid #2A3550",borderRadius:esMovil?0:20,width:"100%",maxWidth:esMovil?"none":560,minHeight:esMovil?"100vh":undefined,height:esMovil?"100dvh":undefined,maxHeight:esMovil?"none":"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:esMovil?"14px 16px 12px":"20px 24px 16px",borderBottom:"0.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
               <div>
                 <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
                   Sesión #{verSesion.numero_sesion} · {verSesion.camara_numero ? `Cámara #${verSesion.camara_numero}` : ""}
@@ -7592,13 +7640,14 @@ function Sesiones({perfil}) {
                   {verSesion.sede_nombre} · {verSesion.fecha} · {verSesion.presion_aplicada} ATA · {verSesion.duracion_minutos} min
                 </div>
               </div>
-              <button onClick={()=>setVerSesion(null)} style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:"5px 12px",borderRadius:8,fontSize:18}}>×</button>
+              <button onClick={()=>setVerSesion(null)} aria-label="Cerrar"
+                style={{background:"var(--surface2)",border:"none",color:"var(--text2)",cursor:"pointer",padding:esMovil?"8px 14px":"5px 12px",minHeight:esMovil?40:undefined,flexShrink:0,borderRadius:8,fontSize:esMovil?22:18}}>×</button>
             </div>
-            <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+            <div {...campoVisible} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:esMovil?"16px 14px":"20px 24px"}}>
 
               {/* Si completada — mostrar registro */}
               {verSesion.estado === "completada" ? (
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:esMovil?"1fr":"1fr 1fr",gap:10}}>
                   {[
                     ["Hora inicio real", fmtHora(verSesion.hora_inicio_real)],
                     ["Hora fin real",    fmtHora(verSesion.hora_fin_real)],
@@ -7625,7 +7674,7 @@ function Sesiones({perfil}) {
                 /* Si en_curso — formulario completar */
                 <>
                   {/* Horario */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+                  <div style={{display:"grid",gridTemplateColumns:esMovil?"1fr":"1fr 1fr",gap:8,marginBottom:16}}>
                     <Input label="Hora inicio real" type="time" value={formCompletar.hora_inicio_real}
                       onChange={v=>setFormCompletar(f=>({...f,hora_inicio_real:v}))}/>
                     <Input label="Hora fin real" type="time" value={formCompletar.hora_fin_real}
@@ -7637,24 +7686,24 @@ function Sesiones({perfil}) {
                     <div style={{padding:"8px 14px",background:"#00A89608",fontSize:11,fontWeight:700,color:"var(--accent)",letterSpacing:"0.08em",textTransform:"uppercase"}}>
                       F. Signos vitales post-sesión — Al salir de cámara
                     </div>
-                    <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:esMovil?"1fr":"1fr 1fr",gap:esMovil?12:10}}>
                       <div>
                         <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Presión arterial</label>
                         <input type="text" value={formCompletar.presion_arterial||""} placeholder="120/80"
                           onChange={e=>setFormCompletar(f=>({...f,presion_arterial:e.target.value}))}
-                          style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                          style={campoMovil(esMovil)}/>
                       </div>
                       <div>
                         <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Frec. cardíaca post (bpm)</label>
                         <input type="number" value={formCompletar.frecuencia_cardiaca_post||""} placeholder="72"
                           onChange={e=>setFormCompletar(f=>({...f,frecuencia_cardiaca_post:e.target.value}))}
-                          style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                          style={campoMovil(esMovil)}/>
                       </div>
                       <div>
                         <label style={{fontSize:11,color:"var(--text3)",fontWeight:600,display:"block",marginBottom:4}}>Saturación O₂ (%)</label>
                         <input type="number" value={formCompletar.saturacion_o2||""} placeholder="98"
                           onChange={e=>setFormCompletar(f=>({...f,saturacion_o2:e.target.value}))}
-                          style={{width:"100%",background:"var(--surface2)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                          style={campoMovil(esMovil)}/>
                       </div>
                       <div style={{gridColumn:"1/-1"}}>
                         <label style={{fontSize:12,color:"var(--text2)",fontWeight:600,display:"block",marginBottom:6}}>
@@ -7662,7 +7711,7 @@ function Sesiones({perfil}) {
                         </label>
                         <input type="range" min="0" max="10" value={formCompletar.nivel_dolor}
                           onChange={e=>setFormCompletar(f=>({...f,nivel_dolor:parseInt(e.target.value)}))}
-                          style={{width:"100%",accentColor:"var(--accent)"}}/>
+                          style={{width:"100%",accentColor:"var(--accent)",height:esMovil?32:undefined}}/>
                         <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text3)",marginTop:2}}>
                           <span>Sin dolor</span><span>Dolor máximo</span>
                         </div>
@@ -7675,7 +7724,7 @@ function Sesiones({perfil}) {
                     )}
                   </div>
 
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{display:"grid",gridTemplateColumns:esMovil?"1fr":"1fr 1fr",gap:8}}>
                     <Select label="Estado general" value={formCompletar.estado_general}
                       onChange={v=>setFormCompletar(f=>({...f,estado_general:v}))}
                       options={["Excelente","Bueno","Regular","Malo"].map(v=>({value:v,label:v}))}/>
@@ -7690,14 +7739,14 @@ function Sesiones({perfil}) {
                       onChange={e=>setFormCompletar(f=>({...f,observaciones:e.target.value}))}
                       placeholder="Incidencias, reacciones, notas del operador..."
                       rows={3}
-                      style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:"10px 14px",fontSize:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
+                      style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,color:"var(--text)",padding:esMovil?"12px 14px":"10px 14px",fontSize:esMovil?16:14,fontFamily:"inherit",outline:"none",resize:"vertical"}}/>
                   </div>
 
                   {/* Flag alerta */}
                   <div style={{padding:"12px 14px",background:"var(--surface2)",borderRadius:10,border:"1px solid #2A3550",display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
                     <input type="checkbox" id="reqAtencion" checked={formCompletar.requiere_atencion}
                       onChange={e=>setFormCompletar(f=>({...f,requiere_atencion:e.target.checked}))}
-                      style={{width:16,height:16,cursor:"pointer",accentColor:"var(--color-error)"}}/>
+                      style={{width:esMovil?22:16,height:esMovil?22:16,flexShrink:0,cursor:"pointer",accentColor:"var(--color-error)"}}/>
                     <label htmlFor="reqAtencion" style={{fontSize:14,color:"var(--text)",cursor:"pointer"}}>
                       🔔 Requiere atención médica
                       <span style={{fontSize:12,color:"var(--text3)",display:"block"}}>Genera alerta automática al especialista y médico de sede</span>
@@ -7709,25 +7758,25 @@ function Sesiones({perfil}) {
                     <div style={{background:"#FEF3C7",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>Llamadas al médico on-call {llamadasSesion.length > 0 && <span style={{background:"var(--color-warning)",color:"white",borderRadius:10,padding:"1px 7px",marginLeft:6,fontSize:11}}>{llamadasSesion.length}</span>}</div>
                       <button onClick={()=>setShowLlamada(v=>!v)}
-                        style={{fontSize:11,background:"var(--color-warning)",color:"white",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
+                        style={{fontSize:esMovil?13:11,background:"var(--color-warning)",color:"white",border:"none",borderRadius:6,padding:esMovil?"9px 14px":"4px 10px",minHeight:esMovil?40:undefined,flexShrink:0,cursor:"pointer",fontWeight:600}}>
                         {showLlamada ? "Cerrar" : "+ Registrar llamada"}
                       </button>
                     </div>
 
                     {showLlamada && (
                       <div style={{padding:"12px 14px",background:"var(--surface2)",borderTop:"0.5px solid #F59E0B40"}}>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                        <div style={{display:"grid",gridTemplateColumns:esMovil?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
                           <div>
                             <label style={{fontSize:11,fontWeight:600,color:"var(--text2)",display:"block",marginBottom:4}}>Hora de llamada *</label>
                             <input type="time" value={formLlamada.hora}
                               onChange={e=>setFormLlamada(f=>({...f,hora:e.target.value}))}
-                              style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                              style={campoMovil(esMovil,"var(--surface)")}/>
                           </div>
                           <div>
                             <label style={{fontSize:11,fontWeight:600,color:"var(--text2)",display:"block",marginBottom:4}}>Motivo *</label>
                             <select value={formLlamada.motivo}
                               onChange={e=>setFormLlamada(f=>({...f,motivo:e.target.value}))}
-                              style={{width:"100%",background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:8,color:"var(--text)",padding:"8px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}>
+                              style={campoMovil(esMovil,"var(--surface)")}>
                               <option value="">Seleccionar motivo</option>
                               {MOTIVOS_LLAMADA.map(m=><option key={m} value={m}>{m}</option>)}
                             </select>
@@ -7780,10 +7829,10 @@ function Sesiones({perfil}) {
                 </>
               )}
             </div>
-            <div style={{padding:"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10}}>
-              <Btn variant="ghost" onClick={()=>setVerSesion(null)}>Cerrar</Btn>
+            <div style={{padding:esMovil?"12px 14px":"14px 24px",borderTop:"0.5px solid var(--border)",display:"flex",justifyContent:esMovil?"stretch":"flex-end",gap:10,flexShrink:0}}>
+              <Btn variant="ghost" onClick={()=>setVerSesion(null)} style={esMovil?{flex:1}:undefined}>Cerrar</Btn>
               {verSesion.estado === "en_curso" && (
-                <Btn onClick={()=>setConfirmCompletar(true)} disabled={savingCompletar}>
+                <Btn onClick={()=>setConfirmCompletar(true)} disabled={savingCompletar} style={esMovil?{flex:2}:undefined}>
                   {savingCompletar ? "Guardando..." : "✓ Marcar completada"}
                 </Btn>
               )}
